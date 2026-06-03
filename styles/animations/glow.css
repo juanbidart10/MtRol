@@ -1,0 +1,260 @@
+/* =========================================================
+   MTROL - INITIATIVE
+========================================================= */
+
+/* =========================
+   CARD DE INICIATIVA
+========================= */
+
+.mtrol-initiative-card {
+
+  padding: 14px;
+
+  border:
+    1px solid rgba(216,194,122,.45);
+
+  border-radius:
+    var(--mtrol-radius-lg);
+
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(216,194,122,.08),
+      transparent 40%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(18,14,10,.98),
+      rgba(5,5,5,.98)
+    );
+
+  box-shadow:
+    0 0 16px rgba(0,0,0,.75),
+    inset 0 0 12px rgba(255,220,120,.03);
+
+}
+
+/* =========================
+   TITULO
+========================= */
+
+.mtrol-initiative-title {
+
+  text-align: center;
+
+  color:
+    var(--mtrol-gold);
+
+  font-family:
+    var(--mtrol-font-title);
+
+  font-size:
+    28px;
+
+  margin-bottom: 10px;
+
+  text-shadow:
+    0 0 8px rgba(216,194,122,.25);
+
+}
+
+/* =========================
+   RESULTADO FINAL
+========================= */
+
+.mtrol-initiative-total {
+
+  display: flex;
+
+  justify-content: center;
+  align-items: center;
+
+  margin: 12px 0;
+
+  font-size: 42px;
+  font-weight: 900;
+
+  color:
+    var(--mtrol-white);
+
+  text-shadow:
+    0 0 12px rgba(216,194,122,.35);
+
+}
+
+/* =========================
+   DADOS
+========================= */
+
+.mtrol-initiative-rolls {
+
+  display: flex;
+
+  justify-content: center;
+
+  gap: 12px;
+
+  flex-wrap: wrap;
+
+}
+
+.mtrol-initiative-roll {
+
+  min-width: 90px;
+
+  padding: 10px;
+
+  text-align: center;
+
+  border:
+    var(--mtrol-border-gold);
+
+  border-radius:
+    var(--mtrol-radius-md);
+
+  background:
+    rgba(0,0,0,.28);
+
+}
+
+.mtrol-initiative-roll-label {
+
+  color:
+    var(--mtrol-gold);
+
+  font-size:
+    var(--mtrol-text-sm);
+
+}
+
+.mtrol-initiative-roll-value {
+
+  color:
+    var(--mtrol-white);
+
+  font-size: 24px;
+  font-weight: bold;
+
+}
+
+/* =========================
+   CRITICOS
+========================= */
+
+.mtrol-initiative-crit {
+
+  margin-top: 12px;
+
+  padding: 10px;
+
+  border:
+    1px solid rgba(255,215,120,.50);
+
+  border-radius:
+    var(--mtrol-radius-md);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(68,45,12,.45),
+      rgba(10,8,4,.75)
+    );
+
+  box-shadow:
+    0 0 10px rgba(255,215,120,.15);
+
+}
+
+.mtrol-initiative-crit-title {
+
+  text-align: center;
+
+  color:
+    var(--mtrol-gold-light);
+
+  font-weight: bold;
+
+  margin-bottom: 6px;
+
+}
+
+.mtrol-initiative-crit-line {
+
+  color:
+    var(--mtrol-silver);
+
+  text-align: center;
+
+}
+
+/* =========================
+   PIFIA
+========================= */
+
+.mtrol-initiative-pifia {
+
+  margin-top: 12px;
+
+  padding: 12px;
+
+  text-align: center;
+
+  border:
+    1px solid rgba(255,0,0,.65);
+
+  border-radius:
+    var(--mtrol-radius-md);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(60,0,0,.45),
+      rgba(10,0,0,.75)
+    );
+
+  color:
+    #ff6666;
+
+  font-weight: bold;
+
+  box-shadow:
+    0 0 12px rgba(255,0,0,.25);
+
+}
+
+/* =========================
+   TRACKER DE COMBATE
+========================= */
+
+.combat-tracker .combatant .token-initiative {
+
+  color:
+    var(--mtrol-gold);
+
+  font-weight: bold;
+
+  text-shadow:
+    0 0 6px rgba(216,194,122,.35);
+
+}
+
+.combat-tracker .combatant.active {
+
+  box-shadow:
+    inset 0 0 12px rgba(216,194,122,.15);
+
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 700px) {
+
+  .mtrol-initiative-total {
+
+    font-size: 32px;
+
+  }
+
+}

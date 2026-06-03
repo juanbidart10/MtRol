@@ -1,0 +1,13 @@
+{
+  "Actor": {
+    "types": ["personaje", "character"],
+    "personaje": {},
+    "character": {}
+  },
+  "Item": {
+    "types": ["competencia", "objeto", "item"],
+    "competencia": {},
+    "objeto": {},
+    "item": {}
+  }
+}

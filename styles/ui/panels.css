@@ -1,0 +1,83 @@
+/* =========================================================
+   MTROL - PANELS
+========================================================= */
+
+.mtrol-panel,
+.sheet-section,
+.identidad,
+.atributos,
+.equipamiento-tab,
+.inventario-tab,
+.combate-panel {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(22, 20, 16, 0.78),
+      rgba(8, 8, 8, 0.72)
+    );
+
+  border: var(--mtrol-border-gold);
+  border-radius: var(--mtrol-radius-md);
+
+  padding: 14px;
+  margin-bottom: 14px;
+
+  box-shadow:
+    var(--mtrol-shadow-soft),
+    inset 0 0 14px rgba(255, 220, 120, 0.035);
+}
+
+.mtrol-panel:hover,
+.sheet-section:hover,
+.identidad:hover,
+.atributos:hover,
+.equipamiento-tab:hover,
+.inventario-tab:hover,
+.combate-panel:hover {
+  box-shadow:
+    var(--mtrol-shadow-medium),
+    inset 0 0 14px rgba(255, 220, 120, 0.05);
+}
+
+.mtrol-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+
+  gap: 12px;
+
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+
+  border-bottom: 1px solid rgba(216, 194, 122, 0.42);
+}
+
+.mtrol-section-title h2 {
+  margin: 0;
+  border-bottom: none !important;
+
+  color: var(--mtrol-gold);
+  font-size: var(--mtrol-title-md);
+}
+
+.mtrol-section-title span {
+  color: var(--mtrol-silver);
+  font-size: var(--mtrol-text-sm);
+  opacity: 0.85;
+}
+
+.hint {
+  padding: 10px 12px;
+
+  color: var(--mtrol-silver);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(18, 18, 18, 0.85),
+      rgba(5, 5, 5, 0.85)
+    );
+
+  border: var(--mtrol-border-gold);
+  border-radius: var(--mtrol-radius-sm);
+}

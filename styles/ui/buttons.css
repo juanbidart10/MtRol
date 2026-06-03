@@ -1,0 +1,97 @@
+/* =========================================================
+   MTROL - BUTTONS
+========================================================= */
+
+.mtrol button,
+.mtrol .button,
+.mtrol .item-create-objeto,
+.mtrol-restaurar-dia {
+  font-family: var(--mtrol-font-title);
+
+  color: var(--mtrol-gold-light);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(60, 45, 20, 0.95),
+      rgba(18, 10, 6, 0.95)
+    );
+
+  border: 1px solid rgba(216, 194, 122, 0.55);
+  border-radius: var(--mtrol-radius-sm);
+
+  padding: 6px 12px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.mtrol button:hover,
+.mtrol .button:hover,
+.mtrol .item-create-objeto:hover,
+.mtrol-restaurar-dia:hover {
+  color: var(--mtrol-white);
+
+  transform: translateY(-1px);
+
+  border-color: var(--mtrol-gold-light);
+
+  box-shadow: var(--mtrol-shadow-soft);
+}
+
+.mtrol button:active,
+.mtrol .button:active {
+  transform: translateY(1px);
+}
+
+.item-edit,
+.item-delete,
+.item-equip,
+.item-unequip,
+.competencia-roll,
+.competencia-up,
+.competencia-down,
+.habilidad-combate-equip,
+.habilidad-combate-unequip {
+  cursor: pointer;
+  text-decoration: none;
+
+  color: var(--mtrol-gold);
+
+  transition:
+    color 0.15s ease,
+    text-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.item-edit:hover,
+.item-equip:hover,
+.item-unequip:hover,
+.competencia-roll:hover,
+.competencia-up:hover,
+.competencia-down:hover,
+.habilidad-combate-equip:hover,
+.habilidad-combate-unequip:hover {
+  color: var(--mtrol-white);
+
+  transform: translateY(-1px);
+
+  text-shadow: 0 0 7px rgba(216, 194, 122, 0.55);
+}
+
+.item-delete {
+  color: #d8a0a0;
+}
+
+.item-delete:hover {
+  color: var(--mtrol-red-light);
+
+  transform: translateY(-1px);
+
+  text-shadow: 0 0 8px rgba(255, 80, 80, 0.55);
+}

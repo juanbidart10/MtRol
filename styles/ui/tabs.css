@@ -1,0 +1,173 @@
+/* =========================================================
+   MTROL - MAIN TABS
+========================================================= */
+
+.mtrol .sheet-tabs,
+.mtrol-main-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+
+  margin: 12px 0 0;
+  padding: 0;
+  overflow: hidden;
+
+  background:
+    linear-gradient(180deg, rgba(7, 6, 5, .88), rgba(0, 0, 0, .96));
+
+  border: 1px solid rgba(216, 194, 122, .36);
+  border-radius: 12px 12px 0 0;
+
+  box-shadow:
+    inset 0 0 16px rgba(0, 0, 0, .78),
+    0 8px 18px rgba(0, 0, 0, .45);
+}
+
+.mtrol .sheet-tabs .item,
+.mtrol-main-tabs .item {
+  position: relative;
+
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  color: rgba(242, 210, 122, .76) !important;
+  background:
+    linear-gradient(180deg, rgba(13, 12, 10, .46), rgba(3, 3, 4, .58));
+
+  border-width: 0 1px 0 0;
+  border-style: solid;
+  border-color: rgba(216, 194, 122, .12);
+  border-radius: 0;
+
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  text-align: center;
+  text-decoration: none;
+  text-transform: none;
+
+  cursor: pointer;
+  overflow: hidden;
+
+  transition:
+    color .16s ease,
+    border-color .16s ease,
+    background .16s ease,
+    box-shadow .16s ease,
+    text-shadow .16s ease;
+}
+
+.mtrol .sheet-tabs .item:first-child,
+.mtrol-main-tabs .item:first-child {
+  border-radius: 11px 0 0 0;
+}
+
+.mtrol .sheet-tabs .item:last-child,
+.mtrol-main-tabs .item:last-child {
+  border-right: 0;
+  border-radius: 0 11px 0 0;
+}
+
+.mtrol .sheet-tabs .item::before,
+.mtrol-main-tabs .item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .12), transparent 56%);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease;
+}
+
+.mtrol .sheet-tabs .item i,
+.mtrol-main-tabs .item i {
+  color: rgba(242, 210, 122, .78);
+  font-size: 14px;
+  text-shadow: 0 0 8px rgba(212, 175, 55, .24);
+}
+
+.mtrol .sheet-tabs .item:hover,
+.mtrol-main-tabs .item:hover {
+  color: #ffe7a3 !important;
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .12), transparent 58%),
+    linear-gradient(180deg, rgba(20, 16, 8, .72), rgba(0, 0, 0, .88));
+  border-color: rgba(242, 210, 122, .30);
+  box-shadow: inset 0 0 12px rgba(212, 175, 55, .08);
+  text-shadow: 0 0 8px rgba(212, 175, 55, .32);
+}
+
+.mtrol .sheet-tabs .item:hover::before,
+.mtrol-main-tabs .item:hover::before {
+  opacity: 1;
+}
+
+.mtrol .sheet-tabs .item.active,
+.mtrol-main-tabs .item.active {
+  color: #fff2c2 !important;
+
+  background:
+    radial-gradient(circle at top, rgba(255, 190, 90, .14), transparent 58%),
+    linear-gradient(180deg, rgba(120, 25, 10, .85), rgba(45, 10, 5, .95));
+
+  border-color: rgba(255, 226, 140, .52);
+  border-bottom: 1px solid rgba(255, 210, 90, .55);
+
+  box-shadow:
+    inset 0 0 14px rgba(255, 130, 40, .22),
+    inset 0 1px 0 rgba(255, 226, 140, .16);
+}
+
+.mtrol .sheet-tabs .item.active i,
+.mtrol-main-tabs .item.active i {
+  color: #fff0ba;
+}
+
+.mtrol .sheet-tabs .item.active::after,
+.mtrol-main-tabs .item.active::after {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .mtrol .sheet-tabs,
+  .mtrol-main-tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .mtrol .sheet-tabs,
+  .mtrol-main-tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@container mtrol-sheet (max-width: 720px) {
+  .mtrol .sheet-tabs,
+  .mtrol-main-tabs {
+    grid-template-columns: repeat(3, 1fr);
+    padding: 0;
+  }
+}
+
+@container mtrol-sheet (max-width: 520px) {
+  .mtrol .sheet-tabs,
+  .mtrol-main-tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mtrol .sheet-tabs .item,
+  .mtrol-main-tabs .item {
+    gap: 5px;
+    font-size: 11px;
+  }
+}

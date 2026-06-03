@@ -1,0 +1,98 @@
+/* =========================================================
+   MTROL - TRANSITIONS
+========================================================= */
+
+.mtrol-fade {
+
+  transition:
+    opacity .25s ease,
+    transform .25s ease;
+
+}
+
+.mtrol-hover-lift {
+
+  transition:
+    transform .15s ease,
+    box-shadow .15s ease;
+
+}
+
+.mtrol-hover-lift:hover {
+
+  transform:
+    translateY(-2px);
+
+}
+
+.mtrol-hover-scale {
+
+  transition:
+    transform .15s ease;
+
+}
+
+.mtrol-hover-scale:hover {
+
+  transform:
+    scale(1.02);
+
+}
+
+/* =========================
+   APPEAR
+========================= */
+
+@keyframes mtrolFadeIn {
+
+  from {
+
+    opacity: 0;
+    transform: translateY(6px);
+
+  }
+
+  to {
+
+    opacity: 1;
+    transform: translateY(0);
+
+  }
+
+}
+
+.mtrol-fade-in {
+
+  animation:
+    mtrolFadeIn .25s ease forwards;
+
+}
+
+/* =========================
+   POP
+========================= */
+
+@keyframes mtrolPop {
+
+  0% {
+
+    transform:
+      scale(.96);
+
+  }
+
+  100% {
+
+    transform:
+      scale(1);
+
+  }
+
+}
+
+.mtrol-pop {
+
+  animation:
+    mtrolPop .18s ease forwards;
+
+}

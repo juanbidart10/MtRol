@@ -1,0 +1,263 @@
+/* =========================================================
+   MTROL - COMPETENCIAS
+   Libro de competencias generales
+========================================================= */
+
+.mtrol-personaje-sheet .mtrol-competencias-header h2 {
+  text-decoration: none;
+
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-competencias-header h2::before,
+.mtrol-personaje-sheet .mtrol-competencias-header h2::after {
+  display: none !important;
+  content: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-competencias-header .add-competencia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+
+  color: #f2d27a;
+  font-size: .72em;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.competencias-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.competencia-row {
+  position: relative;
+  min-height: 66px;
+  padding: 10px 12px;
+  overflow: hidden;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  background:
+    radial-gradient(circle at 0% 0%, rgba(216, 194, 122, .10), transparent 32%),
+    linear-gradient(180deg, rgba(14, 12, 8, .92), rgba(2, 2, 3, .97));
+
+  border: 1px solid rgba(216, 194, 122, .34);
+  border-radius: 11px;
+
+  box-shadow:
+    inset 0 0 16px rgba(0, 0, 0, .76),
+    0 7px 15px rgba(0, 0, 0, .38);
+
+  transition:
+    transform .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease;
+}
+
+.competencia-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(115deg, rgba(255, 226, 140, .075), transparent 26%, transparent 72%, rgba(120, 24, 12, .08));
+
+  opacity: .72;
+  pointer-events: none;
+}
+
+.competencia-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.competencia-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 226, 140, .62);
+
+  box-shadow:
+    inset 0 0 16px rgba(0, 0, 0, .78),
+    0 10px 19px rgba(0, 0, 0, .48),
+    0 0 15px rgba(216, 194, 122, .18);
+}
+
+.competencia-main {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.competencia-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  object-fit: cover;
+
+  color: rgba(242, 210, 122, .82);
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .14), transparent 58%),
+    linear-gradient(180deg, rgba(21, 17, 10, .98), rgba(1, 1, 2, .98));
+
+  border: 1px solid rgba(216, 194, 122, .52);
+  border-radius: 10px;
+
+  box-shadow:
+    inset 0 0 9px rgba(0, 0, 0, .74),
+    0 0 10px rgba(216, 194, 122, .14);
+}
+
+.competencia-icon-fallback {
+  font-size: 14px;
+}
+
+.competencia-info {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.competencia-nombre {
+  overflow: hidden;
+
+  color: #fff0ba;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  text-shadow:
+    0 0 8px rgba(212, 175, 55, .18),
+    0 2px 3px rgba(0, 0, 0, .92);
+}
+
+.competencia-subtitle {
+  overflow: hidden;
+
+  color: rgba(230, 200, 120, .62);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .10em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.competencia-controles {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.competencia-nivel {
+  min-width: 42px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffe28c;
+  font-size: 15px;
+  font-weight: 900;
+
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .10), transparent 58%),
+    linear-gradient(180deg, rgba(13, 11, 8, .94), rgba(0, 0, 0, .96));
+
+  border: 1px solid rgba(216, 194, 122, .38);
+  border-radius: 999px;
+
+  box-shadow:
+    inset 0 0 8px rgba(0, 0, 0, .70),
+    0 0 8px rgba(216, 194, 122, .08);
+}
+
+.competencia-controles a {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: rgba(242, 210, 122, .82);
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .08), transparent 60%),
+    linear-gradient(180deg, rgba(16, 15, 13, .94), rgba(3, 3, 4, .96));
+
+  border: 1px solid rgba(216, 194, 122, .28);
+  border-radius: 7px;
+
+  text-decoration: none;
+
+  transition:
+    color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+.competencia-controles a:hover {
+  color: #fff0c2;
+  transform: translateY(-1px);
+  border-color: rgba(242, 210, 122, .62);
+  box-shadow:
+    inset 0 0 8px rgba(216, 194, 122, .06),
+    0 0 10px rgba(216, 194, 122, .18);
+}
+
+.competencias-list .hint {
+  margin: 0;
+  padding: 20px 14px;
+
+  color: rgba(244, 234, 210, .60);
+  text-align: center;
+  font-style: italic;
+
+  background:
+    linear-gradient(180deg, rgba(14, 13, 11, .60), rgba(0, 0, 0, .72));
+
+  border: 1px dashed rgba(216, 194, 122, .24);
+  border-radius: 10px;
+}
+
+@media (max-width: 700px) {
+  .competencia-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .competencia-controles {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .competencia-controles a {
+    width: 28px;
+    height: 28px;
+  }
+}

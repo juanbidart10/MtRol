@@ -1,0 +1,197 @@
+/* =========================================================
+   MTROL - COMBAT CHAT CARDS
+========================================================= */
+
+.chat-message .mtrol-combat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 14px;
+
+  color: #efe7d3;
+  font-family: var(--mtrol-font-body);
+
+  background:
+    radial-gradient(circle at 50% 0%, rgba(216, 194, 122, .13), transparent 32%),
+    radial-gradient(circle at 100% 16%, rgba(120, 24, 16, .16), transparent 34%),
+    linear-gradient(180deg, rgba(20, 17, 13, .98), rgba(2, 2, 3, .99));
+
+  border: 1px solid rgba(216, 194, 122, .50);
+  border-radius: 12px;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 140, .05),
+    inset 0 0 28px rgba(0, 0, 0, .70),
+    0 10px 22px rgba(0, 0, 0, .58);
+}
+
+.chat-message .mtrol-combat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(135deg, rgba(255, 226, 140, .09), transparent 22%, transparent 76%, rgba(255, 226, 140, .04));
+
+  pointer-events: none;
+}
+
+.chat-message .mtrol-combat-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-message .mtrol-combat-header {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.chat-message .mtrol-combat-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  max-width: 100%;
+  margin: 0 auto;
+
+  color: #f4d47a;
+  font-family: var(--mtrol-font-title);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: .2px;
+  text-align: center;
+
+  text-shadow:
+    0 0 10px rgba(216, 194, 122, .28),
+    0 2px 5px rgba(0, 0, 0, 1);
+}
+
+.chat-message .mtrol-combat-subheader {
+  margin-top: 8px;
+  color: rgba(239, 231, 211, .86);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chat-message .mtrol-combat-subheader strong {
+  color: #fff3c7;
+}
+
+.chat-message .mtrol-combat-card hr {
+  height: 1px;
+  margin: 11px 0;
+
+  background:
+    linear-gradient(90deg, transparent, rgba(216, 194, 122, .46), transparent);
+
+  border: 0;
+}
+
+.chat-message .mtrol-combat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.chat-message .mtrol-roll-block {
+  padding: 8px;
+
+  background:
+    linear-gradient(180deg, rgba(8, 8, 8, .72), rgba(0, 0, 0, .86));
+
+  border: 1px solid rgba(216, 194, 122, .28);
+  border-radius: 8px;
+
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, .72);
+}
+
+.chat-message .mtrol-combat-card .dice-roll {
+  margin: 0;
+}
+
+.chat-message .mtrol-combat-card .dice-formula,
+.chat-message .mtrol-combat-card .dice-total {
+  color: #f7efd9;
+  background: rgba(0, 0, 0, .64);
+  border: 1px solid rgba(216, 194, 122, .34);
+  border-radius: 5px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, .70);
+}
+
+.chat-message .mtrol-combat-card p {
+  margin: 0;
+  padding: 4px 0;
+
+  color: rgba(239, 231, 211, .88);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.chat-message .mtrol-combat-label {
+  display: inline-block;
+  margin-right: 4px;
+
+  color: rgba(239, 231, 211, .78);
+  font-weight: 800;
+}
+
+.chat-message .mtrol-combat-card strong {
+  color: #fff3c7;
+  font-weight: 900;
+}
+
+.chat-message .mtrol-combat-crit-block {
+  padding: 10px;
+
+  background:
+    radial-gradient(circle at top, rgba(255, 226, 140, .13), transparent 42%),
+    linear-gradient(180deg, rgba(66, 42, 12, .44), rgba(7, 6, 4, .82));
+
+  border: 1px solid rgba(255, 215, 120, .42);
+  border-radius: 9px;
+
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .66),
+    0 0 12px rgba(255, 215, 120, .12);
+}
+
+.chat-message .mtrol-combat-crit-block p:first-child {
+  color: #f4d47a;
+  font-weight: 900;
+  text-align: center;
+}
+
+.chat-message .mtrol-details {
+  color: rgba(239, 231, 211, .80);
+  font-size: 12px;
+}
+
+.chat-message .mtrol-combat-alert {
+  margin-top: 8px;
+  padding: 10px;
+
+  border-radius: 9px;
+
+  text-align: center;
+  font-weight: 900;
+}
+
+.chat-message .mtrol-combat-alert.destroy {
+  color: #ffbf7d;
+  background: rgba(80, 35, 10, .36);
+  border: 1px solid rgba(255, 150, 70, .50);
+}
+
+.chat-message .mtrol-combat-alert.death {
+  color: #ff6b6b;
+  background:
+    radial-gradient(circle at top, rgba(255, 70, 70, .16), transparent 58%),
+    rgba(80, 0, 0, .34);
+
+  border: 1px solid rgba(255, 70, 70, .66);
+
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .64),
+    0 0 14px rgba(255, 0, 0, .18);
+}

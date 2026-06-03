@@ -1,0 +1,60 @@
+/* =========================================================
+   MTROL - DARK THEME
+========================================================= */
+
+:root {
+
+  --mtrol-bg-primary:
+    #050505;
+
+  --mtrol-bg-secondary:
+    #0b0b0b;
+
+  --mtrol-bg-panel:
+    rgba(0,0,0,.85);
+
+}
+
+/* =========================
+   PANELS
+========================= */
+
+.mtrol-panel,
+.sheet-section {
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(16,16,16,.95),
+      rgba(6,6,6,.95)
+    );
+
+}
+
+/* =========================
+   INPUTS
+========================= */
+
+.mtrol input,
+.mtrol select,
+.mtrol textarea {
+
+  background:
+    rgba(8,8,8,.95);
+
+}
+
+/* =========================
+   TABS
+========================= */
+
+.mtrol .sheet-tabs {
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(18,18,18,.92),
+      rgba(6,6,6,.92)
+    );
+
+}

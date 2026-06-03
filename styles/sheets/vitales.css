@@ -1,0 +1,182 @@
+/* ========================================= */
+/* MTROL - VITALES */
+/* HP / MP BARS */
+/* ========================================= */
+
+.mtrol-vital-bar {
+  position: relative;
+
+  height: 16px;
+  overflow: hidden;
+
+  background: rgba(0, 0, 0, .66);
+
+  border: 1px solid rgba(255, 226, 140, .16);
+  border-radius: 999px;
+
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, .95),
+    0 0 8px rgba(0, 0, 0, .54);
+}
+
+.mtrol-vital-bar::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.24),
+      transparent 45%,
+      rgba(0,0,0,.28)
+    );
+
+  pointer-events: none;
+}
+
+.mtrol-vital-fill {
+  height: 100%;
+  width: var(--mtrol-vital-percent, 100%);
+
+  border-radius: 999px;
+  transition: width .16s ease-out;
+}
+
+.mtrol-vital-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+
+  color: #f4ead2;
+  font-size: 17px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.mtrol-vital-current input.mtrol-vital-field {
+  width: 38px;
+  height: 22px;
+  min-width: 0;
+  padding: 0;
+
+  color: #f4ead2 !important;
+  background: transparent !important;
+  border: 0 !important;
+
+  font: inherit;
+  line-height: 1;
+  text-align: right;
+
+  box-shadow: none !important;
+}
+
+.mtrol-vital-current input.mtrol-vital-field:focus {
+  background: rgba(0, 0, 0, .34) !important;
+  outline: 1px solid rgba(242, 210, 122, .55);
+  outline-offset: 2px;
+}
+
+.mtrol-vital-current input.mtrol-vital-field:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+/* HP */
+
+.hp-fill {
+  background:
+    linear-gradient(
+      90deg,
+      #651010,
+      #c8372f,
+      #ff6a4f
+    );
+
+  box-shadow:
+    inset 0 0 8px rgba(255, 255, 255, .18),
+    0 0 12px rgba(255, 64, 44, .28);
+}
+
+/* MP */
+
+.mp-fill {
+  background:
+    linear-gradient(
+      90deg,
+      #0b2b58,
+      #2474d6,
+      #6ab7ff
+    );
+
+  box-shadow:
+    inset 0 0 8px rgba(255, 255, 255, .16),
+    0 0 12px rgba(52, 152, 255, .26);
+}
+
+/* Legacy fallback por si algún bloque viejo usa vitales-bar */
+
+.vitales-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+
+  margin-top: 14px;
+}
+
+.mtrol-vital-card {
+  padding: 12px 14px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(30, 24, 17, .92),
+      rgba(8, 8, 10, .94)
+    );
+
+  border: 1px solid rgba(212, 175, 55, .26);
+  border-radius: 14px;
+
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, .65),
+    0 0 12px rgba(0, 0, 0, .45);
+}
+
+/* ========================================= */
+/* HEADER V2 - ANTI OVERLAP RESPONSIVE */
+/* ========================================= */
+
+@media (max-width: 980px) {
+  .mtrol-master-header {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-hero-vitals {
+    width: 100%;
+    min-width: 0;
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 720px) {
+  .mtrol-hero-left {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-hero-stats {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .mtrol-hero-vitals {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-hero-vital {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+}
