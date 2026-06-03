@@ -17,6 +17,10 @@
     }
   ],
 
+  "manifest": "https://raw.githubusercontent.com/juanbidart10/MtRol/main/system.json",
+
+  "download": "https://github.com/juanbidart10/MtRol/releases/latest/download/mtrol.zip",
+
   "esmodules": [
     "scripts/mtrol.js"
   ],
