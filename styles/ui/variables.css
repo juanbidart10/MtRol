@@ -1,0 +1,130 @@
+/* =========================================================
+   MTROL VARIABLES
+========================================================= */
+
+:root {
+
+  /* =========================
+     COLORES PRINCIPALES
+  ========================= */
+
+  --mtrol-gold: #d4af37;
+  --mtrol-gold-light: #f4d67a;
+  --mtrol-gold-dark: #8a6a12;
+
+  --mtrol-silver: #d7d7d7;
+  --mtrol-white: #ffffff;
+
+  --mtrol-red: #8b0000;
+  --mtrol-red-light: #c62828;
+
+  --mtrol-blue: #4aa3ff;
+  --mtrol-blue-dark: #1b4f9c;
+
+  --mtrol-green: #3cb371;
+
+  /* =========================
+     FONDOS
+  ========================= */
+
+  --mtrol-bg-primary: #050505;
+  --mtrol-bg-secondary: #0b0b0b;
+  --mtrol-bg-panel: rgba(0, 0, 0, 0.85);
+
+  --mtrol-bg-card: linear-gradient(
+    180deg,
+    rgba(25, 15, 0, 0.95),
+    rgba(0, 0, 0, 0.95)
+  );
+
+  /* =========================
+     BORDES
+  ========================= */
+
+  --mtrol-border-gold:
+    1px solid var(--mtrol-gold);
+
+  --mtrol-border-heavy:
+    2px solid var(--mtrol-gold);
+
+  --mtrol-radius-sm: 6px;
+  --mtrol-radius-md: 10px;
+  --mtrol-radius-lg: 16px;
+
+  /* =========================
+     SOMBRAS
+  ========================= */
+
+  --mtrol-shadow-soft:
+    0 0 10px rgba(212, 175, 55, 0.25);
+
+  --mtrol-shadow-medium:
+    0 0 18px rgba(212, 175, 55, 0.45);
+
+  --mtrol-shadow-strong:
+    0 0 28px rgba(212, 175, 55, 0.7);
+
+  /* =========================
+     FUENTES
+  ========================= */
+
+  --mtrol-font-title:
+    "Morpheus",
+    serif;
+
+  --mtrol-font-body:
+    "Signika",
+    sans-serif;
+
+  /* =========================
+     TAMAÑOS
+  ========================= */
+
+  --mtrol-title-xl: 42px;
+  --mtrol-title-lg: 32px;
+  --mtrol-title-md: 24px;
+
+  --mtrol-text-lg: 18px;
+  --mtrol-text-md: 14px;
+  --mtrol-text-sm: 12px;
+
+  /* =========================
+     ESPACIADOS
+  ========================= */
+
+  --mtrol-gap-xs: 4px;
+  --mtrol-gap-sm: 8px;
+  --mtrol-gap-md: 12px;
+  --mtrol-gap-lg: 20px;
+
+  /* =========================
+     COMBATE
+  ========================= */
+
+  --combat-card-width: 190px;
+  --combat-card-height: 260px;
+
+  --combat-image-width: 110px;
+  --combat-image-height: 110px;
+
+  --combat-button-height: 40px;
+
+  /* =========================
+     BARRAS
+  ========================= */
+
+  --hp-color:
+    linear-gradient(
+      90deg,
+      #c62828,
+      #ff5252
+    );
+
+  --mp-color:
+    linear-gradient(
+      90deg,
+      #1565c0,
+      #64b5f6
+    );
+
+}

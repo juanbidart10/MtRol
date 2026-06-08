@@ -1,0 +1,1045 @@
+﻿<form class="{{cssClass}} mtrol-personaje-sheet mtrol-sheet-v2" autocomplete="off">
+
+  <!-- =============================== -->
+  <!-- HEADER MASTER -->
+  <!-- =============================== -->
+
+  <header class="mtrol-master-header">
+
+    <section class="mtrol-hero-left">
+
+      <div class="mtrol-hero-portrait">
+        <img class="profile-img"
+             src="{{actorImg}}"
+             data-fallback="icons/svg/mystery-man.svg"
+             data-edit="img"
+             title="{{actor.name}}" />
+      </div>
+
+      <div class="mtrol-hero-identity">
+
+        <input class="mtrol-hero-name"
+               name="name"
+               type="text"
+               value="{{actor.name}}"
+               placeholder="Nombre del personaje" />
+
+        <div class="mtrol-hero-subtitle">
+          <span>{{system.identidad.titulo}}</span>
+          <span>&diams;</span>
+          <span>{{system.identidad.raza}}</span>
+          <span>&diams;</span>
+          <span>{{system.identidad.clase}}</span>
+        </div>
+
+        <div class="mtrol-hero-stats">
+
+          <div class="mtrol-hero-stat">
+            <label>Nivel</label>
+            <strong>{{system.recursos.nivel}}</strong>
+          </div>
+
+          <div class="mtrol-hero-stat wide">
+            <label>EXP</label>
+            <strong>{{system.recursos.exp}}</strong>
+          </div>
+
+          <div class="mtrol-hero-stat karma">
+            <label>Karma</label>
+            <strong>{{system.recursos.karma}}</strong>
+          </div>
+
+          <div class="mtrol-hero-stat dharma">
+            <label>Dharma</label>
+            <strong>{{system.recursos.dharma}}</strong>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <section class="mtrol-hero-vitals">
+
+      <div class="mtrol-hero-vital hp">
+
+        <div class="mtrol-vital-icon">&hearts;</div>
+
+        <div class="mtrol-vital-content">
+          <div class="mtrol-vital-top">
+            <label>HP</label>
+            <span class="mtrol-vital-current">
+              <input class="mtrol-vital-field"
+                     type="number"
+                     name="system.vitales.hp.value"
+                     value="{{system.vitales.hp.value}}"
+                     min="0"
+                     data-vital="hp"
+                     data-field="value"
+                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+              <span>/</span>
+              <input class="mtrol-vital-field"
+                     type="number"
+                     name="system.vitales.hp.max"
+                     value="{{system.vitales.hp.max}}"
+                     min="0"
+                     data-vital="hp"
+                     data-field="max"
+                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+            </span>
+          </div>
+
+          <div class="mtrol-vital-bar">
+            <div class="mtrol-vital-fill hp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.hp}}%;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="mtrol-hero-vital mp">
+
+        <div class="mtrol-vital-icon">&diams;</div>
+
+        <div class="mtrol-vital-content">
+          <div class="mtrol-vital-top">
+            <label>MP</label>
+            <span class="mtrol-vital-current">
+              <input class="mtrol-vital-field"
+                     type="number"
+                     name="system.vitales.mp.value"
+                     value="{{system.vitales.mp.value}}"
+                     min="0"
+                     data-vital="mp"
+                     data-field="value"
+                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+              <span>/</span>
+              <input class="mtrol-vital-field"
+                     type="number"
+                     name="system.vitales.mp.max"
+                     value="{{system.vitales.mp.max}}"
+                     min="0"
+                     data-vital="mp"
+                     data-field="max"
+                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+            </span>
+          </div>
+
+          <div class="mtrol-vital-bar">
+            <div class="mtrol-vital-fill mp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.mp}}%;"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </header>
+
+  <!-- =============================== -->
+  <!-- NAV TABS -->
+  <!-- =============================== -->
+
+  <nav class="sheet-tabs tabs mtrol-main-tabs" data-group="primary">
+    <a class="item" data-tab="personaje"><i class="fas fa-user"></i>Personaje</a>
+    <a class="item" data-tab="combate"><i class="fas fa-dice-d20"></i>Combate</a>
+    <a class="item" data-tab="competencias"><i class="fas fa-star"></i>Competencias</a>
+    <a class="item" data-tab="equipamiento"><i class="fas fa-shield-alt"></i>Equipamiento</a>
+    <a class="item" data-tab="inventario"><i class="fas fa-suitcase"></i>Inventario</a>
+    <a class="item" data-tab="progresion"><i class="fas fa-chart-line"></i>Progresi&oacute;n</a>
+  </nav>
+
+  <section class="sheet-body mtrol-sheet-body-v2">
+
+    <!-- =============================== -->
+    <!-- TAB PERSONAJE -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-personaje" data-group="primary" data-tab="personaje">
+
+      <section class="mtrol-panel atributos">
+        <header class="mtrol-tab-header mtrol-atributos-header">
+          <div>
+            <h2>Atributos</h2>
+          </div>
+        </header>
+
+        <div class="atributos-grid mtrol-atributos-premium">
+
+          <section class="mtrol-attribute-group mtrol-attribute-group-physical" aria-label="Atributos Físicos">
+            <header class="mtrol-attribute-group-header">
+              <span>Físicos</span>
+            </header>
+
+            <div class="mtrol-attribute-group-grid">
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="resistencia" data-atributo="resistencia">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-shield-alt"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Resistencia</label>
+                  <input type="number" name="system.atributos.resistencia" value="{{system.atributos.resistencia}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="fuerza" data-atributo="fuerza">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-fist-raised"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Fuerza</label>
+                  <input type="number" name="system.atributos.fuerza" value="{{system.atributos.fuerza}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="destreza" data-atributo="destreza">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-running"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Destreza</label>
+                  <input type="number" name="system.atributos.destreza" value="{{system.atributos.destreza}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="mtrol-attribute-group mtrol-attribute-group-mental" aria-label="Atributos Mentales">
+            <header class="mtrol-attribute-group-header">
+              <span>Mentales</span>
+            </header>
+
+            <div class="mtrol-attribute-group-grid">
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="inteligencia" data-atributo="inteligencia">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-brain"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Inteligencia</label>
+                  <input type="number" name="system.atributos.inteligencia" value="{{system.atributos.inteligencia}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="voluntad" data-atributo="voluntad">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-fire"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Voluntad</label>
+                  <input type="number" name="system.atributos.voluntad" value="{{system.atributos.voluntad}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="percepcion" data-atributo="percepcion">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-eye"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Percepción</label>
+                  <input type="number" name="system.atributos.percepcion" value="{{system.atributos.percepcion}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="mtrol-attribute-group mtrol-attribute-group-spiritual" aria-label="Atributos Sociales y Espirituales">
+            <header class="mtrol-attribute-group-header">
+              <span>Sociales y Espirituales</span>
+            </header>
+
+            <div class="mtrol-attribute-group-grid">
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="carisma" data-atributo="carisma">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-theater-masks"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Carisma</label>
+                  <input type="number" name="system.atributos.carisma" value="{{system.atributos.carisma}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="aura" data-atributo="aura">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-sun"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Aura</label>
+                  <input type="number" name="system.atributos.aura" value="{{system.atributos.aura}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+
+              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="suerte" data-atributo="suerte">
+                <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-dice-d20"></i></div>
+                <div class="mtrol-attribute-main">
+                  <label>Suerte</label>
+                  <input type="number" name="system.atributos.suerte" value="{{system.atributos.suerte}}" {{#unless esGM}}disabled{{/unless}}>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </section>
+
+      <section class="mtrol-panel identidad">
+        <header class="mtrol-tab-header mtrol-identidad-header">
+          <div>
+            <h2>Identidad</h2>
+            <p>Registro del personaje</p>
+          </div>
+        </header>
+
+        <div class="identidad-grid mtrol-identidad-premium">
+
+          <div class="mtrol-field wide">
+            <label>T&iacute;tulo</label>
+            <input type="text" name="system.identidad.titulo" value="{{system.identidad.titulo}}">
+          </div>
+
+          <div class="mtrol-field">
+            <label>Clase</label>
+            <input type="text" name="system.identidad.clase" value="{{system.identidad.clase}}">
+          </div>
+
+          <div class="mtrol-field">
+            <label>Raza</label>
+            <input type="text" name="system.identidad.raza" value="{{system.identidad.raza}}">
+          </div>
+
+          <div class="mtrol-field">
+            <label>Profesi&oacute;n</label>
+            <input type="text" name="system.identidad.profesion" value="{{system.identidad.profesion}}">
+          </div>
+
+          <div class="mtrol-field">
+            <label>Maestr&iacute;a</label>
+            <input type="text" name="system.identidad.maestria" value="{{system.identidad.maestria}}">
+          </div>
+
+          <div class="mtrol-field">
+            <label>Edad</label>
+            <input type="number" name="system.identidad.edad" value="{{system.identidad.edad}}" min="0">
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- TAB COMBATE -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-combate" data-group="primary" data-tab="combate">
+
+      <section class="mtrol-combat-hero">
+
+        <header class="mtrol-combat-title mtrol-tab-header">
+          <div>
+            <h2>Combate</h2>
+          </div>
+        </header>
+
+        <section class="mtrol-combat-grid">
+
+          {{#if habilidadesEquipadasCombate.length}}
+
+            {{#each habilidadesEquipadasCombate}}
+
+              <article class="mtrol-combat-card mtrol-item"
+                       data-item-id="{{this.id}}"
+                       data-elemento="{{this.system.elemento}}">
+
+                <div class="mtrol-combat-card-image">
+                  <img src="{{this.mtrolBanner}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
+                  <span class="mtrol-combat-card-level">Nv. {{this.system.nivel}}</span>
+                </div>
+
+                <div class="mtrol-combat-card-body">
+
+                  <div class="mtrol-combat-card-school">
+                    {{#if this.system.elemento}}
+                      {{this.system.elemento}}
+                    {{else}}
+                      {{this.system.tipo}}
+                    {{/if}}
+                  </div>
+
+                  <h3 class="mtrol-combat-card-title">{{this.name}}</h3>
+
+                  <div class="mtrol-combat-card-meta">
+                    <span><i class="fas fa-tint"></i> MP {{this.system.costeMP}}</span>
+                    <span><i class="fas fa-hourglass-half"></i> CD {{this.system.cooldown}}</span>
+                  </div>
+
+                  <div class="mtrol-combat-card-actions">
+                    <button type="button"
+                            class="mtrol-combat-use competencia-roll"
+                            data-item-id="{{this.id}}">
+                      Usar
+                    </button>
+
+                    <button type="button"
+                            class="mtrol-combat-card-detail"
+                            data-item-id="{{this.id}}">
+                      Ver detalle
+                    </button>
+
+                    {{#if ../esGM}}
+                      <button type="button"
+                              class="mtrol-combat-unequip habilidad-combate-unequip"
+                              data-item-id="{{this.id}}">
+                        Desequipar
+                      </button>
+                    {{/if}}
+                  </div>
+
+                </div>
+
+              </article>
+
+            {{/each}}
+
+          {{else}}
+
+            <div class="mtrol-combat-empty">
+              No hay habilidades equipadas en combate.
+            </div>
+
+          {{/if}}
+
+        </section>
+
+        <section class="sheet-section combate-section">
+
+          <h2>
+            Barra de Combate
+            {{#if esGM}}
+              <a class="add-habilidad-combate" title="Agregar habilidad de combate">
+                <i class="fas fa-plus"></i>
+              </a>
+            {{/if}}
+          </h2>
+
+          <div class="combat-skills-bar">
+
+            {{#if habilidadesCombate.length}}
+
+              {{#each habilidadesCombate}}
+
+                <div class="combat-skill-card mtrol-item" data-item-id="{{this.id}}">
+
+                  <div class="combat-skill-header">
+                    <div class="combat-skill-title">
+                      {{#if this.imgSeguro}}
+                        <img class="combat-skill-icon" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
+                      {{else}}
+                        <span class="combat-skill-icon combat-skill-icon-fallback">
+                          <i class="fas fa-bolt"></i>
+                        </span>
+                      {{/if}}
+
+                      <span class="combat-skill-name">{{this.name}}</span>
+                    </div>
+
+                    <div class="combat-skill-state">
+                      <span class="combat-skill-level">Nv. {{this.system.nivel}}</span>
+
+                      {{#if this.system.equipadaCombate}}
+                        <span class="combat-skill-status is-equipped">Equipada</span>
+                      {{else}}
+                        <span class="combat-skill-status is-unequipped">Reserva</span>
+                      {{/if}}
+                    </div>
+                  </div>
+
+                  <div class="combat-skill-actions">
+
+                    {{#if ../esGM}}
+                      <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                      <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                    {{/if}}
+
+                    <a class="competencia-roll" data-item-id="{{this.id}}" title="Usar habilidad"><i class="fas fa-bolt"></i></a>
+
+                    {{#if this.system.equipadaCombate}}
+                      {{#if ../esGM}}
+                        <a class="habilidad-combate-unequip" data-item-id="{{this.id}}" title="Desequipar de Combate">
+                          <i class="fas fa-times-circle"></i>
+                        </a>
+                      {{/if}}
+                    {{else}}
+                      {{#if ../esGM}}
+                        <a class="habilidad-combate-equip" data-item-id="{{this.id}}" title="Equipar en Combate">
+                          <i class="fas fa-check-circle"></i>
+                        </a>
+                      {{/if}}
+                    {{/if}}
+
+                    {{#if ../esGM}}
+                      <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
+                      <a class="item-delete" data-item-id="{{this.id}}" title="Eliminar"><i class="fas fa-trash"></i></a>
+                    {{/if}}
+
+                  </div>
+
+                </div>
+
+              {{/each}}
+
+            {{else}}
+
+              <p class="hint">No hay habilidades de combate creadas.</p>
+
+            {{/if}}
+
+          </div>
+
+        </section>
+
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- TAB COMPETENCIAS -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-competencias" data-group="primary" data-tab="competencias">
+
+      <section class="sheet-section">
+
+        <header class="mtrol-tab-header mtrol-competencias-header">
+          <div>
+            <h2>
+              Competencias
+              {{#if esGM}}
+                <a class="add-competencia" title="Agregar competencia">
+                  <i class="fas fa-plus"></i>
+                </a>
+              {{/if}}
+            </h2>
+          </div>
+        </header>
+
+        <div class="competencias-list">
+
+          {{#if competenciasGenerales.length}}
+
+            {{#each competenciasGenerales}}
+
+              <div class="competencia-row mtrol-item" data-item-id="{{this.id}}">
+
+                <div class="competencia-main">
+                  {{#if this.imgSeguro}}
+                    <img class="competencia-icon" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
+                  {{else}}
+                    <span class="competencia-icon competencia-icon-fallback">
+                      <i class="fas fa-star"></i>
+                    </span>
+                  {{/if}}
+
+                  <div class="competencia-info">
+                    <span class="competencia-nombre">{{this.name}}</span>
+                    <span class="competencia-subtitle">Competencia</span>
+                  </div>
+                </div>
+
+                <span class="competencia-controles">
+
+                  {{#if ../esGM}}
+                    <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                  {{/if}}
+
+                  <span class="competencia-nivel">{{this.system.nivel}}</span>
+
+                  {{#if ../esGM}}
+                    <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                  {{/if}}
+
+                  <a class="competencia-roll" data-item-id="{{this.id}}" title="Tirar competencia"><i class="fas fa-dice"></i></a>
+
+                  {{#if ../esGM}}
+                    <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
+                    <a class="item-delete" data-item-id="{{this.id}}" title="Eliminar"><i class="fas fa-trash"></i></a>
+                  {{/if}}
+
+                </span>
+
+              </div>
+
+            {{/each}}
+
+          {{else}}
+
+            <p class="hint">No tienes competencias generales a&uacute;n.</p>
+
+          {{/if}}
+
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- TAB EQUIPAMIENTO -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-equipamiento" data-group="primary" data-tab="equipamiento">
+
+      <section class="equipamiento-tab mtrol-equipment-tab">
+
+        <header class="mtrol-equipment-header mtrol-tab-header">
+          <div>
+            <h2>Equipamiento</h2>
+          </div>
+        </header>
+
+        <div class="mtrol-equipment-layout">
+
+          <section class="mtrol-body-build">
+
+            <div class="mtrol-body-silhouette" aria-hidden="true">
+              <div class="mtrol-silhouette-head"></div>
+              <div class="mtrol-silhouette-torso"></div>
+              <div class="mtrol-silhouette-arms"></div>
+              <div class="mtrol-silhouette-legs"></div>
+
+              <div class="mtrol-body-slot-overlay">
+                {{#each slotsEquipamiento as |slot|}}
+                  {{#if (eq slot.key "cabeza")}}
+                    <span class="mtrol-body-slot-marker slot-cabeza {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "cuello")}}
+                    <span class="mtrol-body-slot-marker slot-cuello {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "hombros")}}
+                    <span class="mtrol-body-slot-marker slot-hombros-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                    <span class="mtrol-body-slot-marker slot-hombros-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "brazos")}}
+                    <span class="mtrol-body-slot-marker slot-brazos-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                    <span class="mtrol-body-slot-marker slot-brazos-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "pecho")}}
+                    <span class="mtrol-body-slot-marker slot-pecho {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "piernas")}}
+                    <span class="mtrol-body-slot-marker slot-piernas-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                    <span class="mtrol-body-slot-marker slot-piernas-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "pies")}}
+                    <span class="mtrol-body-slot-marker slot-pies-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                    <span class="mtrol-body-slot-marker slot-pies-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "manoIzq")}}
+                    <span class="mtrol-body-slot-marker slot-mano-izq {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "manoDer")}}
+                    <span class="mtrol-body-slot-marker slot-mano-der {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                  {{#if (eq slot.key "extra")}}
+                    <span class="mtrol-body-slot-marker slot-extra {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
+                  {{/if}}
+                {{/each}}
+              </div>
+            </div>
+
+            <div class="mtrol-body-slots">
+
+              {{#each slotsEquipamiento as |slot|}}
+
+                {{#if slot.ocupado}}
+                  <article class="mtrol-equip-slot {{slot.estadoClase}} mtrol-draggable-objeto"
+                           data-slot="{{slot.key}}"
+                           data-item-id="{{slot.item.id}}">
+
+                    <div class="mtrol-slot-label">{{slot.label}}</div>
+
+                    <div class="mtrol-slot-box">
+                      <img class="mtrol-slot-icon"
+                           src="{{slot.itemImg}}"
+                           data-fallback="icons/svg/item-bag.svg"
+                           alt="{{slot.item.name}}">
+
+                      <div class="mtrol-slot-content">
+                        <strong class="mtrol-slot-name">{{slot.item.name}}</strong>
+
+                        <div class="mtrol-slot-stats">
+                          <span>DEF {{slot.defensaActualBase}}</span>
+                          <span>DMG {{#if slot.danio}}{{slot.danio}}{{else}}-{{/if}}</span>
+                          <span>Peso {{slot.peso}}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mtrol-slot-actions">
+                      <button type="button"
+                              class="item-unequip"
+                              title="Desequipar">
+                        <i class="fas fa-user-minus"></i>
+                      </button>
+                    </div>
+
+                  </article>
+                {{else}}
+                  <article class="mtrol-equip-slot {{slot.estadoClase}}"
+                           data-slot="{{slot.key}}">
+
+                    <div class="mtrol-slot-label">{{slot.label}}</div>
+
+                    <div class="mtrol-slot-box">
+                      <div class="mtrol-slot-icon mtrol-slot-empty-icon">
+                        <i class="fas fa-plus"></i>
+                      </div>
+
+                      <div class="mtrol-slot-content">
+                        <strong class="mtrol-slot-name">Vac&iacute;o</strong>
+
+                        <div class="mtrol-slot-stats">
+                          <span>DEF -</span>
+                          <span>DMG -</span>
+                          <span>Peso -</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </article>
+                {{/if}}
+
+              {{/each}}
+
+            </div>
+
+          </section>
+
+          <aside class="mtrol-equipment-summary">
+            <h3>Resumen</h3>
+
+            <div class="mtrol-summary-row">
+              <span>Da&ntilde;o de armas</span>
+              <strong>{{equipamientoResumen.danioArmas}}</strong>
+            </div>
+
+            <div class="mtrol-summary-row">
+              <span>Peso actual</span>
+              <strong>{{equipamientoResumen.pesoActual}}</strong>
+            </div>
+
+            <div class="mtrol-summary-row">
+              <span>Peso m&aacute;ximo</span>
+              <strong>{{equipamientoResumen.pesoMaximo}}</strong>
+            </div>
+
+            <div class="mtrol-summary-row">
+              <span>Peso libre</span>
+              <strong>{{equipamientoResumen.pesoLibre}}</strong>
+            </div>
+
+            <div class="mtrol-summary-row">
+              <span>Slots ocupados</span>
+              <strong>{{equipamientoResumen.slotsOcupados}} / {{equipamientoResumen.slotsTotales}}</strong>
+            </div>
+          </aside>
+
+        </div>
+
+        <details class="mtrol-equipment-fallback">
+          <summary>Ver tabla cl&aacute;sica</summary>
+
+        <table class="tabla-equipamiento">
+
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>Objeto equipado</th>
+              <th>Defensa</th>
+              <th>Da&ntilde;o</th>
+              <th>Defensa actual/base</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            {{#each slotsEquipamiento as |slot|}}
+
+              <tr>
+
+                <td>{{slot.label}}</td>
+
+                {{#if slot.ocupado}}
+
+                  <td class="item-nombre-col">
+                    <div class="item-miniatura">
+                      <img src="{{slot.itemImg}}" data-fallback="icons/svg/item-bag.svg" alt="{{slot.item.name}}">
+                      <span>{{slot.item.name}}</span>
+                    </div>
+                  </td>
+
+                  <td>{{slot.defensa}}</td>
+
+                  <td>
+                    {{#if slot.danio}}{{slot.danio}}{{else}}-{{/if}}
+                  </td>
+
+                  <td>
+                    {{slot.item.system.defensa}} / {{slot.item.system.defensaBase}}
+                  </td>
+
+                  <td>
+                    <span class="objeto-ok">OK</span>
+                  </td>
+
+                  <td>
+                    <div class="item mtrol-draggable-objeto" data-item-id="{{slot.item.id}}">
+                      <a class="item-edit" title="Editar"><i class="fas fa-edit"></i></a>
+                      <a class="item-unequip" title="Desequipar"><i class="fas fa-user-minus"></i></a>
+                      <a class="item-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
+                    </div>
+                  </td>
+
+                {{else}}
+
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+
+                {{/if}}
+
+              </tr>
+
+            {{/each}}
+
+          </tbody>
+
+        </table>
+
+        </details>
+
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- TAB INVENTARIO -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-inventario" data-group="primary" data-tab="inventario">
+
+      <section class="inventario-tab">
+
+        <div class="inventario-header mtrol-tab-header">
+
+          <div>
+            <h2>Inventario</h2>
+          </div>
+
+          {{#if esGM}}
+            <a class="item-create-objeto" title="Crear objeto">
+              <i class="fas fa-plus"></i>
+              Nuevo objeto
+            </a>
+          {{/if}}
+
+          <a class="mtrol-trade-request" title="Solicitud de comercio">
+            <i class="fas fa-handshake"></i>
+            Solicitud de comercio
+          </a>
+
+        </div>
+
+        <div class="slots-resumen">
+          <span><strong>Peso m&aacute;ximo:</strong> {{inventario.maximos}}</span>
+          <span><strong>Carga:</strong> {{inventario.usados}}</span>
+          <span><strong>Peso libre:</strong> {{inventario.libres}}</span>
+        </div>
+
+        {{#if inventario.sobrecargado}}
+          <div class="mtrol-warning">
+            Capacidad de carga excedida.
+          </div>
+        {{/if}}
+
+        {{#if objetosInventario.length}}
+
+          <table class="tabla-inventario">
+
+            <thead>
+              <tr>
+                <th>Objeto</th>
+                <th>Cantidad</th>
+                <th>Peso</th>
+                <th>Tipo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              {{#each objetosInventario as |objeto|}}
+
+                <tr class="item mtrol-draggable-objeto" data-item-id="{{objeto.id}}">
+
+                  <td class="item-nombre-col">
+                    <div class="item-miniatura">
+                      <img src="{{objeto.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{objeto.name}}">
+                      <span>{{objeto.name}}</span>
+                    </div>
+                  </td>
+
+                  <td>{{objeto.system.cantidad}}</td>
+                  <td>{{objeto.system.peso}}</td>
+                  <td>{{objeto.system.tipoObjeto}}</td>
+
+                  <td>
+                    <a class="item-edit" title="Editar"><i class="fas fa-edit"></i></a>
+
+                    {{#if objeto.system.equipable}}
+                      <a class="item-equip" title="Equipar"><i class="fas fa-shield-alt"></i></a>
+                    {{/if}}
+
+                    <a class="item-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
+                  </td>
+
+                </tr>
+
+              {{/each}}
+
+            </tbody>
+
+          </table>
+
+        {{else}}
+
+          <p class="hint">No tienes objetos a&uacute;n.</p>
+
+        {{/if}}
+
+      </section>
+
+    </div>
+
+    <!-- =============================== -->
+    <!-- TAB PROGRESION -->
+    <!-- =============================== -->
+
+    <div class="tab mtrol-tab-progresion" data-group="primary" data-tab="progresion">
+
+      <section class="sheet-section">
+
+        <div class="progresion-header mtrol-tab-header">
+
+          <div>
+            <h2>Progresi&oacute;n</h2>
+            <p>Evoluci&oacute;n, destino y huella del personaje</p>
+          </div>
+
+          {{#if esGM}}
+            <button type="button" class="mtrol-restaurar-dia">
+              <span class="restaurar-dia-icon">&#127769;</span>
+              <span class="restaurar-dia-text">
+                <strong>Restaurar D&iacute;a</strong>
+                <small>Reinicia acumuladores diarios</small>
+              </span>
+            </button>
+          {{/if}}
+
+        </div>
+
+        <div class="progresion-panel">
+
+          <section class="progresion-section progresion-section--resources">
+            <div class="progresion-section-header">
+              <h3>Recursos principales</h3>
+            </div>
+
+            <div class="progresion-grid">
+              <div class="progresion-card progresion-card--resource">
+                <label>Nivel</label>
+                <input type="number" name="system.recursos.nivel" value="{{system.recursos.nivel}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--resource progresion-card--exp">
+                <label>EXP</label>
+                <input type="number" name="system.recursos.exp" value="{{system.recursos.exp}}" {{#unless esGM}}disabled{{/unless}}>
+                <div class="progresion-exp-bar" aria-hidden="true"><span></span></div>
+              </div>
+
+              <div class="progresion-card progresion-card--resource">
+                <label>Doblones</label>
+                <input type="number" name="system.recursos.doblones" value="{{system.recursos.doblones}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--resource">
+                <label>MVP</label>
+                <input type="number" name="system.recursos.mvp" value="{{system.recursos.mvp}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+            </div>
+          </section>
+
+          <section class="progresion-section progresion-section--spiritual">
+            <div class="progresion-section-header">
+              <h3>Estado espiritual</h3>
+            </div>
+
+            <div class="progresion-grid">
+              <div class="progresion-card progresion-card--spiritual progresion-card--dharma">
+                <label>Dharma</label>
+                <div class="progresion-score-wrap">
+                  <div class="progresion-score" style="--progresion-score: {{system.recursos.dharma}};" aria-hidden="true"></div>
+                  <span class="progresion-score-count">{{system.recursos.dharma}}/5</span>
+                </div>
+                <input type="number" name="system.recursos.dharma" value="{{system.recursos.dharma}}" min="0" max="5" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--spiritual progresion-card--karma">
+                <label>Karma</label>
+                <div class="progresion-score-wrap">
+                  <div class="progresion-score" style="--progresion-score: {{system.recursos.karma}};" aria-hidden="true"></div>
+                  <span class="progresion-score-count">{{system.recursos.karma}}/5</span>
+                </div>
+                <input type="number" name="system.recursos.karma" value="{{system.recursos.karma}}" min="0" max="5" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--spiritual progresion-card--estres">
+                <label>Estr&eacute;s</label>
+                <input type="number" name="system.recursos.estres" value="{{system.recursos.estres}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--spiritual progresion-card--corrupcion">
+                <label>Corrupci&oacute;n</label>
+                <input type="number" name="system.recursos.corrupcion" value="{{system.recursos.corrupcion}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+            </div>
+          </section>
+
+          <section class="progresion-section progresion-section--talents">
+            <div class="progresion-section-header">
+              <h3>Desarrollo del personaje</h3>
+            </div>
+
+            <div class="progresion-grid">
+              <div class="progresion-card progresion-card--talent">
+                <label>Pasiva</label>
+                <input type="text" name="system.recursos.pasiva" value="{{system.recursos.pasiva}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--talent">
+                <label>Despertar</label>
+                <input type="text" name="system.recursos.despertar" value="{{system.recursos.despertar}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--talent">
+                <label>Habilidad Especial I</label>
+                <input type="text" name="system.recursos.habilidadEspecial1" value="{{system.recursos.habilidadEspecial1}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+
+              <div class="progresion-card progresion-card--talent">
+                <label>Habilidad Especial II</label>
+                <input type="text" name="system.recursos.habilidadEspecial2" value="{{system.recursos.habilidadEspecial2}}" {{#unless esGM}}disabled{{/unless}}>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+      </section>
+
+    </div>
+
+  </section>
+
+</form>

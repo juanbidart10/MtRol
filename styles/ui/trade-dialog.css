@@ -1,0 +1,72 @@
+.mtrol-trade-dialog {
+  padding: 4px;
+}
+
+.mtrol-trade-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mtrol-trade-grid section {
+  border: 1px solid rgba(160, 130, 80, 0.35);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(20, 18, 15, 0.78);
+}
+
+.mtrol-trade-grid h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.mtrol-trade-inventory {
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.mtrol-trade-item {
+  display: grid;
+  grid-template-columns: 18px 28px minmax(0, 1fr) 72px 54px 34px;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.mtrol-trade-item img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border: 1px solid rgba(220, 190, 120, 0.35);
+  border-radius: 4px;
+}
+
+.mtrol-trade-item-name,
+.mtrol-trade-item-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtrol-trade-item input[type="number"] {
+  width: 54px;
+}
+
+.mtrol-trade-item-max {
+  opacity: 0.75;
+}
+
+.mtrol-trade-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+.mtrol-trade-card h2 {
+  margin-top: 0;
+}

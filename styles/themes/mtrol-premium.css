@@ -1,0 +1,120 @@
+/* =========================================================
+   MTROL - PREMIUM THEME
+   Sobrio, oscuro y dorado
+========================================================= */
+
+.mtrol.sheet.personaje,
+.mtrol.sheet.objeto {
+  color: var(--mtrol-silver);
+
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .42), rgba(0, 0, 0, .78)),
+    radial-gradient(circle at 48% 24%, rgba(212, 175, 55, .12), transparent 34%),
+    url("../../assets/ui/mtrol-arcane-bg.webp") center center / cover no-repeat !important;
+}
+
+.mtrol.sheet.personaje .window-content,
+.mtrol.sheet.objeto .window-content {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(212, 175, 55, .05), transparent 34%),
+    linear-gradient(180deg, rgba(8, 7, 6, .76), rgba(0, 0, 0, .90)) !important;
+
+  border: 1px solid rgba(216, 194, 122, .20);
+
+  box-shadow:
+    inset 0 0 36px rgba(0, 0, 0, .72),
+    inset 0 1px 0 rgba(255, 226, 140, .06);
+}
+
+.mtrol-panel,
+.sheet-section,
+.identidad,
+.atributos,
+.equipamiento-tab,
+.inventario-tab,
+.combate-section,
+.combate-panel {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(212, 175, 55, .07), transparent 36%),
+    rgba(5, 4, 2, .78) !important;
+
+  border: 1px solid rgba(212, 175, 55, .45) !important;
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 0 20px rgba(0, 0, 0, .85),
+    inset 0 0 18px rgba(212, 175, 55, .08) !important;
+
+  backdrop-filter: blur(4px);
+}
+
+.mtrol h1,
+.mtrol h2,
+.mtrol h3 {
+  font-family: var(--mtrol-font-title) !important;
+  color: var(--mtrol-gold-light) !important;
+  letter-spacing: .3px;
+
+  text-shadow:
+    0 0 10px rgba(216, 194, 122, .18),
+    0 2px 5px rgba(0, 0, 0, 1) !important;
+}
+
+.mtrol input,
+.mtrol select,
+.mtrol textarea {
+  color: #fff4dc !important;
+
+  background:
+    linear-gradient(180deg, rgba(9, 9, 9, .96), rgba(1, 1, 1, .96)) !important;
+
+  border: 1px solid rgba(216, 194, 122, .42) !important;
+  border-radius: 7px !important;
+
+  box-shadow: inset 0 0 9px rgba(0, 0, 0, .76) !important;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 1);
+}
+
+.mtrol input:hover,
+.mtrol select:hover,
+.mtrol textarea:hover {
+  border-color: rgba(255, 220, 120, .66) !important;
+}
+
+.mtrol input:focus,
+.mtrol select:focus,
+.mtrol textarea:focus {
+  outline: none !important;
+  border-color: rgba(255, 235, 170, .88) !important;
+
+  box-shadow:
+    0 0 10px rgba(216, 194, 122, .22),
+    inset 0 0 9px rgba(0, 0, 0, .82) !important;
+}
+
+.mtrol button {
+  position: relative;
+  overflow: hidden;
+  font-family: var(--mtrol-font-title) !important;
+}
+
+.mtrol button::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -100%;
+  width: 100%;
+
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, .10), transparent);
+
+  transition: left .35s ease;
+}
+
+.mtrol button:hover::before {
+  left: 100%;
+}
+
+.mtrol ::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(180deg, rgba(216, 194, 122, .40), rgba(90, 70, 28, .45)) !important;
+}

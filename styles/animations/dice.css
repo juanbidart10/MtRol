@@ -1,0 +1,119 @@
+/* =========================================================
+   MTROL - DICE EFFECTS
+========================================================= */
+
+/* =========================
+   RESULTADO NORMAL
+========================= */
+
+.mtrol-dice-result {
+
+  font-size: 24px;
+  font-weight: bold;
+
+  color:
+    var(--mtrol-white);
+
+}
+
+/* =========================
+   CRITICO
+========================= */
+
+.mtrol-dice-critical {
+
+  color:
+    var(--mtrol-gold-light);
+
+  text-shadow:
+    0 0 8px rgba(255,215,120,.45);
+
+  animation:
+    mtrolCriticalPulse 1.2s infinite;
+
+}
+
+@keyframes mtrolCriticalPulse {
+
+  0% {
+
+    text-shadow:
+      0 0 6px rgba(255,215,120,.35);
+
+  }
+
+  50% {
+
+    text-shadow:
+      0 0 14px rgba(255,215,120,.85);
+
+  }
+
+  100% {
+
+    text-shadow:
+      0 0 6px rgba(255,215,120,.35);
+
+  }
+
+}
+
+/* =========================
+   PIFIA
+========================= */
+
+.mtrol-dice-fumble {
+
+  color:
+    #ff4d4d;
+
+  text-shadow:
+    0 0 10px rgba(255,0,0,.65);
+
+}
+
+@keyframes mtrolShake {
+
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(-2px); }
+  40%  { transform: translateX(2px); }
+  60%  { transform: translateX(-2px); }
+  80%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+
+}
+
+.mtrol-dice-fumble {
+
+  animation:
+    mtrolShake .25s ease;
+
+}
+
+/* =========================
+   DHARMA
+========================= */
+
+.mtrol-dharma-trigger {
+
+  color:
+    #8fd8ff;
+
+  text-shadow:
+    0 0 8px rgba(120,220,255,.55);
+
+}
+
+/* =========================
+   KARMA
+========================= */
+
+.mtrol-karma-trigger {
+
+  color:
+    #d48fff;
+
+  text-shadow:
+    0 0 8px rgba(212,143,255,.55);
+
+}

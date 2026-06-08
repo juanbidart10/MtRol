@@ -1,0 +1,157 @@
+<form class="{{cssClass}} mtrol-objeto-sheet" autocomplete="off">
+
+  <header class="sheet-header">
+
+    <div class="header-left">
+      <img class="profile-img"
+           src="{{itemImg}}"
+           data-fallback="icons/svg/item-bag.svg"
+           data-edit="img"
+           title="{{item.name}}"
+           height="96"
+           width="96" />
+    </div>
+
+    <div class="header-right">
+
+      <div class="charname">
+        <label>Nombre</label>
+
+        <input type="text"
+               name="name"
+               value="{{item.name}}"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+    </div>
+
+  </header>
+
+  <section class="sheet-section">
+
+    <h2>Datos del Objeto</h2>
+
+    <div class="objeto-grid">
+
+      <div class="objeto-field">
+        <label>Tipo de objeto</label>
+
+        <select name="system.tipoObjeto" {{#unless esGM}}disabled{{/unless}}>
+          {{#each tiposObjeto as |tipo|}}
+            <option value="{{tipo.value}}" {{#if tipo.selected}}selected{{/if}}>
+              {{tipo.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="objeto-field">
+        <label>Cantidad</label>
+
+        <input type="number"
+               name="system.cantidad"
+               value="{{system.cantidad}}"
+               min="0"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field">
+        <label>Material</label>
+
+        <select name="system.material" {{#unless esGM}}disabled{{/unless}}>
+          {{#each materialesObjeto as |material|}}
+            <option value="{{material.value}}" {{#if material.selected}}selected{{/if}}>
+              {{material.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="objeto-field">
+        <label>Peso</label>
+
+        <input type="number"
+               name="system.peso"
+               value="{{system.peso}}"
+               step="0.1"
+               min="0"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field">
+        <label>Valor</label>
+
+        <input type="number"
+               name="system.valor"
+               value="{{system.valor}}"
+               min="0"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field objeto-toggle-row">
+        <label>Es equipable</label>
+
+        <input type="checkbox"
+               name="system.equipable"
+               {{checked system.equipable}}
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field">
+        <label>Slot Corporal</label>
+
+        <select name="system.slot" {{#unless esGM}}disabled{{/unless}}>
+          {{#each slotsCorporales as |slot|}}
+            <option value="{{slot.value}}" {{#if slot.selected}}selected{{/if}}>
+              {{slot.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="objeto-field">
+        <label>Defensa actual</label>
+
+        <input type="number"
+               name="system.defensa"
+               value="{{system.defensa}}"
+               min="0"
+               max="20"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field">
+        <label>Defensa base</label>
+
+        <input type="number"
+               name="system.defensaBase"
+               value="{{system.defensaBase}}"
+               min="0"
+               max="20"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+      <div class="objeto-field">
+        <label>Daño</label>
+
+        <input type="text"
+               name="system.danio"
+               value="{{system.danio}}"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+
+    </div>
+
+  </section>
+
+  <section class="sheet-section">
+
+    <h2>Descripción</h2>
+
+    <textarea name="system.descripcion"
+              rows="8"
+              {{#unless esGM}}disabled{{/unless}}>{{system.descripcion}}</textarea>
+
+  </section>
+
+</form>

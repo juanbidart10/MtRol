@@ -1,0 +1,224 @@
+/* =========================================================
+   MTROL - BASE
+========================================================= */
+
+/* =========================
+   FUENTE GLOBAL
+========================= */
+
+.mtrol,
+.mtrol * {
+  box-sizing: border-box;
+}
+
+/* =========================
+   APP GENERAL
+========================= */
+
+.mtrol {
+
+  color: var(--mtrol-silver);
+
+  font-family:
+    var(--mtrol-font-body);
+
+  background:
+    var(--mtrol-bg-primary);
+
+  min-height: 100%;
+
+}
+
+/* =========================
+   TITULOS
+========================= */
+
+.mtrol h1,
+.mtrol h2,
+.mtrol h3,
+.mtrol h4 {
+
+  font-family:
+    var(--mtrol-font-title);
+
+  color:
+    var(--mtrol-gold);
+
+  text-shadow:
+    0 0 10px rgba(212,175,55,.35);
+
+  margin: 0;
+
+}
+
+/* =========================
+   TEXTO
+========================= */
+
+.mtrol p,
+.mtrol span,
+.mtrol label,
+.mtrol div {
+
+  color:
+    var(--mtrol-silver);
+
+}
+
+/* =========================
+   LINKS
+========================= */
+
+.mtrol a {
+
+  color:
+    var(--mtrol-gold);
+
+  text-decoration:
+    none;
+
+}
+
+.mtrol a:hover {
+
+  color:
+    var(--mtrol-gold-light);
+
+}
+
+/* =========================
+   INPUTS
+========================= */
+
+.mtrol input,
+.mtrol select,
+.mtrol textarea {
+
+  background:
+    rgba(0,0,0,.75);
+
+  color:
+    var(--mtrol-white);
+
+  border:
+    var(--mtrol-border-gold);
+
+  border-radius:
+    var(--mtrol-radius-sm);
+
+  padding:
+    6px 8px;
+
+  transition:
+    all .2s ease;
+
+}
+
+.mtrol input:focus,
+.mtrol select:focus,
+.mtrol textarea:focus {
+
+  outline: none;
+
+  border-color:
+    var(--mtrol-gold-light);
+
+  box-shadow:
+    var(--mtrol-shadow-soft);
+
+}
+
+/* =========================
+   BOTONES GENERICOS
+========================= */
+
+.mtrol button {
+
+  border:
+    var(--mtrol-border-gold);
+
+  border-radius:
+    var(--mtrol-radius-md);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(70,35,10,.95),
+      rgba(20,10,0,.95)
+    );
+
+  color:
+    var(--mtrol-white);
+
+  cursor:
+    pointer;
+
+  transition:
+    all .2s ease;
+
+}
+
+.mtrol button:hover {
+
+  transform:
+    translateY(-1px);
+
+  box-shadow:
+    var(--mtrol-shadow-medium);
+
+}
+
+.mtrol button:active {
+
+  transform:
+    translateY(0);
+
+}
+
+/* =========================
+   IMAGENES
+========================= */
+
+.mtrol img {
+
+  display:
+    block;
+
+  max-width:
+    100%;
+
+}
+
+/* =========================
+   SCROLLBAR
+========================= */
+
+.mtrol ::-webkit-scrollbar {
+
+  width: 8px;
+
+}
+
+.mtrol ::-webkit-scrollbar-track {
+
+  background:
+    rgba(0,0,0,.5);
+
+}
+
+.mtrol ::-webkit-scrollbar-thumb {
+
+  background:
+    var(--mtrol-gold-dark);
+
+  border-radius:
+    999px;
+
+}
+
+.mtrol ::-webkit-scrollbar-thumb:hover {
+
+  background:
+    var(--mtrol-gold);
+
+}

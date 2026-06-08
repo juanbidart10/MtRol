@@ -1,0 +1,401 @@
+/* ========================================================= */
+/* MTROL - ATRIBUTOS PREMIUM */
+/* ========================================================= */
+
+.atributos-grid,
+.mtrol-atributos-premium {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+.mtrol-attribute-group {
+  --attribute-group-rgb: 212, 175, 55;
+
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+
+  background:
+    radial-gradient(circle at 10% 0%, rgba(var(--attribute-group-rgb), .22), transparent 34%),
+    linear-gradient(180deg, rgba(18, 14, 10, .88), rgba(4, 4, 5, .94));
+
+  border: 1px solid rgba(212, 175, 55, .30);
+  border-radius: 12px;
+
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, .70),
+    0 0 18px rgba(0, 0, 0, .45);
+}
+
+.mtrol-attribute-group::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 230, 160, .07), transparent),
+    radial-gradient(circle at 94% 20%, rgba(var(--attribute-group-rgb), .16), transparent 24%);
+
+  opacity: .75;
+}
+
+.mtrol-attribute-group-physical {
+  --attribute-group-rgb: 200, 111, 66;
+}
+
+.mtrol-attribute-group-mental {
+  --attribute-group-rgb: 93, 168, 206;
+}
+
+.mtrol-attribute-group-spiritual {
+  --attribute-group-rgb: 183, 138, 232;
+}
+
+.mtrol-attribute-group-header {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.mtrol-attribute-group-header::before,
+.mtrol-attribute-group-header::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, .50), transparent);
+}
+
+.mtrol-attribute-group-header span {
+  color: rgba(255, 231, 163, .92);
+  font-family: var(--mtrol-font-title);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(var(--attribute-group-rgb), .34);
+}
+
+.mtrol-attribute-group-grid {
+  position: relative;
+  z-index: 1;
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+/* CARD */
+
+.mtrol-attribute-card {
+  --attribute-rgb: 212, 175, 55;
+
+  position: relative;
+  isolation: isolate;
+  min-height: 118px;
+  padding: 12px;
+
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+
+  color: var(--mtrol-silver);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(var(--attribute-rgb), .28), transparent 38%),
+    linear-gradient(145deg, rgba(34, 27, 18, .94), rgba(5, 5, 7, .98));
+
+  border: 1px solid rgba(212, 175, 55, .34);
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  box-shadow:
+    inset 0 0 16px rgba(0, 0, 0, .76),
+    0 0 12px rgba(0, 0, 0, .42),
+    0 0 16px rgba(var(--attribute-rgb), .14);
+
+  transition:
+    transform .22s ease,
+    border-color .22s ease,
+    box-shadow .22s ease,
+    background .22s ease;
+}
+
+.mtrol-attribute-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: 9px;
+
+  background:
+    linear-gradient(135deg, rgba(255, 235, 170, .12), transparent 34%),
+    radial-gradient(circle at 80% 12%, rgba(var(--attribute-rgb), .24), transparent 30%);
+
+  opacity: .72;
+}
+
+.mtrol-attribute-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 12px 10px;
+  height: 1px;
+
+  background: linear-gradient(90deg, transparent, rgba(var(--attribute-rgb), .64), transparent);
+  opacity: .64;
+}
+
+.mtrol-attribute-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 226, 140, .74);
+
+  background:
+    radial-gradient(circle at 18% 18%, rgba(var(--attribute-rgb), .38), transparent 40%),
+    linear-gradient(145deg, rgba(42, 33, 21, .98), rgba(5, 5, 7, .98));
+
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, .78),
+    0 0 18px rgba(var(--attribute-rgb), .28),
+    0 0 22px rgba(212, 175, 55, .16);
+}
+
+/* ATTRIBUTE COLORS */
+
+.mtrol-attribute-card[data-attr="resistencia"] {
+  --attribute-rgb: 199, 121, 69;
+}
+
+.mtrol-attribute-card[data-attr="fuerza"] {
+  --attribute-rgb: 216, 93, 74;
+}
+
+.mtrol-attribute-card[data-attr="destreza"] {
+  --attribute-rgb: 214, 168, 92;
+}
+
+.mtrol-attribute-card[data-attr="inteligencia"] {
+  --attribute-rgb: 102, 174, 224;
+}
+
+.mtrol-attribute-card[data-attr="voluntad"] {
+  --attribute-rgb: 143, 145, 255;
+}
+
+.mtrol-attribute-card[data-attr="percepcion"] {
+  --attribute-rgb: 85, 199, 183;
+}
+
+.mtrol-attribute-card[data-attr="carisma"] {
+  --attribute-rgb: 214, 132, 199;
+}
+
+.mtrol-attribute-card[data-attr="aura"] {
+  --attribute-rgb: 200, 167, 255;
+}
+
+.mtrol-attribute-card[data-attr="suerte"] {
+  --attribute-rgb: 134, 199, 101;
+}
+
+/* ICON */
+
+.mtrol-attribute-icon {
+  width: 48px;
+  height: 48px;
+
+  display: grid;
+  place-items: center;
+
+  color: #fff4dc;
+  background:
+    radial-gradient(circle, rgba(var(--attribute-rgb), .26), rgba(0, 0, 0, .34) 62%),
+    linear-gradient(180deg, rgba(255, 236, 184, .10), rgba(0, 0, 0, .20));
+
+  border: 1px solid rgba(var(--attribute-rgb), .48);
+  border-radius: 50%;
+
+  font-size: 20px;
+
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .70),
+    0 0 12px rgba(var(--attribute-rgb), .26);
+
+  text-shadow: 0 0 10px rgba(var(--attribute-rgb), .64);
+}
+
+.mtrol-attribute-card:hover .mtrol-attribute-icon {
+  color: #fff6df;
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .72),
+    0 0 18px rgba(var(--attribute-rgb), .42);
+}
+
+/* VALUE */
+
+.mtrol-attribute-main {
+  min-width: 0;
+
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+
+.mtrol-attribute-card label {
+  margin: 0;
+
+  color: rgba(232, 225, 207, .78);
+
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .09em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.mtrol-attribute-card:hover label {
+  color: #ffe7a3;
+  text-shadow: 0 0 8px rgba(var(--attribute-rgb), .42);
+}
+
+.mtrol-attribute-card input {
+  width: 68px;
+  height: 42px;
+  padding: 0;
+
+  color: #f6d77f !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--attribute-rgb), .18), transparent 52%),
+    rgba(0, 0, 0, .50) !important;
+
+  border: 1px solid rgba(var(--attribute-rgb), .48) !important;
+  border-radius: 8px !important;
+
+  text-align: center;
+
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, .82),
+    0 0 10px rgba(var(--attribute-rgb), .14) !important;
+}
+
+.mtrol-attribute-card input:disabled {
+  opacity: 1;
+  color: #f6d77f !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--attribute-rgb), .15), transparent 54%),
+    rgba(0, 0, 0, .42) !important;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 820px) {
+  .mtrol-attribute-group-grid {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .mtrol-attribute-group {
+    padding: 12px;
+  }
+
+  .mtrol-attribute-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-attribute-card {
+    min-height: 112px;
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .mtrol-attribute-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+}
+
+/* ========================================= */
+/* HEADER V2 - RESPONSIVE SHEET WIDTH */
+/* ========================================= */
+
+@media (max-width: 820px) {
+
+  .mtrol-master-header {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .mtrol-hero-left {
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .mtrol-hero-portrait {
+    width: 130px;
+    height: 130px;
+  }
+
+  .mtrol-hero-name {
+    max-width: 100%;
+    height: 48px;
+    font-size: 30px;
+  }
+
+  .mtrol-hero-stats {
+    grid-template-columns: repeat(4, minmax(70px, 1fr));
+  }
+
+  .mtrol-hero-vitals {
+    min-width: 0;
+    width: 100%;
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .mtrol-hero-vital {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .mtrol-vital-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+
+  .mtrol-hero-left {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-hero-portrait {
+    width: 120px;
+    height: 120px;
+  }
+
+  .mtrol-hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mtrol-hero-vitals {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-hero-name {
+    font-size: 26px;
+  }
+}

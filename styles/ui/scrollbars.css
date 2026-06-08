@@ -1,0 +1,20 @@
+/* =========================================================
+   MTROL - SCROLLBARS
+========================================================= */
+
+.mtrol ::-webkit-scrollbar {
+  width: 10px;
+}
+
+.mtrol ::-webkit-scrollbar-track {
+  background: rgba(10, 10, 10, 0.55);
+}
+
+.mtrol ::-webkit-scrollbar-thumb {
+  background: rgba(216, 194, 122, 0.28);
+  border-radius: 999px;
+}
+
+.mtrol ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 220, 120, 0.45);
+}

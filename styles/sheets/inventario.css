@@ -1,0 +1,226 @@
+/* =========================================================
+   MTROL - INVENTARIO
+========================================================= */
+
+.inventario-tab {
+  position: relative;
+  overflow: hidden;
+}
+
+.inventario-tab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background:
+    radial-gradient(circle at 78% 0%, rgba(216, 194, 122, .08), transparent 30%),
+    radial-gradient(circle at 18% 80%, rgba(120, 20, 12, .06), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, .018), transparent 36%);
+
+  pointer-events: none;
+}
+
+.inventario-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+.inventario-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.inventario-header h2 {
+  margin: 0;
+  color: #f2d27a;
+  font-size: 24px;
+  letter-spacing: .4px;
+  text-transform: none;
+  text-decoration: none;
+
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none;
+
+  text-shadow:
+    0 0 10px rgba(212, 175, 55, .24),
+    0 2px 5px rgba(0, 0, 0, 1);
+}
+
+.inventario-header h2::before,
+.inventario-header h2::after {
+  display: none !important;
+  content: none !important;
+}
+
+.item-create-objeto {
+  padding: 8px 12px;
+
+  color: #fff0c2;
+  background:
+    linear-gradient(180deg, rgba(89, 28, 18, .92), rgba(24, 6, 4, .96));
+
+  border: 1px solid rgba(255, 226, 140, .46);
+  border-radius: 8px;
+
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+
+  box-shadow:
+    inset 0 0 10px rgba(255, 255, 255, .035),
+    0 5px 12px rgba(0, 0, 0, .28);
+}
+
+.item-create-objeto:hover {
+  border-color: rgba(255, 226, 140, .72);
+  box-shadow: 0 0 13px rgba(216, 194, 122, .18);
+}
+
+.slots-resumen {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.slots-resumen span {
+  padding: 10px;
+
+  color: #f4ead2;
+  text-align: center;
+
+  background:
+    radial-gradient(circle at top, rgba(216, 194, 122, .06), transparent 58%),
+    linear-gradient(180deg, rgba(12, 10, 8, .88), rgba(0, 0, 0, .95));
+
+  border: 1px solid rgba(216, 194, 122, .22);
+  border-radius: 10px;
+
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .74),
+    0 6px 13px rgba(0, 0, 0, .34);
+}
+
+.slots-resumen strong {
+  color: #f2d27a;
+}
+
+.mtrol-warning {
+  margin: -2px 0 14px;
+  padding: 10px 12px;
+
+  color: #ffd9a1;
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: .3px;
+
+  background:
+    linear-gradient(180deg, rgba(92, 20, 12, .70), rgba(28, 4, 3, .88));
+
+  border: 1px solid rgba(255, 130, 64, .48);
+  border-radius: 9px;
+
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, .66),
+    0 0 12px rgba(180, 40, 20, .16);
+}
+
+.tabla-inventario {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.tabla-inventario thead th {
+  padding: 8px 10px;
+  color: rgba(232, 225, 207, .56);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(212, 175, 55, .18);
+}
+
+.tabla-inventario tbody tr {
+  background:
+    linear-gradient(180deg, rgba(16, 14, 11, .90), rgba(2, 2, 3, .96));
+
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, .70),
+    0 5px 11px rgba(0, 0, 0, .28);
+}
+
+.tabla-inventario tbody td {
+  padding: 9px 10px;
+  color: #f4ead2;
+  text-align: center;
+  border-top: 1px solid rgba(212, 175, 55, .14);
+  border-bottom: 1px solid rgba(212, 175, 55, .14);
+}
+
+.tabla-inventario tbody td:first-child {
+  border-left: 1px solid rgba(212, 175, 55, .14);
+  border-radius: 10px 0 0 10px;
+}
+
+.tabla-inventario tbody td:last-child {
+  border-right: 1px solid rgba(212, 175, 55, .14);
+  border-radius: 0 10px 10px 0;
+}
+
+.tabla-inventario a {
+  margin: 0 4px;
+  color: rgba(242, 210, 122, .82);
+  text-decoration: none;
+}
+
+.tabla-inventario a:hover {
+  color: #fff0c2;
+  text-shadow: 0 0 8px rgba(212, 175, 55, .35);
+}
+
+.inventario-tab .hint {
+  position: relative;
+  margin: 0;
+  padding: 48px 16px 28px;
+
+  color: rgba(244, 234, 210, .60);
+  text-align: center;
+  font-style: italic;
+
+  background:
+    linear-gradient(180deg, rgba(14, 13, 11, .60), rgba(0, 0, 0, .72));
+
+  border: 1px dashed rgba(216, 194, 122, .24);
+  border-radius: 10px;
+}
+
+.inventario-tab .hint::before {
+  content: "\f187";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+
+  color: rgba(242, 210, 122, .46);
+  font-family: "Font Awesome 5 Free";
+  font-size: 18px;
+  font-weight: 900;
+
+  transform: translateX(-50%);
+  text-shadow: 0 0 10px rgba(212, 175, 55, .18);
+}
+
+@media (max-width: 700px) {
+  .inventario-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .slots-resumen {
+    grid-template-columns: 1fr;
+  }
+}

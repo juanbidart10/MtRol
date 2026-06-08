@@ -1,0 +1,145 @@
+<section class="mtrol-ambient-fx">
+  <header class="mtrol-ambient-header">
+    <div class="mtrol-ambient-header-main">
+      <span class="mtrol-ambient-kicker">GM Scene Ambient Tool</span>
+      <h2>MTROL Ambient FX</h2>
+      <p>FX persistentes guardados en esta escena</p>
+    </div>
+    <div class="mtrol-ambient-scene">
+      <span class="mtrol-ambient-scene-label">Escena activa</span>
+      <strong><i class="fas fa-map-location-dot"></i> {{sceneName}}</strong>
+      <small class="mtrol-ambient-scene-id" title="{{sceneId}}">Scene ID {{sceneId}}</small>
+    </div>
+  </header>
+
+  <div class="mtrol-ambient-toolbar">
+    <div class="mtrol-ambient-toolbar-item">
+      <button type="button" data-action="refresh">
+        <i class="fas fa-sync-alt"></i>
+        Refrescar FX de escena
+      </button>
+      <small>Vuelve a reproducir los FX guardados.</small>
+    </div>
+    <div class="mtrol-ambient-toolbar-item">
+      <button type="button" class="mtrol-ambient-stop-button" data-action="stop">
+        <i class="fas fa-stop"></i>
+        Detener FX activos
+      </button>
+      <small>Detiene solo los FX activos de MTROL, no los borra.</small>
+    </div>
+  </div>
+
+  <section class="mtrol-ambient-list-panel" aria-label="FX guardados">
+    <div class="mtrol-ambient-panel-title">
+      <div>
+        <h3>FX actuales</h3>
+        <span>{{sceneName}}</span>
+      </div>
+      <strong>{{effects.length}} FX</strong>
+    </div>
+
+    <div class="mtrol-ambient-list">
+    {{#if hasEffects}}
+      {{#each effects as |fx|}}
+        <article class="mtrol-ambient-card">
+          <div class="mtrol-ambient-row-main">
+            <strong>{{fx.label}}</strong>
+            <span title="{{fx.file}}">{{fx.fileShort}}</span>
+          </div>
+          <div class="mtrol-ambient-row-meta">
+            <span>X {{fx.x}}</span>
+            <span>Y {{fx.y}}</span>
+            <span>Escala {{fx.scale}}</span>
+            <span>Opacidad {{fx.opacity}}</span>
+            <span>Rotación {{fx.rotation}}</span>
+          </div>
+          <div class="mtrol-ambient-card-actions">
+            <button type="button" data-action="preview-saved" data-fx-id="{{fx.id}}" title="Probar FX">
+              <i class="fas fa-play"></i>
+              Probar
+            </button>
+            <button type="button" class="mtrol-ambient-danger-button" data-action="delete" data-fx-id="{{fx.id}}" title="Eliminar FX">
+              <i class="fas fa-trash"></i>
+              Eliminar
+            </button>
+          </div>
+        </article>
+      {{/each}}
+    {{else}}
+      <div class="mtrol-ambient-empty">
+        <i class="fas fa-wand-magic-sparkles"></i>
+        <strong>No hay FX ambientales guardados en esta escena.</strong>
+        <span>Agregá un efecto para que MTROL lo restaure automáticamente al volver.</span>
+      </div>
+    {{/if}}
+    </div>
+  </section>
+
+  <form class="mtrol-ambient-form">
+    <fieldset>
+      <legend>
+        <span>Nuevo FX ambiental</span>
+        <small>Persistente por escena</small>
+      </legend>
+      <p class="mtrol-ambient-form-help">Usá rutas de JB2A/Sequencer. El FX se guarda en la escena activa y se recrea al volver.</p>
+
+      <div class="mtrol-ambient-field-row">
+        <label>
+          <span>Nombre</span>
+          <input type="text" name="label" value="{{defaults.label}}" placeholder="Niebla del pantano">
+        </label>
+
+        <label>
+          <span>Ruta del archivo JB2A / Sequencer</span>
+          <input type="text" name="file" value="{{defaults.file}}" placeholder="modules/JB2A_DnD5e/Library/.../effect.webm">
+          <small class="mtrol-ambient-help">Ejemplo: modules/JB2A_DnD5e/Library/Generic/Fog/AmbientFog001_01_Loop_White_1200x1200.webm</small>
+        </label>
+      </div>
+
+      <div class="mtrol-ambient-grid">
+        <label>
+          <span>X</span>
+          <input type="number" name="x" value="{{defaults.x}}" step="1">
+        </label>
+        <label>
+          <span>Y</span>
+          <input type="number" name="y" value="{{defaults.y}}" step="1">
+        </label>
+        <label>
+          <span>Escala</span>
+          <input type="number" name="scale" value="{{defaults.scale}}" step="0.05">
+        </label>
+        <label>
+          <span>Opacidad</span>
+          <input type="number" name="opacity" value="{{defaults.opacity}}" step="0.05" min="0" max="1">
+        </label>
+        <label>
+          <span>Rotación</span>
+          <input type="number" name="rotation" value="{{defaults.rotation}}" step="1">
+        </label>
+      </div>
+
+      <div class="mtrol-ambient-checks">
+        <label class="mtrol-ambient-toggle">
+          <input type="checkbox" name="belowTokens" {{checked defaults.belowTokens}}>
+          <span>Debajo de tokens</span>
+        </label>
+        <label class="mtrol-ambient-toggle">
+          <input type="checkbox" name="aboveLighting" {{checked defaults.aboveLighting}}>
+          <span>Sobre iluminación</span>
+        </label>
+      </div>
+
+      <div class="mtrol-ambient-actions">
+        <button type="button" data-action="preview">
+          <i class="fas fa-play"></i>
+          Probar FX
+        </button>
+        <button type="button" data-action="save">
+          <i class="fas fa-save"></i>
+          Guardar en esta escena
+        </button>
+      </div>
+    </fieldset>
+  </form>
+</section>

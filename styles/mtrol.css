@@ -1,0 +1,65 @@
+/* ========================================= */
+/* MTROL - CORE */
+/* Variables, colores y tema principal */
+/* ========================================= */
+
+@import url("./ui/variables.css");
+
+@import url("./themes/mtrol-dark.css");
+@import url("./themes/mtrol-premium.css");
+
+
+/* ========================================= */
+/* MTROL - UI FRAMEWORK */
+/* Componentes reutilizables */
+/* ========================================= */
+
+@import url("./ui/base.css");
+@import url("./ui/panels.css");
+@import url("./ui/buttons.css");
+@import url("./ui/tabs.css");
+@import url("./ui/scrollbars.css");
+@import url("./ui/trade-dialog.css");
+
+@import url("./apps/ambient-fx.css");
+
+
+/* ========================================= */
+/* MTROL - ANIMATIONS */
+/* Hover, glow y efectos visuales */
+/* ========================================= */
+
+@import url("./animations/transitions.css");
+@import url("./animations/glow.css");
+@import url("./animations/dice.css");
+
+
+/* ========================================= */
+/* MTROL - CHARACTER SHEET */
+/* Hoja principal de personaje */
+/* ========================================= */
+
+@import url("./sheets/personaje.css");
+
+@import url("./sheets/header.css");
+@import url("./sheets/vitales.css");
+
+@import url("./sheets/atributos.css");
+@import url("./sheets/competencias.css");
+
+@import url("./sheets/equipamiento.css");
+@import url("./sheets/inventario.css");
+
+@import url("./sheets/progresion.css");
+@import url("./sheets/objeto.css");
+
+
+/* ========================================= */
+/* MTROL - COMBAT */
+/* Sistema de combate y chat */
+/* ========================================= */
+
+@import url("./combat/combat-cards.css");
+@import url("./combat/combat-chat.css");
+@import url("./combat/combat-tab.css");
+@import url("./combat/initiative.css");

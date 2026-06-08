@@ -1,0 +1,64 @@
+{
+  "id": "mtrol",
+  "type": "system",
+  "title": "MtRol Beta",
+  "description": "Sistema oficial de MtRol para Foundry VTT en etapa de beta.",
+  "version": "1.0.0",
+
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14",
+    "maximum": "14"
+  },
+
+  "authors": [
+    {
+      "name": "Juan Bidart"
+    }
+  ],
+
+  "manifest": "https://raw.githubusercontent.com/juanbidart10/MtRol/main/system.json",
+
+  "download": "https://github.com/juanbidart10/MtRol/releases/latest/download/mtrol.zip",
+
+  "esmodules": [
+    "scripts/mtrol.js"
+  ],
+
+  "styles": [
+    "styles/mtrol.css"
+  ],
+
+  "template": "template.json",
+
+  "languages": [
+    {
+      "lang": "es",
+      "name": "Español",
+      "path": "lang/es.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+
+  "media": [
+    {
+      "type": "cover",
+      "url": "systems/mtrol/assets/ui/mtrol-banner.png",
+      "caption": "MtRol Beta"
+    }
+  ],
+
+  "packs": [],
+
+  "socket": true,
+
+  "gridDistance": 1,
+  "gridUnits": "m",
+
+  "primaryTokenAttribute": "system.vitales.hp",
+  "secondaryTokenAttribute": "system.vitales.mp"
+}

@@ -1,0 +1,146 @@
+/* =========================================================
+   MTROL - COMBAT CARDS
+========================================================= */
+
+.mtrol-combat-card {
+  padding: 14px;
+
+  border-radius: var(--mtrol-radius-lg);
+
+  font-family: var(--mtrol-font-body);
+
+  color: var(--mtrol-silver);
+
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(216,194,122,0.08),
+      transparent 38%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(18,14,10,0.98),
+      rgba(3,3,3,0.98)
+    );
+
+  border: 1px solid rgba(216,194,122,0.48);
+
+  box-shadow:
+    0 0 18px rgba(0,0,0,0.75),
+    inset 0 0 14px rgba(255,220,120,0.035);
+}
+
+.mtrol-combat-header {
+  text-align: center;
+
+  margin-bottom: 10px;
+}
+
+.mtrol-combat-title {
+  font-family: var(--mtrol-font-title);
+
+  color: var(--mtrol-gold-light);
+
+  font-size: 24px;
+  font-weight: 900;
+
+  letter-spacing: 1px;
+
+  text-shadow:
+    0 0 8px rgba(216,194,122,0.30),
+    0 0 6px rgba(0,0,0,1);
+}
+
+.mtrol-combat-subheader {
+  margin-top: 6px;
+
+  color: var(--mtrol-silver);
+
+  font-size: 14px;
+}
+
+.mtrol-combat-section {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+.mtrol-roll-block {
+  padding: 8px;
+
+  border: 1px solid rgba(216,194,122,0.22);
+  border-radius: var(--mtrol-radius-sm);
+
+  background:
+    rgba(0,0,0,0.28);
+}
+
+.mtrol-combat-card p {
+  margin: 4px 0;
+
+  color: var(--mtrol-silver);
+}
+
+.mtrol-combat-card strong {
+  color: var(--mtrol-white);
+}
+
+.mtrol-combat-crit-block {
+  padding: 10px;
+
+  border: 1px solid rgba(255,215,120,0.50);
+  border-radius: var(--mtrol-radius-md);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(68,45,12,0.55),
+      rgba(10,8,4,0.75)
+    );
+
+  box-shadow:
+    0 0 12px rgba(255,215,120,0.18),
+    inset 0 0 10px rgba(255,220,120,0.04);
+}
+
+.mtrol-combat-crit-block p:first-child {
+  color: var(--mtrol-gold-light);
+
+  font-weight: bold;
+
+  text-align: center;
+}
+
+.mtrol-combat-alert {
+  margin-top: 8px;
+
+  padding: 10px;
+
+  border-radius: var(--mtrol-radius-md);
+
+  text-align: center;
+
+  font-weight: bold;
+}
+
+.mtrol-combat-alert.destroy {
+  color: #ffb36a;
+
+  border: 1px solid rgba(255,150,70,0.55);
+
+  background:
+    rgba(80,35,10,0.40);
+}
+
+.mtrol-combat-alert.death {
+  color: #ff4d4d;
+
+  border: 1px solid rgba(255,60,60,0.65);
+
+  background:
+    rgba(80,0,0,0.45);
+
+  box-shadow:
+    0 0 14px rgba(255,0,0,0.25);
+}

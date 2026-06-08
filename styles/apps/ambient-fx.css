@@ -1,0 +1,635 @@
+/* ========================================= */
+/* MTROL - AMBIENT FX MANAGER */
+/* ========================================= */
+
+.mtrol-ambient-fx {
+  position: relative;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(210, 170, 70, 0.26);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(202, 157, 49, 0.12), transparent 32%),
+    radial-gradient(circle at 92% 18%, rgba(119, 82, 32, 0.13), transparent 34%),
+    linear-gradient(180deg, rgba(7, 8, 11, 0.98), rgba(2, 3, 5, 0.98));
+  color: var(--mtrol-text, #efe7d0);
+}
+
+.mtrol-ambient-fx > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mtrol-ambient-fx * {
+  box-sizing: border-box;
+}
+
+/* Header */
+
+.mtrol-ambient-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  gap: 9px;
+  align-items: end;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(212, 175, 55, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(26, 23, 18, 0.94), rgba(5, 6, 9, 0.96)),
+    rgba(6, 7, 10, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 156, 0.1),
+    0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.mtrol-ambient-header-main {
+  min-width: 0;
+}
+
+.mtrol-ambient-kicker {
+  display: inline-flex;
+  margin-bottom: 2px;
+  color: rgba(246, 211, 126, 0.68);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.mtrol-ambient-header h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ffe4a3;
+  font-family: var(--mtrol-title-font, inherit);
+  font-size: 1.18rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+.mtrol-ambient-header p {
+  margin: 2px 0 0;
+  color: rgba(239, 231, 208, 0.68);
+  font-size: 0.72rem;
+  line-height: 1.22;
+}
+
+.mtrol-ambient-scene {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.mtrol-ambient-scene-label {
+  color: rgba(239, 231, 208, 0.46);
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.mtrol-ambient-scene strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 230px;
+  min-width: 0;
+  padding: 3px 7px;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  color: #f5d98b;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtrol-ambient-scene-id {
+  max-width: 230px;
+  overflow: hidden;
+  color: rgba(239, 231, 208, 0.36);
+  font-size: 0.58rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Main Actions */
+
+.mtrol-ambient-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.mtrol-ambient-toolbar-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(10, 11, 14, 0.82), rgba(4, 5, 8, 0.88));
+}
+
+.mtrol-ambient-toolbar-item button {
+  grid-row: 1 / span 2;
+}
+
+.mtrol-ambient-toolbar-item small {
+  min-width: 0;
+  color: rgba(239, 231, 208, 0.52);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.mtrol-ambient-toolbar button,
+.mtrol-ambient-actions button,
+.mtrol-ambient-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(212, 175, 55, 0.34);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(38, 33, 25, 0.96), rgba(11, 12, 15, 0.96));
+  color: #f1d58a;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mtrol-ambient-toolbar button:hover,
+.mtrol-ambient-actions button:hover,
+.mtrol-ambient-card-actions button:hover {
+  border-color: rgba(255, 221, 126, 0.72);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
+}
+
+.mtrol-ambient-toolbar button i,
+.mtrol-ambient-actions button i,
+.mtrol-ambient-card-actions button i {
+  color: #f7d77a;
+}
+
+.mtrol-ambient-stop-button {
+  border-color: rgba(188, 119, 63, 0.38) !important;
+  background: linear-gradient(180deg, rgba(63, 39, 27, 0.96), rgba(18, 12, 12, 0.96)) !important;
+  color: #e8b57e !important;
+}
+
+/* Saved FX */
+
+.mtrol-ambient-list-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(11, 12, 15, 0.88), rgba(4, 5, 7, 0.92)),
+    rgba(5, 6, 9, 0.86);
+}
+
+.mtrol-ambient-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mtrol-ambient-panel-title div {
+  min-width: 0;
+}
+
+.mtrol-ambient-panel-title h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #f7d98a;
+  font-family: var(--mtrol-title-font, inherit);
+  font-size: 0.98rem;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.mtrol-ambient-panel-title span {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  color: rgba(239, 231, 208, 0.46);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtrol-ambient-panel-title > strong {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid rgba(212, 175, 55, 0.24);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(246, 211, 126, 0.82);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.mtrol-ambient-list {
+  display: grid;
+  gap: 7px;
+  max-height: 214px;
+  min-width: 0;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-color: rgba(212, 175, 55, 0.42) rgba(0, 0, 0, 0.24);
+  scrollbar-width: thin;
+}
+
+.mtrol-ambient-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mtrol-ambient-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.24);
+  border-radius: 999px;
+}
+
+.mtrol-ambient-list::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.44);
+  border-radius: 999px;
+}
+
+.mtrol-ambient-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.16);
+  border-radius: 7px;
+  background: rgba(3, 4, 7, 0.72);
+}
+
+.mtrol-ambient-row-main {
+  min-width: 0;
+}
+
+.mtrol-ambient-row-main strong,
+.mtrol-ambient-row-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtrol-ambient-row-main strong {
+  color: #f1d58a;
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.mtrol-ambient-row-main span {
+  margin-top: 2px;
+  color: rgba(239, 231, 208, 0.5);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.mtrol-ambient-row-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mtrol-ambient-row-meta span {
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(239, 231, 208, 0.62);
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+.mtrol-ambient-card-actions {
+  display: flex;
+  gap: 5px;
+  align-items: start;
+  justify-content: flex-end;
+}
+
+.mtrol-ambient-card-actions button {
+  min-height: 27px;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}
+
+.mtrol-ambient-card-actions .mtrol-ambient-danger-button {
+  border-color: rgba(156, 93, 69, 0.38);
+  color: #dcae8e;
+}
+
+.mtrol-ambient-empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 14px 10px;
+  border: 1px dashed rgba(212, 175, 55, 0.22);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+
+.mtrol-ambient-empty i {
+  color: rgba(246, 211, 126, 0.46);
+  font-size: 1rem;
+}
+
+.mtrol-ambient-empty strong {
+  color: rgba(239, 231, 208, 0.72);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.mtrol-ambient-empty span {
+  max-width: 360px;
+  color: rgba(239, 231, 208, 0.5);
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+/* Form */
+
+.mtrol-ambient-form fieldset {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(212, 175, 55, 0.075), transparent 36%),
+    linear-gradient(180deg, rgba(10, 11, 14, 0.9), rgba(4, 5, 8, 0.94));
+}
+
+.mtrol-ambient-form legend {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: #f4df9f;
+  font-family: var(--mtrol-title-font, inherit);
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.mtrol-ambient-form legend small {
+  color: rgba(239, 231, 208, 0.42);
+  font-family: inherit;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mtrol-ambient-form-help,
+.mtrol-ambient-help {
+  margin: 0;
+  color: rgba(239, 231, 208, 0.5);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.mtrol-ambient-field-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.72fr) minmax(220px, 1.28fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.mtrol-ambient-form label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mtrol-ambient-form label span {
+  color: rgba(239, 231, 208, 0.72);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mtrol-ambient-form input[type="text"],
+.mtrol-ambient-form input[type="number"],
+.mtrol-ambient-form select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 29px;
+  padding: 5px 8px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-style: solid;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.54);
+  box-sizing: border-box;
+  color: var(--mtrol-text, #efe7d0);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  outline-offset: 0;
+}
+
+.mtrol-ambient-form input::placeholder {
+  color: rgba(218, 186, 93, 0.34);
+}
+
+.mtrol-ambient-form input[type="text"]:focus,
+.mtrol-ambient-form input[type="number"]:focus,
+.mtrol-ambient-form select:focus {
+  border-color: rgba(255, 220, 112, 0.64);
+  box-shadow: 0 0 0 1px rgba(255, 220, 112, 0.2), 0 0 12px rgba(212, 175, 55, 0.14);
+  outline: none;
+}
+
+.mtrol-ambient-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.mtrol-ambient-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mtrol-ambient-toggle {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.mtrol-ambient-toggle input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: #d4af37;
+}
+
+.mtrol-ambient-toggle:has(input[type="checkbox"]:checked) {
+  border-color: rgba(255, 220, 112, 0.48);
+  background: rgba(86, 58, 19, 0.34);
+}
+
+.mtrol-ambient-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 8px;
+}
+
+.mtrol-ambient-actions button[data-action="preview"] {
+  background: linear-gradient(180deg, rgba(28, 28, 31, 0.96), rgba(9, 10, 13, 0.96));
+}
+
+.mtrol-ambient-actions button[data-action="save"] {
+  border-color: rgba(255, 218, 113, 0.66);
+  background: linear-gradient(180deg, rgba(139, 94, 30, 0.98), rgba(69, 42, 17, 0.98));
+  color: #fff0b8;
+  box-shadow: inset 0 1px 0 rgba(255, 232, 160, 0.18);
+}
+
+/* GM Access Buttons */
+
+.mtrol-ambient-directory-button,
+.mtrol-ambient-canvas-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.44);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(55, 43, 24, 0.96), rgba(22, 18, 15, 0.96));
+  color: #f4df9f;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mtrol-ambient-directory-button {
+  min-height: 28px;
+  margin: 4px;
+  padding: 4px 8px;
+}
+
+.mtrol-ambient-canvas-button {
+  position: fixed;
+  left: 72px;
+  top: 92px;
+  z-index: 70;
+  min-height: 30px;
+  max-width: 180px;
+  padding: 5px 9px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34);
+}
+
+.mtrol-ambient-canvas-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtrol-ambient-directory-button:hover,
+.mtrol-ambient-canvas-button:hover {
+  border-color: rgba(255, 220, 112, 0.76);
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.28), 0 8px 20px rgba(0, 0, 0, 0.34);
+}
+
+/* Responsive */
+
+@media (max-width: 620px) {
+  .mtrol-ambient-header,
+  .mtrol-ambient-toolbar,
+  .mtrol-ambient-field-row,
+  .mtrol-ambient-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mtrol-ambient-scene {
+    justify-items: start;
+  }
+
+  .mtrol-ambient-scene strong,
+  .mtrol-ambient-scene-id {
+    max-width: 100%;
+  }
+
+  .mtrol-ambient-toolbar-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mtrol-ambient-toolbar-item button {
+    grid-row: auto;
+  }
+
+  .mtrol-ambient-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mtrol-ambient-card-actions {
+    justify-content: flex-start;
+  }
+
+  .mtrol-ambient-grid {
+    grid-template-columns: repeat(2, minmax(96px, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .mtrol-ambient-fx {
+    padding: 8px;
+  }
+
+  .mtrol-ambient-panel-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .mtrol-ambient-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
