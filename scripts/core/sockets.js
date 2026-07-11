@@ -2,6 +2,10 @@
 // MTROL - SOCKETS
 // =========================
 
+import {
+  applyStateFromSocket
+} from "../states/state-engine.js";
+
 function isPrimaryActiveGM() {
   const activeGMs =
     game.users
@@ -134,6 +138,14 @@ export function registerMtrolSockets() {
           }
 
           await game.mtrol.ejecutarComercioMtrolDesdeSocket(data);
+          break;
+        }
+
+        // =========================
+        // MTROL - ESTADOS AUTORITATIVOS
+        // =========================
+        case "mtrolApplyState": {
+          await applyStateFromSocket(data);
           break;
         }
 

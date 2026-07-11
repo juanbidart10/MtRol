@@ -24,10 +24,6 @@ import { initMtrol3D }
 
 Hooks.once("init", async () => {
 
-  console.log("=================================");
-  console.log("MTROL | BOOTING");
-  console.log("=================================");
-
   initMtrol3D();
 
   await initMtrol();
@@ -39,10 +35,6 @@ Hooks.once("init", async () => {
 // =========================
 
 Hooks.once("ready", async () => {
-
-  console.log("=================================");
-  console.log("MTROL | READY");
-  console.log("=================================");
 
   registerMtrolSockets();
 

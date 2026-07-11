@@ -20,29 +20,9 @@ import {
 
 export function registerHooks() {
 
-  console.log("=================================");
-  console.log("MTROL | HOOKS");
-  console.log("=================================");
-
   registrarHooksPesoMtrol();
   registerMtrolSequencerHooks();
   registerMtrolAmbientFxHooks();
-
-  // =========================
-  // CHAT RENDER V14
-  // =========================
-
-  Hooks.on("renderChatMessageHTML", () => {
-    // Placeholder futuro para chat cards premium.
-  });
-
-  // =========================
-  // UPDATE ACTOR
-  // =========================
-
-  Hooks.on("updateActor", () => {
-    // Runtime hooks futuros.
-  });
 
   // =========================
   // MTROL - OVERRIDE INICIATIVA
@@ -100,8 +80,5 @@ export function registerHooks() {
 
     return this;
   };
-
-  console.log("MTROL | Iniciativa MtRol registrada.");
-  console.log("MTROL | Hooks registrados.");
 
 }

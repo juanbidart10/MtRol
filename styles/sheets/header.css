@@ -8,11 +8,11 @@
 
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
-  gap: 14px;
+  gap: 12px;
   align-items: center;
 
-  min-height: 136px;
-  padding: 14px 16px;
+  min-height: 0;
+  padding: 10px 12px;
 
   background:
     radial-gradient(circle at 24% 12%, rgba(255, 226, 140, .08), transparent 30%),
@@ -47,15 +47,15 @@
 
 .mtrol-hero-left {
   display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
   min-width: 0;
 }
 
 .mtrol-hero-portrait {
-  width: 108px;
-  height: 108px;
+  width: 88px;
+  height: 88px;
   padding: 4px;
   overflow: hidden;
 
@@ -85,14 +85,14 @@
 .mtrol-hero-name {
   width: 100%;
   max-width: 340px;
-  height: 46px;
+  height: 38px;
   padding: 0 10px;
 
   color: #fff0c2 !important;
   background: transparent !important;
   border-color: transparent !important;
 
-  font-size: 34px;
+  font-size: 29px;
   font-weight: 900;
   letter-spacing: 0;
 
@@ -108,11 +108,11 @@
   gap: 7px;
   align-items: center;
 
-  margin-top: 6px;
+  margin-top: 4px;
   max-width: 460px;
 
   color: rgba(244, 234, 210, .78);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -125,15 +125,15 @@
 .mtrol-hero-stats {
   display: grid;
   grid-template-columns: 70px minmax(100px, 140px) 78px 78px;
-  gap: 8px;
+  gap: 7px;
 
   max-width: 386px;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .mtrol-hero-stat {
-  min-height: 52px;
-  padding: 7px 5px;
+  min-height: 42px;
+  padding: 5px;
 
   display: flex;
   flex-direction: column;
@@ -168,7 +168,7 @@
 
 .mtrol-hero-stat strong {
   color: #ffe28c;
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1;
 }
@@ -184,7 +184,7 @@
 .mtrol-hero-vitals {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
   width: 100%;
   max-width: 330px;
@@ -192,22 +192,22 @@
 
 .mtrol-hero-vital {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 9px;
   align-items: center;
   min-width: 0;
 }
 
 .mtrol-vital-icon {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
   color: #fff0c2;
-  font-size: 21px;
+  font-size: 18px;
 
   border: 1px solid rgba(255, 226, 140, .64);
   border-radius: 50%;
@@ -293,22 +293,22 @@
 
 @container mtrol-sheet (max-width: 560px) {
   .mtrol-master-header {
-    padding: 12px;
+    padding: 8px;
   }
 
   .mtrol-hero-left {
-    grid-template-columns: 82px minmax(0, 1fr);
+    grid-template-columns: 68px minmax(0, 1fr);
     gap: 10px;
   }
 
   .mtrol-hero-portrait {
-    width: 82px;
-    height: 82px;
+    width: 68px;
+    height: 68px;
   }
 
   .mtrol-hero-name {
-    height: 38px;
-    font-size: 26px;
+    height: 34px;
+    font-size: 23px;
   }
 
   .mtrol-hero-stats,

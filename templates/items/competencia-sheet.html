@@ -2,235 +2,368 @@
 
   <header class="sheet-header mtrol-competencia-header">
 
-    <img class="profile-img"
-         src="{{itemImg}}"
-         data-fallback="icons/svg/item-bag.svg"
-         data-edit="img"
-         title="{{item.name}}"
-         height="72"
-         width="72" />
+    <div class="mtrol-competencia-icon-frame">
+      <img class="profile-img mtrol-competencia-icon"
+           src="{{itemImg}}"
+           data-fallback="icons/svg/item-bag.svg"
+           data-edit="img"
+           title="{{item.name}}"
+           height="88"
+           width="88" />
+    </div>
 
     <div class="mtrol-competencia-title">
+      <label>Competencia / Habilidad</label>
 
       <input type="text"
              name="name"
              value="{{item.name}}"
              placeholder="Nombre de competencia" />
 
-      <span>Configuración de competencia / habilidad</span>
-
+      <div class="mtrol-competencia-badges">
+        <span>{{system.categoria}}</span>
+        <span>Nv. {{system.nivel}}</span>
+      </div>
     </div>
 
   </header>
 
   <section class="sheet-body mtrol-competencia-body">
 
-    <div class="sheet-section mtrol-competencia-section">
+    <nav class="mtrol-competencia-tabs tabs" data-group="competencia">
+      <a class="item" data-tab="general"><i class="fas fa-cog"></i>General</a>
+      <a class="item" data-tab="mecanica"><i class="fas fa-crosshairs"></i>Mecanica</a>
+      <a class="item" data-tab="efectos"><i class="fas fa-magic"></i>Efectos</a>
+      <a class="item" data-tab="formulas"><i class="fas fa-dice-d20"></i>Formulas</a>
+      <a class="item" data-tab="presentacion"><i class="fas fa-palette"></i>Presentacion</a>
+    </nav>
 
-      <h2>Configuración</h2>
+    <section class="mtrol-competencia-tab-content">
 
-      <div class="form-grid">
+      <div class="tab mtrol-competencia-tab active" data-group="competencia" data-tab="general">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>General</h2>
+          </header>
 
-        <div>
-          <label>Nivel</label>
-          <input type="number"
-                 name="system.nivel"
-                 value="{{system.nivel}}"
-                 min="1"
-                 max="5" />
-        </div>
+          <div class="mtrol-competencia-grid">
 
-        <div>
-          <label>Categoría</label>
-          <select name="system.categoria">
-            <option value="basico" {{#if (eq system.categoria "basico")}}selected{{/if}}>Básico</option>
-            <option value="competencia" {{#if (eq system.categoria "competencia")}}selected{{/if}}>Competencia</option>
-            <option value="combate" {{#if (eq system.categoria "combate")}}selected{{/if}}>Habilidad de combate</option>
-            <option value="hechizo" {{#if (eq system.categoria "hechizo")}}selected{{/if}}>Hechizo</option>
-            <option value="contraataque" {{#if (eq system.categoria "contraataque")}}selected{{/if}}>Contraataque</option>
-            <option value="pasiva" {{#if (eq system.categoria "pasiva")}}selected{{/if}}>Pasiva</option>
-          </select>
-        </div>
+            <div class="mtrol-field">
+              <label>Nivel</label>
+              <input type="number"
+                     name="system.nivel"
+                     value="{{system.nivel}}"
+                     min="1"
+                     max="5" />
+            </div>
 
-        <div class="checkbox-field">
-          <label>Equipada en Combate</label>
-          <input type="checkbox"
-                 name="system.equipadaCombate"
-                 {{checked system.equipadaCombate}} />
-        </div>
+            <div class="mtrol-field">
+              <label>Categoria</label>
+              <select name="system.categoria">
+                <option value="basico" {{#if (eq system.categoria "basico")}}selected{{/if}}>Basico</option>
+                <option value="competencia" {{#if (eq system.categoria "competencia")}}selected{{/if}}>Competencia</option>
+                <option value="combate" {{#if (eq system.categoria "combate")}}selected{{/if}}>Habilidad de combate</option>
+                <option value="hechizo" {{#if (eq system.categoria "hechizo")}}selected{{/if}}>Hechizo</option>
+                <option value="contraataque" {{#if (eq system.categoria "contraataque")}}selected{{/if}}>Contraataque</option>
+                <option value="pasiva" {{#if (eq system.categoria "pasiva")}}selected{{/if}}>Pasiva</option>
+              </select>
+            </div>
 
-        <div>
-          <label>Tipo</label>
-          <input type="text"
-                 name="system.tipo"
-                 value="{{system.tipo}}"
-                 placeholder="ataque-magico" />
-        </div>
+            <label class="mtrol-toggle">
+              <span>Equipada en combate</span>
+              <input type="checkbox"
+                     name="system.equipadaCombate"
+                     {{checked system.equipadaCombate}} />
+            </label>
 
-        <div>
-          <label>Atributo Base</label>
-          <input type="text"
-                 name="system.atributo"
-                 value="{{system.atributo}}"
-                 placeholder="aura" />
-        </div>
-
-        <div>
-          <label>Coste MP</label>
-          <input type="number"
-                 name="system.costeMP"
-                 value="{{system.costeMP}}"
-                 min="0" />
-        </div>
-
-        <div class="wide">
-          <label>Fórmula de Tirada</label>
-          <input type="text"
-                 name="system.formula"
-                 value="{{system.formula}}"
-                 placeholder="1d10 + @atributos.aura" />
-        </div>
-
-        <div class="wide">
-          <label>Fórmula de Daño</label>
-          <input type="text"
-                 name="system.danio"
-                 value="{{system.danio}}"
-                 placeholder="2d10 + @atributos.aura" />
-        </div>
-
-        <div class="checkbox-field">
-          <label>Usa Daño Localizado</label>
-          <input type="checkbox"
-                 name="system.usaDanioLocalizado"
-                 {{checked system.usaDanioLocalizado}} />
-        </div>
-
+          </div>
+        </section>
       </div>
 
-    </div>
+      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="mecanica">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>Mecanica</h2>
+          </header>
 
-    <div class="sheet-section mtrol-competencia-section">
+          <div class="mtrol-competencia-grid">
 
-      <h2>Presentacion V3</h2>
+            <div class="mtrol-field wide">
+              <label>Tipo de accion</label>
+              <select name="system.actionType">
+                <option value="attack" {{#if (eq system.actionType "attack")}}selected{{/if}}>Ataque</option>
+                <option value="basicAttack" {{#if (eq system.actionType "basicAttack")}}selected{{/if}}>Ataque basico</option>
+                <option value="combatSkill" {{#if (eq system.actionType "combatSkill")}}selected{{/if}}>Habilidad de combate</option>
+                <option value="control" {{#if (eq system.actionType "control")}}selected{{/if}}>Control</option>
+                <option value="damage" {{#if (eq system.actionType "damage")}}selected{{/if}}>Dano</option>
+                <option value="heal" {{#if (eq system.actionType "heal")}}selected{{/if}}>Curacion</option>
+                <option value="buff" {{#if (eq system.actionType "buff")}}selected{{/if}}>Buff</option>
+                <option value="debuff" {{#if (eq system.actionType "debuff")}}selected{{/if}}>Debuff</option>
+                <option value="summon" {{#if (eq system.actionType "summon")}}selected{{/if}}>Invocacion</option>
+                <option value="utility" {{#if (eq system.actionType "utility")}}selected{{/if}}>Utilidad</option>
+                <option value="movement" {{#if (eq system.actionType "movement")}}selected{{/if}}>Movimiento</option>
+                <option value="channel" {{#if (eq system.actionType "channel")}}selected{{/if}}>Canalizacion</option>
+                <option value="defense" {{#if (eq system.actionType "defense")}}selected{{/if}}>Defensa</option>
+              </select>
+            </div>
 
-      <div class="form-grid">
+            {{#if (eq system.actionType "defense")}}
+            <div class="mtrol-field wide">
+              <label>Tipo de defensa</label>
+              <select name="system.defenseType">
+                <option value="shield" {{#if (eq system.defenseType "shield")}}selected{{/if}}>Escudo</option>
+                <option value="dodge" {{#if (eq system.defenseType "dodge")}}selected{{/if}}>Esquiva</option>
+                <option value="parry" {{#if (eq system.defenseType "parry")}}selected{{/if}}>Parada</option>
+                <option value="resistance" {{#if (eq system.defenseType "resistance")}}selected{{/if}}>Resistencia</option>
+                <option value="will" {{#if (eq system.defenseType "will")}}selected{{/if}}>Voluntad</option>
+                <option value="custom" {{#if (eq system.defenseType "custom")}}selected{{/if}}>Custom</option>
+              </select>
+            </div>
+            {{/if}}
 
-        <div class="wide">
-          <label>Banner de combate</label>
-          <input type="text"
-                 name="system.banner"
-                 value="{{system.banner}}"
-                 placeholder="systems/mtrol/assets/skills/fireball.webp" />
-        </div>
+            <label class="mtrol-toggle">
+              <span>Requiere objetivo</span>
+              <input type="checkbox"
+                     name="system.requiresTarget"
+                     {{checked system.requiresTarget}} />
+            </label>
 
-        <div>
-          <label>Elemento</label>
-          <input type="text"
-                 name="system.elemento"
-                 value="{{system.elemento}}"
-                 placeholder="fuego, hielo, sombra..." />
-        </div>
+            <label class="mtrol-toggle">
+              <span>Requiere oposicion</span>
+              <input type="checkbox"
+                     name="system.requiresOpposition"
+                     {{checked system.requiresOpposition}} />
+            </label>
 
-        <div>
-          <label>Rareza</label>
-          <select name="system.rareza">
-            <option value="comun" {{#if (eq system.rareza "comun")}}selected{{/if}}>Comun</option>
-            <option value="magica" {{#if (eq system.rareza "magica")}}selected{{/if}}>Magica</option>
-            <option value="rara" {{#if (eq system.rareza "rara")}}selected{{/if}}>Rara</option>
-            <option value="epica" {{#if (eq system.rareza "epica")}}selected{{/if}}>Epica</option>
-            <option value="legendaria" {{#if (eq system.rareza "legendaria")}}selected{{/if}}>Legendaria</option>
-          </select>
-        </div>
+            <div class="mtrol-field wide">
+              <label>Tipo de oposicion</label>
+              <select name="system.oppositionType">
+                <option value="free" {{#if (eq system.oppositionType "free")}}selected{{/if}}>Libre</option>
+                <option value="dodge" {{#if (eq system.oppositionType "dodge")}}selected{{/if}}>Esquiva</option>
+                <option value="shield" {{#if (eq system.oppositionType "shield")}}selected{{/if}}>Escudo</option>
+                <option value="will" {{#if (eq system.oppositionType "will")}}selected{{/if}}>Voluntad</option>
+                <option value="resistance" {{#if (eq system.oppositionType "resistance")}}selected{{/if}}>Resistencia</option>
+                <option value="competence" {{#if (eq system.oppositionType "competence")}}selected{{/if}}>Competencia</option>
+                <option value="custom" {{#if (eq system.oppositionType "custom")}}selected{{/if}}>Custom</option>
+              </select>
+            </div>
 
-        <div>
-          <label>Cooldown</label>
-          <input type="number"
-                 name="system.cooldown"
-                 value="{{system.cooldown}}"
-                 min="0" />
-        </div>
-
+          </div>
+        </section>
       </div>
 
-    </div>
+      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="efectos">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>Efectos</h2>
+          </header>
 
-    <div class="sheet-section mtrol-competencia-section">
+          <div class="mtrol-competencia-grid">
 
-      <h2>FX Visuales</h2>
+            <div class="mtrol-field wide">
+              <label>Efecto principal</label>
+              <select name="system.effect">
+                <option value="none" {{#if (eq system.effect "none")}}selected{{/if}}>Ninguno</option>
+                <option value="damage" {{#if (eq system.effect "damage")}}selected{{/if}}>Dano</option>
+                <option value="stunned" {{#if (eq system.effect "stunned")}}selected{{/if}}>Stunned</option>
+                <option value="silence" {{#if (eq system.effect "silence")}}selected{{/if}}>Silence</option>
+                <option value="fear" {{#if (eq system.effect "fear")}}selected{{/if}}>Fear</option>
+                <option value="root" {{#if (eq system.effect "root")}}selected{{/if}}>Root</option>
+                <option value="burn" {{#if (eq system.effect "burn")}}selected{{/if}}>Burn</option>
+                <option value="bleed" {{#if (eq system.effect "bleed")}}selected{{/if}}>Bleed</option>
+                <option value="freeze" {{#if (eq system.effect "freeze")}}selected{{/if}}>Freeze</option>
+                <option value="poison" {{#if (eq system.effect "poison")}}selected{{/if}}>Poison</option>
+                <option value="heal" {{#if (eq system.effect "heal")}}selected{{/if}}>Heal</option>
+                <option value="shield" {{#if (eq system.effect "shield")}}selected{{/if}}>Shield</option>
+                <option value="block" {{#if (eq system.effect "block")}}selected{{/if}}>Block</option>
+                <option value="buff" {{#if (eq system.effect "buff")}}selected{{/if}}>Buff</option>
+                <option value="debuff" {{#if (eq system.effect "debuff")}}selected{{/if}}>Debuff</option>
+                <option value="mpRecovery" {{#if (eq system.effect "mpRecovery")}}selected{{/if}}>MP recovery</option>
+              </select>
+            </div>
 
-      <div class="form-grid">
+            <div class="mtrol-field">
+              <label>Duracion</label>
+              <input type="number"
+                     name="system.effectDuration"
+                     value="{{system.effectDuration}}"
+                     min="0" />
+            </div>
 
-        <div class="wide">
-          <label>FX Autocast / Caster</label>
-          <input type="text"
-                 name="system.fx.autocast"
-                 value="{{system.fx.autocast}}"
-                 placeholder="Efecto sobre quien lanza la habilidad" />
-        </div>
+            <div class="mtrol-field">
+              <label>Intensidad</label>
+              <input type="number"
+                     name="system.effectIntensity"
+                     value="{{system.effectIntensity}}" />
+            </div>
 
-        <div class="wide">
-          <label>FX Proyectil / Trayectoria</label>
-          <input type="text"
-                 name="system.fx.proyectil"
-                 value="{{system.fx.proyectil}}"
-                 placeholder="jb2a.fire_bolt.orange" />
-        </div>
-
-        <div class="wide">
-          <label>FX Target / Impacto</label>
-          <input type="text"
-                 name="system.fx.target"
-                 value="{{system.fx.target}}"
-                 placeholder="modules/JB2A_DnD5e/Library/3rd_Level/Fireball/FireballExplosion_01_Orange_800x800.webm" />
-        </div>
-
-        <div class="wide">
-          <label>FX Visual Legacy</label>
-          <input type="text"
-                 name="system.fx.visual"
-                 value="{{system.fx.visual}}"
-                 placeholder="Campo antiguo. Se usará como fallback temporal." />
-        </div>
-
-        <div class="wide">
-          <label>FX Sonido</label>
-          <input type="text"
-                 name="system.fx.sonido"
-                 value="{{system.fx.sonido}}"
-                 placeholder="sounds/fireball.ogg" />
-        </div>
-
-        <div>
-          <label>Duración</label>
-          <input type="number"
-                 name="system.fx.duracion"
-                 value="{{system.fx.duracion}}"
-                 min="0" />
-        </div>
-
-        <div>
-          <label>Escala</label>
-          <input type="number"
-                 step="0.1"
-                 name="system.fx.escala"
-                 value="{{system.fx.escala}}"
-                 min="0" />
-        </div>
-
+          </div>
+        </section>
       </div>
 
-    </div>
+      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="formulas">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>Formulas</h2>
+          </header>
 
-    <div class="sheet-section mtrol-competencia-section">
+          <div class="mtrol-competencia-grid">
 
-      <h2>Descripción</h2>
+            <div class="mtrol-field">
+              <label>Atributo Base</label>
+              <input type="text"
+                     name="system.atributo"
+                     value="{{system.atributo}}"
+                     placeholder="aura" />
+            </div>
 
-      <textarea name="system.descripcion"
-                rows="8"
-                placeholder="Describe el efecto, alcance, uso narrativo o condición de la competencia.">{{system.descripcion}}</textarea>
+            <div class="mtrol-field">
+              <label>Coste MP</label>
+              <input type="number"
+                     name="system.costeMP"
+                     value="{{system.costeMP}}"
+                     min="0" />
+            </div>
 
-    </div>
+            <div class="mtrol-field wide">
+              <label>Formula de Tirada</label>
+              <input type="text"
+                     name="system.formula"
+                     value="{{system.formula}}"
+                     placeholder="1d10 + @atributos.aura" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Formula de Dano</label>
+              <input type="text"
+                     name="system.danio"
+                     value="{{system.danio}}"
+                     placeholder="2d10 + @atributos.aura" />
+            </div>
+
+            <label class="mtrol-toggle">
+              <span>Usa Dano Localizado</span>
+              <input type="checkbox"
+                     name="system.usaDanioLocalizado"
+                     {{checked system.usaDanioLocalizado}} />
+            </label>
+
+          </div>
+        </section>
+      </div>
+
+      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="presentacion">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>Presentacion</h2>
+          </header>
+
+          <div class="mtrol-competencia-grid">
+
+            <div class="mtrol-field wide">
+              <label>Banner de combate</label>
+              <input type="text"
+                     name="system.banner"
+                     value="{{system.banner}}"
+                     placeholder="systems/mtrol/assets/skills/fireball.webp" />
+            </div>
+
+            <div class="mtrol-field">
+              <label>Elemento</label>
+              <input type="text"
+                     name="system.elemento"
+                     value="{{system.elemento}}"
+                     placeholder="fuego, hielo, sombra..." />
+            </div>
+
+            <div class="mtrol-field">
+              <label>Rareza</label>
+              <select name="system.rareza">
+                <option value="comun" {{#if (eq system.rareza "comun")}}selected{{/if}}>Comun</option>
+                <option value="magica" {{#if (eq system.rareza "magica")}}selected{{/if}}>Magica</option>
+                <option value="rara" {{#if (eq system.rareza "rara")}}selected{{/if}}>Rara</option>
+                <option value="epica" {{#if (eq system.rareza "epica")}}selected{{/if}}>Epica</option>
+                <option value="legendaria" {{#if (eq system.rareza "legendaria")}}selected{{/if}}>Legendaria</option>
+              </select>
+            </div>
+
+            <div class="mtrol-field">
+              <label>Cooldown</label>
+              <input type="number"
+                     name="system.cooldown"
+                     value="{{system.cooldown}}"
+                     min="0" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>FX Autocast / Caster</label>
+              <input type="text"
+                     name="system.fx.autocast"
+                     value="{{system.fx.autocast}}"
+                     placeholder="Efecto sobre quien lanza la habilidad" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>FX Proyectil / Trayectoria</label>
+              <input type="text"
+                     name="system.fx.proyectil"
+                     value="{{system.fx.proyectil}}"
+                     placeholder="jb2a.fire_bolt.orange" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>FX Target / Impacto</label>
+              <input type="text"
+                     name="system.fx.target"
+                     value="{{system.fx.target}}"
+                     placeholder="modules/JB2A_DnD5e/Library/3rd_Level/Fireball/FireballExplosion_01_Orange_800x800.webm" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>FX Visual Legacy</label>
+              <input type="text"
+                     name="system.fx.visual"
+                     value="{{system.fx.visual}}"
+                     placeholder="Campo antiguo. Se usara como fallback temporal." />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>FX Sonido</label>
+              <input type="text"
+                     name="system.fx.sonido"
+                     value="{{system.fx.sonido}}"
+                     placeholder="sounds/fireball.ogg" />
+            </div>
+
+            <div class="mtrol-field">
+              <label>Duracion FX</label>
+              <input type="number"
+                     name="system.fx.duracion"
+                     value="{{system.fx.duracion}}"
+                     min="0" />
+            </div>
+
+            <div class="mtrol-field">
+              <label>Escala FX</label>
+              <input type="number"
+                     step="0.1"
+                     name="system.fx.escala"
+                     value="{{system.fx.escala}}"
+                     min="0" />
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Descripcion</label>
+              <textarea name="system.descripcion"
+                        rows="8"
+                        placeholder="Describe el efecto, alcance, uso narrativo o condicion de la competencia.">{{system.descripcion}}</textarea>
+            </div>
+
+          </div>
+        </section>
+      </div>
+
+    </section>
 
   </section>
 

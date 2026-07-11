@@ -57,18 +57,30 @@ import {
 } from "../items/trade-engine.js";
 
 import {
+  registerMtrolDebugSetting
+} from "./debug.js";
+
+import {
   installMtrolAmbientFxApi
 } from "../scene-fx/ambient-fx-manager.js";
+
+import {
+  installMtrolActionsApi
+} from "../actions/action-engine.js";
+
+import {
+  installMtrolStatesApi
+} from "../states/state-engine.js";
+
+import {
+  installMtrolDeathApi
+} from "../states/death-engine.js";
 
 // =========================
 // INIT MTROL
 // =========================
 
 export async function initMtrol() {
-
-  console.log("=================================");
-  console.log("MTROL | INIT");
-  console.log("=================================");
 
   // =========================
   // ACTOR MODELS
@@ -171,7 +183,11 @@ export async function initMtrol() {
   game.mtrol.ejecutarComercioMtrolDesdeSocket =
     ejecutarComercioMtrolDesdeSocket;
 
+  registerMtrolDebugSetting();
   installMtrolAmbientFxApi();
+  installMtrolStatesApi();
+  installMtrolDeathApi();
+  installMtrolActionsApi();
 
   // =========================
   // PATCH TEMPORAL
@@ -214,9 +230,4 @@ export async function initMtrol() {
     return true;
 
   });
-
-  console.log("MTROL | Models registrados.");
-  console.log("MTROL | Sheets registradas.");
-  console.log("MTROL | Combat runtime registrado.");
-  console.log("MTROL | INIT completado.");
 }

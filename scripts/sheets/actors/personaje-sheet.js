@@ -53,8 +53,17 @@ import {
 } from "../../core/system.js";
 
 import {
+  attachDefenseRollForActor,
+  createPendingActionFromCompetencia
+} from "../../actions/action-engine.js";
+
+import {
   calcularCargaActor
 } from "../../core/mtrol-carry-weight.js";
+
+import {
+  installMtrolCustomResizeHandle
+} from "../mtrol-resize-handle.js";
 
 const { ActorSheet } = foundry.appv1.sheets;
 
@@ -169,6 +178,7 @@ export class PersonajeSheet extends ActorSheet {
       template: `systems/${game.system.id}/templates/actors/personaje-sheet.html`,
       width: 820,
       height: 560,
+      minHeight: 320,
       resizable: true,
 
       tabs: [{
@@ -400,6 +410,8 @@ export class PersonajeSheet extends ActorSheet {
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    installMtrolCustomResizeHandle(this, html);
 
     this._installImageFallbacks(html);
 
@@ -653,6 +665,14 @@ export class PersonajeSheet extends ActorSheet {
       type: "competencia",
       system: {
         nivel: 1,
+        categoria: "competencia",
+        actionType: "utility",
+        effect: "none",
+        requiresTarget: false,
+        requiresOpposition: false,
+        oppositionType: "free",
+        effectDuration: 1,
+        effectIntensity: 0,
         banner: "",
         elemento: "",
         rareza: "comun",
@@ -754,6 +774,30 @@ export class PersonajeSheet extends ActorSheet {
       resultadoCompetencia
     } = resultado;
 
+    if (item.system?.actionType === "defense") {
+      const defenseResult =
+        await attachDefenseRollForActor({
+          actor,
+          item,
+          defenderRoll: resultadoCompetencia
+        });
+
+      await this._finalizarConsumoCompetencia({
+        actor,
+        item,
+        consumoMP,
+        resultadoCompetencia
+      });
+
+      if (defenseResult) return;
+
+      ui.notifications.warn(
+        `${item.name} es una defensa, pero no hay acciones pendientes para ${actor.name}.`
+      );
+
+      return;
+    }
+
     if (resultadoCompetencia?.pifia) {
       await this._finalizarConsumoCompetencia({
         actor,
@@ -761,6 +805,29 @@ export class PersonajeSheet extends ActorSheet {
         consumoMP,
         resultadoCompetencia
       });
+
+      return;
+    }
+
+    const pendingAction =
+      createPendingActionFromCompetencia({
+        actor,
+        item,
+        targetToken,
+        attackerRoll: resultadoCompetencia
+      });
+
+    if (pendingAction) {
+      await this._finalizarConsumoCompetencia({
+        actor,
+        item,
+        consumoMP,
+        resultadoCompetencia
+      });
+
+      ui.notifications.info(
+        `${item.name} espera una defensa manual.`
+      );
 
       return;
     }
@@ -808,8 +875,6 @@ try {
   ui.notifications.warn(`Formula de dano invalida: ${danioFormula}`);
   return;
 }
-
-console.log("MTROL | Damage roll executed");
 
 // =========================
 // VISUAL DICE SO NICE
@@ -995,18 +1060,6 @@ await crearCombatCard({
         ? Math.min(mpMax, mpDespuesCoste + restauracion)
         : mpDespuesCoste;
 
-    console.log("MTROL | Meditar debug", {
-      mpAntes,
-      mpMax,
-      costeAplicado,
-      mpDespuesCoste,
-      resultado: total,
-      esPifia,
-      exito,
-      restauracion,
-      mpFinal
-    });
-
     await aplicarConsumoMP(
       actor,
       {
@@ -1072,6 +1125,13 @@ await crearCombatCard({
       system: {
         nivel: 1,
         categoria: "combate",
+        actionType: "combatSkill",
+        effect: "none",
+        requiresTarget: false,
+        requiresOpposition: false,
+        oppositionType: "free",
+        effectDuration: 1,
+        effectIntensity: 0,
         equipadaCombate: false,
         formula: "",
         danio: "",

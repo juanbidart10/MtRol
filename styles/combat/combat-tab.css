@@ -5,6 +5,7 @@
 
 .mtrol-tab-combate {
   padding: 0;
+  min-height: 0;
 
   background:
     radial-gradient(circle at 50% 0%, rgba(216, 194, 122, .08), transparent 26%),
@@ -23,6 +24,7 @@
 }
 
 .mtrol-combat-hero {
+  min-height: 0;
   padding: 12px 12px 14px;
 }
 
@@ -104,6 +106,7 @@
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   justify-content: center;
+  min-height: 0;
 }
 
 @media (min-width: 760px) {
@@ -115,7 +118,7 @@
 
 .mtrol-tab-combate .mtrol-combat-card {
   position: relative;
-  min-height: 244px;
+  min-height: 210px;
   padding: 0;
   overflow: hidden;
 
@@ -767,7 +770,7 @@
   }
 
   .mtrol-tab-combate .mtrol-combat-card {
-    min-height: 232px;
+    min-height: 198px;
     grid-template-rows: 78px 1fr;
   }
 

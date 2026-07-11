@@ -4,11 +4,12 @@
 
 .mtrol-personaje-sheet {
   position: relative;
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   min-width: 0 !important;
   min-height: 0 !important;
-  padding: 14px;
+  padding: 10px;
   overflow: hidden;
 
   display: flex;
@@ -54,8 +55,16 @@
   z-index: 1;
 }
 
-.mtrol.sheet.personaje .window-content {
+.mtrol.sheet.personaje .window-content,
+.mtrol.sheet.personaje-sheet .window-content,
+.mtrol.sheet.mtrol-personaje .window-content {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
   overflow: hidden !important;
+
+  display: flex;
+  flex-direction: column;
 }
 
 .mtrol-master-header,
@@ -68,10 +77,12 @@
   flex: 1 1 auto;
   height: auto;
   min-height: 0 !important;
-  margin-top: 12px;
-  padding-right: 8px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  margin-top: 8px;
+  padding-right: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
 
   background:
     radial-gradient(circle at 50% 0%, rgba(212, 175, 55, .05), transparent 36%),
@@ -82,12 +93,16 @@
 .mtrol-personaje-sheet .mtrol-tab-personaje,
 .mtrol-personaje-sheet .mtrol-tab-combate,
 .mtrol-personaje-sheet .mtrol-tab-competencias,
+.mtrol-personaje-sheet .mtrol-tab-equipamiento,
 .mtrol-personaje-sheet .mtrol-tab-inventario,
 .mtrol-personaje-sheet .mtrol-tab-progresion {
   position: relative;
-  overflow: hidden;
-  min-height: 100%;
-  padding: 14px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
 
   background:
     linear-gradient(180deg, rgba(0, 0, 0, .28), rgba(0, 0, 0, .50)),
@@ -108,6 +123,7 @@
 .mtrol-personaje-sheet .mtrol-tab-personaje::before,
 .mtrol-personaje-sheet .mtrol-tab-combate::before,
 .mtrol-personaje-sheet .mtrol-tab-competencias::before,
+.mtrol-personaje-sheet .mtrol-tab-equipamiento::before,
 .mtrol-personaje-sheet .mtrol-tab-inventario::before,
 .mtrol-personaje-sheet .mtrol-tab-progresion::before {
   content: "";
@@ -125,6 +141,7 @@
 .mtrol-personaje-sheet .mtrol-tab-personaje > *,
 .mtrol-personaje-sheet .mtrol-tab-combate > *,
 .mtrol-personaje-sheet .mtrol-tab-competencias > *,
+.mtrol-personaje-sheet .mtrol-tab-equipamiento > *,
 .mtrol-personaje-sheet .mtrol-tab-inventario > *,
 .mtrol-personaje-sheet .mtrol-tab-progresion > * {
   position: relative;
@@ -132,7 +149,12 @@
 }
 
 .mtrol-personaje-sheet .mtrol-tab-equipamiento {
-  padding: 0;
+  padding: 10px;
+}
+
+.mtrol-personaje-sheet .sheet-body > .tab.active,
+.mtrol-sheet-body-v2 > .tab.active {
+  display: block;
 }
 
 .mtrol-panel,

@@ -2,6 +2,10 @@
 // MTROL - OBJETO SHEET
 // =========================
 
+import {
+  installMtrolCustomResizeHandle
+} from "../mtrol-resize-handle.js";
+
 const { ItemSheet } =
   foundry.appv1.sheets;
 
@@ -65,6 +69,7 @@ export class ObjetoSheet extends ItemSheet {
         template: `systems/${game.system.id}/templates/items/objeto-sheet.html`,
         width: 600,
         height: 620,
+        minHeight: 300,
         resizable: true
       }
     );
@@ -130,6 +135,8 @@ export class ObjetoSheet extends ItemSheet {
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    installMtrolCustomResizeHandle(this, html);
 
     html.find("img")
       .off("error.mtrolImageGuard")

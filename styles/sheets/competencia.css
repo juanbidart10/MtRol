@@ -1,0 +1,434 @@
+/* =========================================================
+   MTROL - COMPETENCIA ITEM SHEET
+   Inspector visual de habilidades y acciones
+========================================================= */
+
+.competencia-sheet .window-content {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  background:
+    radial-gradient(circle at 12% 0%, rgba(214, 171, 65, .16), transparent 30%),
+    linear-gradient(180deg, #15100a 0%, #050506 100%);
+}
+
+.mtrol-competencia-sheet {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  color: #efe2bd;
+  background:
+    radial-gradient(circle at 72% 0%, rgba(128, 22, 12, .18), transparent 34%),
+    linear-gradient(180deg, rgba(18, 14, 9, .98), rgba(4, 4, 5, .99));
+}
+
+.mtrol-competencia-header {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 10px 14px;
+  overflow: hidden;
+
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+
+  border-bottom: 1px solid rgba(218, 176, 74, .34);
+  box-shadow: inset 0 -18px 28px rgba(0, 0, 0, .36);
+}
+
+.mtrol-competencia-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(118deg, rgba(245, 220, 139, .10), transparent 34%, rgba(80, 11, 6, .16)),
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 38px);
+
+  pointer-events: none;
+}
+
+.mtrol-competencia-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mtrol-competencia-icon-frame {
+  width: 76px;
+  height: 76px;
+  padding: 4px;
+
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 231, 151, .22), transparent 62%),
+    linear-gradient(180deg, rgba(28, 22, 13, .96), rgba(2, 2, 3, .98));
+
+  border: 1px solid rgba(222, 184, 86, .56);
+  border-radius: 8px;
+
+  box-shadow:
+    inset 0 0 14px rgba(0, 0, 0, .76),
+    0 0 20px rgba(196, 151, 43, .14);
+}
+
+.mtrol-competencia-icon {
+  width: 66px;
+  height: 66px;
+  object-fit: cover;
+
+  border: 1px solid rgba(0, 0, 0, .72);
+  border-radius: 6px;
+}
+
+.mtrol-competencia-title {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mtrol-competencia-title label {
+  color: rgba(233, 199, 111, .72);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.mtrol-competencia-title input[name="name"] {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+
+  color: #fff0bd;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0;
+
+  background: rgba(6, 5, 4, .78);
+  border: 1px solid rgba(219, 178, 80, .36);
+  border-radius: 7px;
+  outline: 0;
+  box-shadow: inset 0 0 13px rgba(0, 0, 0, .70);
+}
+
+.mtrol-competencia-title input[name="name"]:focus {
+  border-color: rgba(245, 215, 138, .68);
+  box-shadow:
+    inset 0 0 13px rgba(0, 0, 0, .70),
+    0 0 0 1px rgba(245, 215, 138, .16);
+}
+
+.mtrol-competencia-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mtrol-competencia-badges span {
+  min-height: 21px;
+  padding: 4px 8px;
+
+  color: rgba(255, 232, 166, .88);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-transform: uppercase;
+
+  background: rgba(10, 9, 7, .72);
+  border: 1px solid rgba(214, 171, 65, .28);
+  border-radius: 999px;
+}
+
+.mtrol-competencia-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mtrol-competencia-tabs {
+  flex: 0 0 auto;
+  margin: 0;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+
+  background:
+    linear-gradient(180deg, rgba(8, 7, 5, .88), rgba(0, 0, 0, .96));
+
+  border: 1px solid rgba(216, 194, 122, .32);
+  border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, .76);
+}
+
+.mtrol-competencia-tabs .item {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  color: rgba(242, 210, 122, .76);
+  background:
+    linear-gradient(180deg, rgba(13, 12, 10, .48), rgba(3, 3, 4, .60));
+
+  border-right: 1px solid rgba(216, 194, 122, .12);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mtrol-competencia-tabs .item:last-child {
+  border-right: 0;
+}
+
+.mtrol-competencia-tabs .item i {
+  color: rgba(242, 210, 122, .78);
+  font-size: 13px;
+}
+
+.mtrol-competencia-tabs .item:hover,
+.mtrol-competencia-tabs .item.active {
+  color: #fff2c2;
+  background:
+    radial-gradient(circle at top, rgba(255, 190, 90, .14), transparent 58%),
+    linear-gradient(180deg, rgba(92, 20, 10, .84), rgba(34, 8, 5, .95));
+  box-shadow: inset 0 0 13px rgba(255, 130, 40, .16);
+}
+
+.mtrol-competencia-tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 226, 140, .08), transparent 34%),
+    linear-gradient(180deg, rgba(12, 10, 7, .92), rgba(3, 3, 4, .98));
+
+  border: 1px solid rgba(216, 194, 122, .24);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, .58);
+}
+
+.mtrol-competencia-tab {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mtrol-competencia-section {
+  min-height: 0;
+  padding: 10px;
+
+  background: rgba(2, 2, 3, .28);
+  border: 0;
+  box-shadow: none;
+}
+
+.mtrol-competencia-section > header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid rgba(218, 176, 74, .28);
+}
+
+.mtrol-competencia-section h2 {
+  margin: 0;
+  padding: 0;
+
+  color: #f3d78a;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-decoration: none;
+  text-transform: none;
+
+  border: 0;
+  box-shadow: none;
+}
+
+.mtrol-competencia-section h2::before,
+.mtrol-competencia-section h2::after {
+  display: none;
+  content: none;
+}
+
+.mtrol-competencia-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mtrol-competencia-sheet .mtrol-field,
+.mtrol-competencia-sheet .mtrol-toggle {
+  min-width: 0;
+}
+
+.mtrol-competencia-sheet .mtrol-field {
+  padding: 8px;
+  gap: 6px;
+
+  background:
+    linear-gradient(180deg, rgba(14, 13, 11, .86), rgba(2, 2, 3, .92));
+
+  border: 1px solid rgba(212, 175, 55, .20);
+  border-radius: 8px;
+  box-shadow: inset 0 0 11px rgba(0, 0, 0, .60);
+}
+
+.mtrol-competencia-sheet .mtrol-field.wide {
+  grid-column: 1 / -1;
+}
+
+.mtrol-competencia-sheet .mtrol-field label,
+.mtrol-competencia-sheet .mtrol-toggle span {
+  margin: 0 0 5px;
+
+  display: block;
+
+  color: rgba(236, 216, 160, .72);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.mtrol-competencia-sheet input,
+.mtrol-competencia-sheet select,
+.mtrol-competencia-sheet textarea {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+
+  color: #f6ebcc;
+  font-size: 13px;
+
+  background-color: rgba(3, 3, 4, .88);
+  background-image: linear-gradient(180deg, rgba(18, 15, 10, .92), rgba(3, 3, 4, .96));
+  border: 1px solid rgba(214, 171, 65, .30);
+  border-radius: 7px;
+  outline: 0;
+  box-shadow: inset 0 0 9px rgba(0, 0, 0, .62);
+}
+
+.mtrol-competencia-sheet select,
+.mtrol-competencia-sheet select option {
+  color: #f6ebcc;
+  background-color: #090806;
+}
+
+.mtrol-competencia-sheet select option:hover,
+.mtrol-competencia-sheet select option:checked {
+  color: #fff2c2;
+  background-color: #4b160b;
+}
+
+.mtrol-competencia-sheet input:focus,
+.mtrol-competencia-sheet select:focus,
+.mtrol-competencia-sheet textarea:focus {
+  border-color: rgba(245, 215, 138, .68);
+  box-shadow:
+    inset 0 0 9px rgba(0, 0, 0, .62),
+    0 0 0 1px rgba(245, 215, 138, .16);
+}
+
+.mtrol-competencia-sheet textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.mtrol-competencia-sheet .mtrol-toggle {
+  min-height: 46px;
+  padding: 8px 9px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  background:
+    linear-gradient(180deg, rgba(14, 13, 11, .80), rgba(2, 2, 3, .90));
+  border: 1px solid rgba(212, 175, 55, .20);
+  border-radius: 8px;
+  box-shadow: inset 0 0 11px rgba(0, 0, 0, .56);
+}
+
+.mtrol-competencia-sheet .mtrol-toggle span {
+  margin: 0;
+}
+
+.mtrol-competencia-sheet .mtrol-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 620px) {
+  .mtrol-competencia-header {
+    grid-template-columns: 64px minmax(0, 1fr);
+    min-height: 0;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .mtrol-competencia-icon-frame {
+    width: 62px;
+    height: 62px;
+  }
+
+  .mtrol-competencia-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .mtrol-competencia-title input[name="name"] {
+    height: 34px;
+    font-size: 18px;
+  }
+
+  .mtrol-competencia-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mtrol-competencia-grid {
+    grid-template-columns: 1fr;
+  }
+}

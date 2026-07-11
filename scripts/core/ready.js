@@ -4,15 +4,15 @@ import {
   aplicarDanioLocalizado
 } from "../combat/damage-localized.js";
 
+import {
+  installMtrolDebugApi
+} from "./debug.js";
+
 // =========================
 // MTROL - READY
 // =========================
 
 export function readyMtrol() {
-
-  console.log(
-    "MtRol | READY - Sistema completamente cargado"
-  );
 
   // =====================================
   // API GLOBAL
@@ -50,7 +50,5 @@ export function readyMtrol() {
     });
   };
 
-  console.log(
-    "MtRol | API global registrada."
-  );
+  installMtrolDebugApi();
 }

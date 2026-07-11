@@ -607,9 +607,6 @@ function addMtrolControlGroup(controls, tool) {
 }
 
 function addSceneControlButton(controls) {
-  console.log("MTROL Ambient FX | controls raw", controls);
-  console.log("MTROL Ambient FX | controls constructor", controls?.constructor?.name);
-
   if (!game.user?.isGM) return;
   if (hasAmbientFxToolInControls(controls)) return;
 

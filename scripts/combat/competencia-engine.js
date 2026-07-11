@@ -49,6 +49,20 @@ function requiereTarget(categoria, danioFormula) {
 
 }
 
+function requiereTargetConfigurado(item, categoria, danioFormula) {
+
+  if (item.system?.requiresTarget === true || item.system?.requiresTarget === "true") {
+    return true;
+  }
+
+  if (item.system?.requiresOpposition === true || item.system?.requiresOpposition === "true") {
+    return true;
+  }
+
+  return requiereTarget(categoria, danioFormula);
+
+}
+
 // =========================
 // RESOLVER COMPETENCIA
 // =========================
@@ -106,7 +120,7 @@ export async function resolverCompetencia({
   // TARGET
   // =========================
 
-  if (requiereTarget(categoria, danioFormula) && !targetToken) {
+  if (requiereTargetConfigurado(item, categoria, danioFormula) && !targetToken) {
     ui.notifications.warn(
       `Seleccioná un objetivo antes de usar ${item.name}.`
     );

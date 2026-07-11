@@ -2,6 +2,10 @@
 // MTROL - COMPETENCIA SHEET
 // =========================
 
+import {
+  installMtrolCustomResizeHandle
+} from "../mtrol-resize-handle.js";
+
 const { ItemSheet } =
   foundry.appv1.sheets;
 
@@ -38,8 +42,15 @@ export class CompetenciaSheet extends ItemSheet {
 
         width: 600,
         height: 700,
+        minHeight: 300,
 
-        resizable: true
+        resizable: true,
+
+        tabs: [{
+          navSelector: ".mtrol-competencia-tabs",
+          contentSelector: ".mtrol-competencia-tab-content",
+          initial: "general"
+        }]
       }
     );
 
@@ -82,6 +93,8 @@ export class CompetenciaSheet extends ItemSheet {
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    installMtrolCustomResizeHandle(this, html);
 
     html.find("img")
       .off("error.mtrolImageGuard")

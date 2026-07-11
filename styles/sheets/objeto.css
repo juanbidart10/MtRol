@@ -3,14 +3,31 @@
 ========================================================= */
 
 .mtrol.sheet.objeto {
+  min-height: 0;
   color: var(--mtrol-silver);
   font-family: var(--mtrol-font-body);
 }
 
 .mtrol.sheet.objeto .window-content {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
   background:
     radial-gradient(circle at 50% 0%, rgba(212, 175, 55, .10), transparent 32%),
     linear-gradient(180deg, rgba(8, 7, 6, .94), rgba(0, 0, 0, .96));
+}
+
+.mtrol-objeto-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* =========================
@@ -18,12 +35,13 @@
 ========================= */
 
 .mtrol.sheet.objeto .sheet-header {
+  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
 
-  padding: 14px;
+  padding: 10px;
 
   background:
     radial-gradient(circle at top left, rgba(216, 194, 122, .10), transparent 36%),
@@ -43,8 +61,8 @@
 }
 
 .mtrol.sheet.objeto .profile-img {
-  width: 96px;
-  height: 96px;
+  width: 78px;
+  height: 78px;
   object-fit: cover;
 
   background: rgba(0, 0, 0, .50);
@@ -72,7 +90,7 @@
 
 .mtrol.sheet.objeto .charname input {
   width: 100%;
-  height: 42px;
+  height: 36px;
 
   color: var(--mtrol-gold-light);
   font-family: var(--mtrol-font-title);
@@ -85,8 +103,8 @@
 ========================= */
 
 .mtrol.sheet.objeto .sheet-section {
-  margin-top: 14px;
-  padding: 14px;
+  margin-top: 10px;
+  padding: 12px;
 
   background:
     radial-gradient(circle at top, rgba(216, 194, 122, .07), transparent 34%),
@@ -206,7 +224,7 @@
 }
 
 .mtrol.sheet.objeto .objeto-toggle-row {
-  min-height: 58px;
+  min-height: 46px;
   padding: 10px;
 
   flex-direction: row;
@@ -221,7 +239,7 @@
 }
 
 .mtrol.sheet.objeto textarea {
-  min-height: 160px;
+  min-height: 96px;
   padding: 10px;
   resize: vertical;
 }
@@ -232,8 +250,8 @@
   }
 
   .mtrol.sheet.objeto .profile-img {
-    width: 84px;
-    height: 84px;
+    width: 68px;
+    height: 68px;
   }
 
   .mtrol.sheet.objeto .objeto-grid {

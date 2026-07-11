@@ -3,7 +3,8 @@
 ========================================================= */
 
 .mtrol-equipment-tab {
-  padding: 14px;
+  min-height: 0;
+  padding: 10px;
 }
 
 .mtrol-equipment-header {
@@ -46,6 +47,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
   gap: 14px;
   align-items: start;
+  min-height: 0;
 }
 
 /* =========================
@@ -55,7 +57,8 @@
 .mtrol-body-build {
   position: relative;
   min-width: 0;
-  min-height: 430px;
+  min-height: 0;
+  height: clamp(300px, 58vh, 430px);
   overflow: hidden;
 
   --mtrol-equipment-figure-art: url("../../assets/ui/equipment/equipment-paperdoll.png");
