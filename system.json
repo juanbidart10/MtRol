@@ -3,7 +3,7 @@
   "type": "system",
   "title": "MtRol Beta",
   "description": "Sistema oficial de MtRol para Foundry VTT en etapa de beta.",
-  "version": "1.2",
+  "version": "1.2.2",
 
   "compatibility": {
     "minimum": "14",

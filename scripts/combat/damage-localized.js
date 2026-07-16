@@ -27,6 +27,12 @@ function serializeRoll(roll) {
   return roll.toJSON?.() ?? roll.toObject?.() ?? null;
 }
 
+function getDeathUpdateOptions(targetTokenDocument) {
+  return {
+    mtrolDeathTargetTokenUuid: targetTokenDocument?.uuid ?? null
+  };
+}
+
 function previewDamageToTarget({
   actorObjetivo,
   slotObjetivo,
@@ -103,25 +109,18 @@ async function applyDamageToTarget({
     const hpNuevo =
       Math.max(0, resultado.hpAnterior - danioFinal);
 
-    await actorObjetivo.update({
-      "system.vitales.hp.value": hpNuevo
-    });
+    await actorObjetivo.update(
+      {
+        "system.vitales.hp.value": hpNuevo
+      },
+      getDeathUpdateOptions(targetTokenDocument)
+    );
 
     resultado.hpPerdido =
       danioFinal;
 
     resultado.hpNuevo =
       hpNuevo;
-
-    if (hpNuevo <= 0 && targetTokenDocument) {
-      try {
-        await targetTokenDocument.update({
-          overlayEffect: "icons/svg/skull.svg"
-        });
-      } catch (error) {
-        console.warn("MTROL | No se pudo actualizar el overlay del token.", error);
-      }
-    }
 
     return resultado;
   }
@@ -169,22 +168,16 @@ async function applyDamageToTarget({
     const hpNuevo =
       Math.max(0, resultado.hpAnterior - danioSobrante);
 
-    await actorObjetivo.update({
-      "system.vitales.hp.value": hpNuevo
-    });
+    await actorObjetivo.update(
+      {
+        "system.vitales.hp.value": hpNuevo
+      },
+      getDeathUpdateOptions(targetTokenDocument)
+    );
 
     resultado.hpNuevo =
       hpNuevo;
 
-    if (hpNuevo <= 0 && targetTokenDocument) {
-      try {
-        await targetTokenDocument.update({
-          overlayEffect: "icons/svg/skull.svg"
-        });
-      } catch (error) {
-        console.warn("MTROL | No se pudo actualizar el overlay del token.", error);
-      }
-    }
   }
 
   return resultado;

@@ -1,28 +1,6 @@
 import { mtrolRoll } from "../../rolls/mtrol-rolls.js";
 
 import {
-  mtrolEvaluarDadosMtrol,
-  mtrolCalcularTotalBaseSinCriticos,
-  mtrolMostrarDados
-} from "../../rolls/dice-engine.js";
-
-import {
-  mtrolAplicarDharmaKarma
-} from "../../rolls/mtrol-dharma-karma.js";
-
-import {
-  mtrolObtenerDanioManos
-} from "../../rolls/roll-helpers.js";
-
-import {
-  aplicarDanioLocalizado
-} from "../../combat/damage-localized.js";
-
-import {
-  crearCombatCard
-} from "../../combat/combat-card.js";
-
-import {
   resolverCompetencia
 } from "../../combat/competencia-engine.js";
 
@@ -56,6 +34,10 @@ import {
   attachDefenseRollForActor,
   createPendingActionFromCompetencia
 } from "../../actions/action-engine.js";
+
+import {
+  executeCompetenciaDamage
+} from "../../actions/action-damage-engine.js";
 
 import {
   calcularCargaActor
@@ -814,7 +796,14 @@ export class PersonajeSheet extends ActorSheet {
         actor,
         item,
         targetToken,
-        attackerRoll: resultadoCompetencia
+        attackerRoll: resultadoCompetencia,
+        damage: {
+          available: !!danioFormula,
+          formula: danioFormula,
+          flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
+          localized: item.system?.usaDanioLocalizado !== false,
+          costoTotal
+        }
       });
 
     if (pendingAction) {
@@ -843,159 +832,30 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    const rollData =
-      actor.getRollData();
+    try {
+      await executeCompetenciaDamage({
+        actor,
+        targetActor,
+        targetToken,
+        formula: danioFormula,
+        flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
+        costoTotal
+      });
+    } catch (error) {
+      ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
+      return;
+    }
 
-    const danioManos =
-      mtrolObtenerDanioManos(actor);
-
-    rollData.mano =
-      danioManos.total;
-
-    rollData.manoDer =
-      danioManos.manoDer;
-
-    rollData.manoIzq =
-      danioManos.manoIzq;
-
-let damageRoll = null;
-
-try {
-  damageRoll =
-    await new Roll(
-      danioFormula,
-      rollData
-    ).evaluate();
-} catch (error) {
-  console.error("MTROL | Formula de dano invalida.", {
-    formula: danioFormula,
-    error
-  });
-
-  ui.notifications.warn(`Formula de dano invalida: ${danioFormula}`);
-  return;
-}
-
-// =========================
-// VISUAL DICE SO NICE
-// =========================
-
-await mtrolMostrarDados(damageRoll);
-
-// =========================
-// EVALUACIÓN MTROL
-// =========================
-
-const evaluacionDanio =
-  await mtrolEvaluarDadosMtrol(
-    damageRoll
-  );
-
-// =========================
-// DHARMA / KARMA
-// =========================
-
-await mtrolAplicarDharmaKarma(
-  actor,
-  evaluacionDanio.cantidadDharma,
-  evaluacionDanio.cantidadKarma
-);
-
-// =========================
-// PIFIA
-// =========================
-
-if (evaluacionDanio.pifia) {
-  const damageRollHTML =
-    await damageRoll.render({
-      flavor: "Tirada de Daño"
+    await this._finalizarConsumoCompetencia({
+      actor,
+      item,
+      consumoMP,
+      resultadoCompetencia
     });
 
-  await ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ actor }),
+    return;
 
-    content: `
-      <div class="mtrol-chat-card mtrol-chat-pifia">
-        <h2>💀 PIFIA EN DAÑO 💀</h2>
-
-        ${damageRollHTML}
-
-        <p>${evaluacionDanio.motivo}</p>
-
-        <p>
-          El daño localizado fue cancelado.
-        </p>
-      </div>
-    `
-  });
-
-  await this._finalizarConsumoCompetencia({
-    actor,
-    item,
-    consumoMP,
-    resultadoCompetencia
-  });
-
-  return;
-}
-
-// =========================
-// TOTALES
-// =========================
-
-const totalBaseDanio =
-  mtrolCalcularTotalBaseSinCriticos(
-    damageRoll
-  );
-
-const totalFinalDanio =
-  totalBaseDanio +
-  evaluacionDanio.totalExtra;
-
-// =========================
-// DAÑO LOCALIZADO
-// =========================
-
-const resultadoDanio =
-  await aplicarDanioLocalizado({
-    actor,
-    targetActor,
-    targetTokenDocument: targetToken?.document ?? targetToken,
-    damageRoll,
-    danio: totalFinalDanio,
-    costoTotal,
-    evaluacionDanio,
-    totalBaseDanio,
-    totalFinalDanio
-  });
-
-if (!resultadoDanio) return;
-
-resultadoDanio.danioOriginal =
-  totalFinalDanio;
-
-await this._finalizarConsumoCompetencia({
-  actor,
-  item,
-  consumoMP,
-  resultadoCompetencia
-});
-
-// =========================
-// COMBAT CARD
-// =========================
-
-await crearCombatCard({
-  actor,
-  targetActor,
-  damageRoll,
-  resultadoDanio,
-  costoTotal,
-  evaluacionDanio,
-  totalBaseDanio,
-  totalFinalDanio
-});
-}
+  }
 
   async _finalizarConsumoCompetencia({
     actor,

@@ -69,6 +69,10 @@ import {
 } from "../actions/action-engine.js";
 
 import {
+  registerResolvedDamageChatHandler
+} from "../actions/action-damage-engine.js";
+
+import {
   installMtrolStatesApi
 } from "../states/state-engine.js";
 
@@ -188,6 +192,7 @@ export async function initMtrol() {
   installMtrolStatesApi();
   installMtrolDeathApi();
   installMtrolActionsApi();
+  registerResolvedDamageChatHandler();
 
   // =========================
   // PATCH TEMPORAL

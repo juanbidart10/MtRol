@@ -24,13 +24,13 @@ export async function crearCombatCard({
 
   const damageRollHTML =
     await damageRoll.render({
-      flavor: "Tirada de Da&ntilde;o"
+      flavor: "Tirada de Daño"
     });
 
   const localizacionRollHTML =
     resultadoDanio.localizacionRoll
       ? await resultadoDanio.localizacionRoll.render({
-          flavor: "Tirada de Localizaci&oacute;n"
+          flavor: "Tirada de Localización"
         })
       : "";
 

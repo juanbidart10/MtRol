@@ -21,6 +21,12 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function getDeathUpdateOptions(targetTokenDocument) {
+  return {
+    mtrolDeathTargetTokenUuid: targetTokenDocument?.uuid ?? null
+  };
+}
+
 // =========================
 // LEGACY - DAÑO SIMPLE
 // =========================
@@ -107,15 +113,12 @@ export async function aplicarDanioAutorizado({
   const hpNuevo =
     Math.max(0, hpActual - danioRestante);
 
-  await targetActor.update({
-    "system.vitales.hp.value": hpNuevo
-  });
-
-  if (hpNuevo <= 0 && targetTokenDocument) {
-    await targetTokenDocument.update({
-      overlayEffect: "icons/svg/skull.svg"
-    });
-  }
+  await targetActor.update(
+    {
+      "system.vitales.hp.value": hpNuevo
+    },
+    getDeathUpdateOptions(targetTokenDocument)
+  );
 
   await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({
@@ -220,9 +223,12 @@ export async function aplicarDanioLocalizadoAutorizado({
     const hpNuevo =
       Math.max(0, hpActual - danioFinal);
 
-    await targetActor.update({
-      "system.vitales.hp.value": hpNuevo
-    });
+    await targetActor.update(
+      {
+        "system.vitales.hp.value": hpNuevo
+      },
+      getDeathUpdateOptions(targetTokenDocument)
+    );
 
     resultado.hpPerdido =
       danioFinal;
@@ -275,19 +281,16 @@ export async function aplicarDanioLocalizadoAutorizado({
       const hpNuevo =
         Math.max(0, hpActual - danioSobrante);
 
-      await targetActor.update({
-        "system.vitales.hp.value": hpNuevo
-      });
+      await targetActor.update(
+        {
+          "system.vitales.hp.value": hpNuevo
+        },
+        getDeathUpdateOptions(targetTokenDocument)
+      );
 
       resultado.hpNuevo =
         hpNuevo;
     }
-  }
-
-  if (resultado.hpNuevo <= 0 && targetTokenDocument) {
-    await targetTokenDocument.update({
-      overlayEffect: "icons/svg/skull.svg"
-    });
   }
 
   return resultado;
