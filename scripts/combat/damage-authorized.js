@@ -3,6 +3,10 @@ import {
   MTROL_BODY_SLOT_LABELS
 } from "../constants/body-slots.js";
 
+import {
+  destroyEquippedItem
+} from "../items/item-destruction-engine.js";
+
 // =========================
 // MTROL - DAMAGE AUTHORIZED
 // =========================
@@ -91,10 +95,13 @@ export async function aplicarDanioAutorizado({
         itemDestruido =
           true;
 
-        await targetActor.deleteEmbeddedDocuments(
-          "Item",
-          [itemDefensivo.id]
-        );
+        await destroyEquippedItem({
+          actor: targetActor,
+          item: itemDefensivo,
+          slot,
+          reason: "daño autorizado",
+          createChatMessage: false
+        });
 
       } else {
         defensaNueva =
@@ -266,11 +273,13 @@ export async function aplicarDanioLocalizadoAutorizado({
       resultado.itemDestruido =
         true;
 
-      await targetActor.update({
-        [`system.equipamiento.${slotObjetivo}`]: ""
+      await destroyEquippedItem({
+        actor: targetActor,
+        item,
+        slot: slotObjetivo,
+        reason: "daño localizado autorizado",
+        createChatMessage: false
       });
-
-      await item.delete();
     } else {
       await item.update({
         "system.defensa": defensaNueva

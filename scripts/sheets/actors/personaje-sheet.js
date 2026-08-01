@@ -764,17 +764,19 @@ export class PersonajeSheet extends ActorSheet {
           defenderRoll: resultadoCompetencia
         });
 
-      await this._finalizarConsumoCompetencia({
-        actor,
-        item,
-        consumoMP,
-        resultadoCompetencia
-      });
+      if (defenseResult) {
+        await this._finalizarConsumoCompetencia({
+          actor,
+          item,
+          consumoMP,
+          resultadoCompetencia
+        });
 
-      if (defenseResult) return;
+        return;
+      }
 
       ui.notifications.warn(
-        `${item.name} es una defensa, pero no hay acciones pendientes para ${actor.name}.`
+        `${item.name} no pudo asociarse a una acción pendiente para ${actor.name}.`
       );
 
       return;
@@ -792,7 +794,7 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     const pendingAction =
-      createPendingActionFromCompetencia({
+      await createPendingActionFromCompetencia({
         actor,
         item,
         targetToken,
@@ -818,6 +820,14 @@ export class PersonajeSheet extends ActorSheet {
         `${item.name} espera una defensa manual.`
       );
 
+      return;
+    }
+
+    const requiereOposicion =
+      item.system?.requiresOpposition === true ||
+      item.system?.requiresOpposition === "true";
+
+    if (requiereOposicion) {
       return;
     }
 

@@ -57,8 +57,8 @@
 .mtrol-body-build {
   position: relative;
   min-width: 0;
-  min-height: 0;
-  height: clamp(300px, 58vh, 430px);
+  min-height: clamp(300px, 58vh, 430px);
+  height: auto;
   overflow: hidden;
 
   --mtrol-equipment-figure-art: url("../../assets/ui/equipment/equipment-paperdoll.png");

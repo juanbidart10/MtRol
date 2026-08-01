@@ -6,23 +6,170 @@ import {
   applyStateFromSocket
 } from "../states/state-engine.js";
 
-function isPrimaryActiveGM() {
-  const activeGMs =
-    game.users
-      .filter(user => user.isGM && user.active)
-      .sort((a, b) => a.id.localeCompare(b.id));
+import {
+  handleSocketResponse,
+  isPrimaryActiveGM,
+  respondToSocketRequest
+} from "./socket-requests.js";
 
-  return activeGMs[0]?.id === game.user.id;
+async function respondWithResult(request, operation) {
+  try {
+    const result =
+      await operation();
+
+    respondToSocketRequest(request, {
+      ok: true,
+      result
+    });
+  } catch (error) {
+    console.error("MTROL | Solicitud autoritativa rechazada:", error);
+
+    respondToSocketRequest(request, {
+      ok: false,
+      error: error.message,
+      result: null
+    });
+  }
 }
 
 export function registerMtrolSockets() {
   game.socket.on("system.mtrol", async (data) => {
+    if (!data) return;
+
+    if (handleSocketResponse(data)) return;
+
+    if (data.action === "mtrolPendingActionSync") {
+      game.mtrol?.actions?.receivePendingActionSync?.(
+        data.pendingAction
+      );
+      return;
+    }
+
+    if (data.action === "mtrolPendingActionCleared") {
+      game.mtrol?.actions?.receivePendingActionCleared?.(
+        data.pendingActionId
+      );
+      return;
+    }
+
     if (!game.user.isGM) return;
     if (!isPrimaryActiveGM()) return;
-    if (!data) return;
+    if (data.targetGMId && data.targetGMId !== game.user.id) return;
 
     try {
       switch (data.action) {
+
+        // =========================
+        // MTROL - ACCIONES ENFRENTADAS AUTORITATIVAS
+        // =========================
+        case "mtrolCreatePendingAction": {
+          await respondWithResult(data, async () => {
+            const pendingAction =
+              await game.mtrol.actions.createPendingActionAuthoritative(
+                data.payload?.pendingAction ?? {},
+                {
+                  requestingUserId: data.requestingUserId
+                }
+              );
+
+            return {
+              pendingAction:
+                game.mtrol.actions.serializePendingAction(pendingAction)
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolAttachDefenseRoll": {
+          await respondWithResult(data, async () => {
+            const result =
+              await game.mtrol.actions.attachDefenseRollAuthoritative({
+                pendingActionId: data.payload?.pendingActionId ?? null,
+                defenderActorUuid: data.payload?.defenderActorUuid ?? null,
+                defenseItemId: data.payload?.defenseItemId ?? null,
+                defenderRoll: data.payload?.defenderRoll ?? null,
+                requestingUserId: data.requestingUserId
+              });
+
+            const pendingAction =
+              game.mtrol.actions.serializePendingAction(result.pendingAction);
+
+            return {
+              pendingAction,
+              resolutionResult: pendingAction?.result ?? null
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolResolvePendingAction": {
+          await respondWithResult(data, async () => {
+            const result =
+              await game.mtrol.actions.resolvePendingActionAuthoritative(
+                data.payload?.pendingActionId,
+                {
+                  requestingUserId: data.requestingUserId
+                }
+              );
+
+            const pendingAction =
+              game.mtrol.actions.serializePendingAction(result.pendingAction);
+
+            return {
+              pendingAction,
+              resolutionResult: pendingAction?.result ?? null
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolClearPendingAction": {
+          await respondWithResult(data, async () => {
+            await game.mtrol.actions.clearPendingActionAuthoritative(
+              data.payload?.pendingActionId,
+              {
+                requestingUserId: data.requestingUserId,
+                reason: data.payload?.reason ?? "cancelled"
+              }
+            );
+
+            const pendingAction =
+              game.mtrol.actions.getPendingAction(
+                data.payload?.pendingActionId
+              );
+
+            return {
+              pendingAction:
+                game.mtrol.actions.serializePendingAction(pendingAction)
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolRequestPendingActionsForActor": {
+          await respondWithResult(data, async () => {
+            const pendingActions =
+              await game.mtrol.actions.requestPendingActionsForActor(
+                data.payload?.actorUuid,
+                {
+                  requestingUserId: data.requestingUserId
+                }
+              );
+
+            return {
+              pendingActions:
+                pendingActions.map(
+                  game.mtrol.actions.serializePendingAction
+                )
+            };
+          });
+
+          break;
+        }
 
         // =========================
         // LEGACY / DAÑO SIMPLE

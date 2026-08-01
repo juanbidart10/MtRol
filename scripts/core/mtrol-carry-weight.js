@@ -41,6 +41,25 @@ function calcularPesoMaximoPorFuerza(fuerza) {
   return fuerzaCapacidad * 10;
 }
 
+function isTokenMovement(tokenDocument, changes) {
+  return ["x", "y", "elevation"].some(key => {
+    if (!Object.prototype.hasOwnProperty.call(changes ?? {}, key)) {
+      return false;
+    }
+
+    return toNumber(changes[key], 0) !==
+      toNumber(tokenDocument?.[key], 0);
+  });
+}
+
+function isMovementRequestedByGM(userId) {
+  const requestingUser =
+    game.users?.get?.(userId) ??
+    (game.user?.id === userId ? game.user : null);
+
+  return requestingUser?.isGM === true;
+}
+
 export function calcularCargaActor(actor) {
   if (!actor || !isMtrolActor(actor)) {
     return {
@@ -81,7 +100,7 @@ export function calcularCargaActor(actor) {
     pesoActual,
     pesoMaximo,
     pesoLibre,
-    sobrecargado: pesoActual > pesoMaximo
+    sobrecargado: pesoActual >= pesoMaximo
   };
 }
 
@@ -121,6 +140,27 @@ export function registrarHooksPesoMtrol() {
 
     ui.notifications.warn(
       `${actor.name} no puede cargar "${item.name}". Capacidad excedida: ${pesoFinal}/${carga.pesoMaximo}.`
+    );
+
+    return false;
+  });
+
+  Hooks.on("preUpdateToken", (tokenDocument, changes, _options, userId) => {
+    if (!isTokenMovement(tokenDocument, changes)) return true;
+    if (isMovementRequestedByGM(userId)) return true;
+
+    const actor =
+      tokenDocument?.actor;
+
+    if (!actor || !isMtrolActor(actor)) return true;
+
+    const carga =
+      calcularCargaActor(actor);
+
+    if (carga.pesoActual < carga.pesoMaximo) return true;
+
+    ui.notifications.warn(
+      "El personaje est\u00e1 sobrecargado y no puede desplazarse."
     );
 
     return false;

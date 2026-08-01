@@ -715,7 +715,7 @@
             </div>
 
             <div class="mtrol-summary-row">
-              <span>Peso m&aacute;ximo</span>
+              <span>Umbral de sobrecarga</span>
               <strong>{{equipamientoResumen.pesoMaximo}}</strong>
             </div>
 
@@ -842,14 +842,17 @@
         </div>
 
         <div class="slots-resumen">
-          <span><strong>Peso m&aacute;ximo:</strong> {{inventario.maximos}}</span>
-          <span><strong>Carga:</strong> {{inventario.usados}}</span>
+          <span><strong>Peso actual:</strong> {{inventario.usados}} / {{inventario.maximos}}</span>
+          <span>
+            <strong>Estado:</strong>
+            {{#if inventario.sobrecargado}}Sobrecargado{{else}}Normal{{/if}}
+          </span>
           <span><strong>Peso libre:</strong> {{inventario.libres}}</span>
         </div>
 
         {{#if inventario.sobrecargado}}
           <div class="mtrol-warning">
-            Capacidad de carga excedida.
+            Al alcanzar el umbral de sobrecarga, el personaje no puede desplazarse.
           </div>
         {{/if}}
 

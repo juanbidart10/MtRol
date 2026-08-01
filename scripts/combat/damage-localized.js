@@ -7,6 +7,10 @@ import {
   mtrolMostrarDados
 } from "../rolls/dice-engine.js";
 
+import {
+  destroyEquippedItem
+} from "../items/item-destruction-engine.js";
+
 // =========================
 // MTROL - DAMAGE LOCALIZED ENGINE
 // =========================
@@ -153,11 +157,13 @@ async function applyDamageToTarget({
     resultado.itemDestruido =
       true;
 
-    await actorObjetivo.update({
-      [`system.equipamiento.${slotObjetivo}`]: ""
+    await destroyEquippedItem({
+      actor: actorObjetivo,
+      item,
+      slot: slotObjetivo,
+      reason: "daño localizado",
+      createChatMessage: false
     });
-
-    await item.delete();
   } else {
     await item.update({
       "system.defensa": defensaNueva

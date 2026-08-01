@@ -2,6 +2,10 @@
 // MTROL - RUNTIME DEBUG API
 // =========================
 
+import {
+  installActorDataDebugApi
+} from "./actor-data-debug.js";
+
 const OVERHEAD_KEYS = new Set([
   "overheadCost",
   "-=overheadCost"
@@ -566,6 +570,7 @@ export function installMtrolDebugApi() {
   game.mtrol = game.mtrol || {};
   game.mtrol.debug = game.mtrol.debug || {};
   game.mtrol.debug.inspectSheetResize = inspectSheetResize;
+  installActorDataDebugApi(game.mtrol.debug);
 
   if (!canInstallMtrolDebugApi()) {
     return false;

@@ -185,6 +185,25 @@ export function mtrolObtenerDanioManos(actor) {
   function sumarUnaVez(item, slot) {
     if (!item) return;
 
+    const tipoObjeto =
+      String(item.system?.tipoObjeto ?? "")
+        .trim()
+        .toLowerCase();
+
+    // Los escudos nunca son armas para @mano, incluso si conservan
+    // un valor de daño por datos legacy o por configuración accidental.
+    if (tipoObjeto === "escudo") return;
+
+    // Las clasificaciones mecánicas explícitas que no sean armas tampoco
+    // participan. "" y "general" mantienen compatibilidad con armas legacy.
+    if (
+      tipoObjeto &&
+      tipoObjeto !== "general" &&
+      tipoObjeto !== "arma"
+    ) {
+      return;
+    }
+
     const idUnico =
       item.id ??
       item._id ??
