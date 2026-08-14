@@ -8,6 +8,11 @@ import {
   mtrolAplicarDharmaKarma
 } from "../rolls/mtrol-dharma-karma.js";
 
+import {
+  mtrolCreateRollMessage,
+  mtrolPrepareChatRolls
+} from "../rolls/chat-rolls.js";
+
 export async function rollMtrolInitiative(actor) {
   if (!actor) {
     ui.notifications.warn("MtRol | No hay actor para iniciativa.");
@@ -37,13 +42,27 @@ export async function rollMtrolInitiative(actor) {
     evaluacion.cantidadKarma
   );
 
+  const mainChatRolls =
+    await mtrolPrepareChatRolls([
+      {
+        roll: mainRoll,
+        label: "Iniciativa principal"
+      },
+      ...(evaluacion.extraRolls ?? []).map((extraRoll, index) => ({
+        roll: extraRoll,
+        label: `Cadena critica de iniciativa ${index + 1}`
+      }))
+    ]);
+
   if (evaluacion.pifia) {
-    await ChatMessage.create({
+    await mtrolCreateRollMessage({
       speaker: ChatMessage.getSpeaker({ actor }),
+      rolls: mainChatRolls.rolls,
       content: `
         <div class="mtrol-chat-card mtrol-chat-pifia">
           <h2>💀 PIFIA DE INICIATIVA 💀</h2>
           <p>${evaluacion.motivo}</p>
+          ${mainChatRolls.html}
           <p>La iniciativa queda en <strong>0</strong>.</p>
         </div>
       `
@@ -54,6 +73,7 @@ export async function rollMtrolInitiative(actor) {
       total: 0,
       mainRoll,
       secondaryRoll: null,
+      rolls: mainChatRolls.rolls,
       evaluacion
     };
   }
@@ -69,11 +89,21 @@ export async function rollMtrolInitiative(actor) {
 
   await mtrolMostrarDados(secondaryRoll);
 
+  const secondaryChatRolls =
+    await mtrolPrepareChatRolls({
+      roll: secondaryRoll,
+      label: "Iniciativa secundaria"
+    });
+
   const totalFinal =
     totalPrincipal + Number(secondaryRoll.total ?? 0);
 
-  await ChatMessage.create({
+  await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
+    rolls: [
+      ...mainChatRolls.rolls,
+      ...secondaryChatRolls.rolls
+    ],
     content: `
       <div class="mtrol-chat-card mtrol-chat-success">
         <h2>⚡ Iniciativa MtRol</h2>
@@ -87,6 +117,8 @@ export async function rollMtrolInitiative(actor) {
           Resultado principal:
           <strong>${totalPrincipal}</strong>
         </p>
+
+        ${mainChatRolls.html}
 
         ${
           evaluacion.detalles.length
@@ -104,6 +136,8 @@ export async function rollMtrolInitiative(actor) {
           <strong>${secondaryRoll.total}</strong>
         </p>
 
+        ${secondaryChatRolls.html}
+
         <hr>
 
         <p>
@@ -119,6 +153,10 @@ export async function rollMtrolInitiative(actor) {
     total: totalFinal,
     mainRoll,
     secondaryRoll,
+    rolls: [
+      ...mainChatRolls.rolls,
+      ...secondaryChatRolls.rolls
+    ],
     evaluacion
   };
 }

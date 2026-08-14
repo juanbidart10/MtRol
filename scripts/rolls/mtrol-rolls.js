@@ -29,6 +29,11 @@ import {
   mtrolAplicarDharmaKarma
 } from "./mtrol-dharma-karma.js";
 
+import {
+  mtrolCreateRollMessage,
+  mtrolPrepareChatRolls
+} from "./chat-rolls.js";
+
 export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
   if (!actor) {
     ui.notifications.warn("MtRol | No hay actor para la tirada.");
@@ -57,7 +62,17 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
   const evaluacion =
     await mtrolEvaluarDadosMtrol(roll);
 
-  const rollHTMLLimpio = "";
+  const chatRolls =
+    await mtrolPrepareChatRolls([
+      {
+        roll,
+        label: flavor
+      },
+      ...(evaluacion.extraRolls ?? []).map((extraRoll, index) => ({
+        roll: extraRoll,
+        label: `Cadena critica ${index + 1}`
+      }))
+    ]);
 
   if (evaluacion.pifia) {
     await mtrolAplicarDharmaKarma(
@@ -66,13 +81,14 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
       evaluacion.cantidadKarma
     );
 
-    await ChatMessage.create({
+    await mtrolCreateRollMessage({
       speaker: ChatMessage.getSpeaker({ actor }),
+      rolls: chatRolls.rolls,
       content: `
         <div class="mtrol-chat-card mtrol-chat-pifia">
           <h2>💀 PIFIA 💀</h2>
           <p>${evaluacion.motivo}</p>
-          ${rollHTMLLimpio}
+          ${chatRolls.html}
         </div>
       `
     });
@@ -81,6 +97,7 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
       pifia: true,
       total: 0,
       roll,
+      rolls: chatRolls.rolls,
       dharma: evaluacion.cantidadDharma,
       karma: evaluacion.cantidadKarma,
       mano: danioManos.total,
@@ -121,8 +138,9 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
     </div>
   `;
 
-  await ChatMessage.create({
+  await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
+    rolls: chatRolls.rolls,
     content: `
       <div class="mtrol-chat-card mtrol-chat-success">
 
@@ -138,7 +156,7 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
 
         ${usaManos ? "<hr>" : ""}
 
-        ${rollHTMLLimpio}
+        ${chatRolls.html}
 
         <hr>
 
@@ -174,6 +192,7 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
     pifia: false,
     total: totalFinal,
     roll,
+    rolls: chatRolls.rolls,
     extra: evaluacion.totalExtra,
     mano: danioManos.total,
     manoDer: danioManos.manoDer,

@@ -1,11 +1,28 @@
 import {
-  MTROL_BODY_SLOTS,
   MTROL_BODY_SLOT_LABELS
 } from "../constants/body-slots.js";
 
 import {
   calcularCargaActor
 } from "./mtrol-carry-weight.js";
+
+import {
+  analyzeItemQuantity,
+  analyzeItemWeight,
+  getActuallyEquippedItems,
+  getEquipmentState,
+  getInventoryItems,
+  getItemWeightContribution,
+  isMtrolObject
+} from "../items/item-invariants.js";
+
+import {
+  installWorldItemAuditApi
+} from "./world-item-audit.js";
+
+import {
+  installItemDataRepairApi
+} from "./item-data-repair.js";
 
 const COMBAT_CATEGORIES = new Set([
   "basico",
@@ -17,10 +34,6 @@ const COMBAT_CATEGORIES = new Set([
 function toNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
-}
-
-function isPhysicalItem(item) {
-  return item?.type === "objeto" || item?.type === "item";
 }
 
 function requireReadableActor(actor) {
@@ -41,44 +54,24 @@ function getItems(actor) {
   return Array.from(actor.items ?? []);
 }
 
-function getItemById(actor, itemId) {
-  if (!itemId) return null;
-
-  return actor.items?.get?.(itemId) ??
-    getItems(actor).find(item => item.id === itemId) ??
-    null;
-}
-
 function getWeightBreakdown(item) {
   const physical =
-    isPhysicalItem(item);
-
-  const persisted =
-    toNumber(item?.system?.peso, 0);
-
-  const legacy =
-    toNumber(item?.system?.slots, 0);
-
-  const quantity =
-    toNumber(item?.system?.cantidad, 1);
-
-  const hasMaterial =
-    item?.system?.material !== undefined &&
-    item?.system?.material !== null &&
-    item?.system?.material !== "";
-
-  let unitWeight = 0;
+    isMtrolObject(item);
+  const weight = physical ? analyzeItemWeight(item) : null;
+  const quantityAnalysis = physical ? analyzeItemQuantity(item) : null;
+  const persisted = weight?.normalized ?? 0;
+  const legacy = weight?.slotsLegacyNormalized ?? 0;
+  const quantity = quantityAnalysis?.effectiveValue ?? 0;
+  const hasMaterial = !!item?.system?.material;
+  const unitWeight = weight?.effectiveUnitWeight ?? 0;
   let source = "excluido por type";
 
-  if (physical && hasMaterial) {
-    unitWeight = persisted;
-    source = "material -> system.peso";
-  } else if (physical && persisted > 0) {
-    unitWeight = persisted;
-    source = "system.peso";
-  } else if (physical) {
-    unitWeight = legacy;
+  if (physical && weight?.calculationSource === "legacy-system.slots-field-absent") {
     source = "legacy system.slots";
+  } else if (physical && weight?.calculationSource === "system.peso") {
+    source = hasMaterial ? "material -> system.peso" : "system.peso";
+  } else if (physical) {
+    source = "peso invalido";
   }
 
   return {
@@ -88,8 +81,10 @@ function getWeightBreakdown(item) {
     quantity,
     hasMaterial,
     unitWeight,
-    subtotal: unitWeight * quantity,
-    source
+    subtotal: physical ? getItemWeightContribution(item) : 0,
+    source,
+    analysis: weight,
+    quantityAnalysis
   };
 }
 
@@ -128,27 +123,17 @@ function prepareSheetCollections(actor) {
       item.system?.equipadaCombate === "true"
     );
 
-  const objetos =
-    items.filter(isPhysicalItem);
+  const objetos = items.filter(isMtrolObject);
+  const objetosInventario = getInventoryItems(actor);
+  const objetosEquipados = getActuallyEquippedItems(actor);
+  const equipmentState = getEquipmentState(actor);
 
-  const objetosInventario =
-    objetos.filter(item => !item.system?.equipado);
-
-  const objetosEquipados =
-    objetos.filter(item => item.system?.equipado);
-
-  const slotsEquipamiento =
-    MTROL_BODY_SLOTS.map(slot => {
-      const reference =
-        actor.system?.equipamiento?.[slot] ?? "";
-
-      return {
-        slot,
-        label: MTROL_BODY_SLOT_LABELS[slot] ?? slot,
-        reference,
-        item: getItemById(actor, reference)
-      };
-    });
+  const slotsEquipamiento = equipmentState.entries.map(entry => ({
+    slot: entry.slot,
+    label: MTROL_BODY_SLOT_LABELS[entry.slot] ?? entry.slot,
+    reference: entry.reference,
+    item: entry.item
+  }));
 
   const itemsEnSlots =
     uniqueItems(slotsEquipamiento.map(entry => entry.item).filter(Boolean));
@@ -224,7 +209,7 @@ function getAppearance(item, collections) {
 function getExclusionReason(item, appearance) {
   if (appearance.rendered) return "";
 
-  if (isPhysicalItem(item)) {
+  if (isMtrolObject(item)) {
     if (item.system?.equipado) {
       const detail =
         item.system.equipado === "false"
@@ -446,9 +431,9 @@ export function compareWeight(actor) {
     pesoPersistido + pesoLegacy + pesoMaterial;
 
   const explicacion = [
-    "Peso Persistido: objetos sin material cuyo aporte real usa system.peso.",
-    "Peso Legacy: objetos sin peso positivo cuyo aporte real cae a system.slots.",
-    "Peso Material: objetos con material cuyo aporte real usa system.peso, incluso si vale 0.",
+    "Peso Persistido: objetos sin material cuyo aporte efectivo usa system.peso, incluido 0.",
+    "Peso Legacy: solo objetos donde el campo system.peso esta ausente y se usa system.slots.",
+    "Peso Material: objetos con material cuyo aporte efectivo usa system.peso, incluido 0.",
     "Las tres categorias son excluyentes y su suma debe coincidir con calcularCargaActor().",
     visible.pesoActual === null
       ? "Para comparar contra la cifra realmente pintada, abre la Sheet del actor y vuelve a ejecutar la auditoria."
@@ -656,6 +641,8 @@ export function installActorDataDebugApi(debugApi) {
   debugApi.findGhostItems = findGhostItems;
   debugApi.compareWeight = compareWeight;
   debugApi.auditCollections = auditCollections;
+  installWorldItemAuditApi(debugApi);
+  installItemDataRepairApi(debugApi);
 
   return debugApi;
 }

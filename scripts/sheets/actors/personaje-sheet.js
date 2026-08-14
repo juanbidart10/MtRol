@@ -44,6 +44,14 @@ import {
 } from "../../core/mtrol-carry-weight.js";
 
 import {
+  getActuallyEquippedItems,
+  getEquipmentState,
+  getInventoryItems,
+  getItemUnitWeight,
+  isMtrolObject
+} from "../../items/item-invariants.js";
+
+import {
   installMtrolCustomResizeHandle
 } from "../mtrol-resize-handle.js";
 
@@ -51,6 +59,14 @@ const { ActorSheet } = foundry.appv1.sheets;
 
 const MTROL_FALLBACK_ACTOR_IMG = "icons/svg/mystery-man.svg";
 const MTROL_FALLBACK_ITEM_IMG = "icons/svg/item-bag.svg";
+const MTROL_COMBAT_BAR_GM_WARNING =
+  "Solo un GM puede modificar la Barra de Combate.";
+const MTROL_COMBAT_BAR_CATEGORIES = new Set([
+  "basico",
+  "combate",
+  "hechizo",
+  "contraataque"
+]);
 
 
 function normalizarNombreBanner(nombre) {
@@ -152,6 +168,15 @@ function esCompetenciaMeditar(item) {
   return normalizarNombreCompetencia(item?.name) === "meditar";
 }
 
+function esHabilidadBarraCombate(item) {
+  if (item?.type !== "competencia") return false;
+
+  return (
+    MTROL_COMBAT_BAR_CATEGORIES.has(item.system?.categoria) ||
+    item.system?.tipo === "habilidad-combate"
+  );
+}
+
 export class PersonajeSheet extends ActorSheet {
 
   static get defaultOptions() {
@@ -186,7 +211,7 @@ export class PersonajeSheet extends ActorSheet {
 
     context.actor = this.actor;
     context.system = this.actor.system;
-    context.esGM = game.user.isGM;
+    context.esGM = game.user.isGM === true;
     context.puedeEditarVitales = game.user.isGM || this.actor.isOwner;
     context.actorImg = getSafeImageSrc(
       this.actor.img,
@@ -202,23 +227,18 @@ export class PersonajeSheet extends ActorSheet {
       i => i.type === "competencia"
     );
 
-    const categoriasBarraCombate = [
-      "basico",
-      "combate",
-      "hechizo",
-      "contraataque"
-    ];
-
     const habilidadesCombate = competencias.filter(
-      i => categoriasBarraCombate.includes(i.system?.categoria)
+      esHabilidadBarraCombate
     );
 
     const competenciasGenerales = competencias.filter(
-      i => !categoriasBarraCombate.includes(i.system?.categoria)
+      i => !esHabilidadBarraCombate(i)
     );
 
     context.competencias = competencias.map(i => prepareItemImageData(i));
-    context.habilidadesCombate = habilidadesCombate.map(i => prepareItemImageData(i));
+    context.habilidadesCombate = context.esGM
+      ? habilidadesCombate.map(i => prepareItemImageData(i))
+      : [];
     context.competenciasGenerales = competenciasGenerales.map(i => prepareItemImageData(i));
 
     context.habilidadesEquipadasCombate = habilidadesCombate.filter(
@@ -232,33 +252,22 @@ export class PersonajeSheet extends ActorSheet {
       mtrolBanner: getCombatBanner(i)
     }));
 
-    const objetos = this.actor.items.filter(
-      i => i.type === "objeto" || i.type === "item"
-    );
+    const equipmentState = getEquipmentState(this.actor);
 
-    context.objetosInventario = objetos.filter(
-      o => !o.system.equipado
-    ).map(o => prepareItemImageData(o));
+    context.objetosInventario = getInventoryItems(this.actor)
+      .map(o => prepareItemImageData(o));
 
-    context.objetosEquipados = objetos.filter(
-      o => o.system.equipado
-    ).map(o => prepareItemImageData(o));
+    context.objetosEquipados = getActuallyEquippedItems(this.actor)
+      .map(o => prepareItemImageData(o));
 
     context.slotsEquipamiento = MTROL_BODY_SLOTS.map(slotKey => {
-      const itemId = this.actor.system.equipamiento?.[slotKey] ?? "";
-      const item = itemId ? this.actor.items.get(itemId) : null;
+      const slotState = equipmentState.entries.find(entry => entry.slot === slotKey);
+      const item = slotState?.item ?? null;
       const defensa =
         toNumber(item?.system?.defensa, 0);
       const defensaBase =
         toNumber(item?.system?.defensaBase, defensa);
-      const tieneMaterial =
-        item?.system?.material !== undefined &&
-        item?.system?.material !== null &&
-        item?.system?.material !== "";
-      const peso =
-        tieneMaterial
-          ? toNumber(item?.system?.peso, 0)
-          : toNumber(item?.system?.peso, toNumber(item?.system?.slots, 0));
+      const peso = item ? getItemUnitWeight(item) : 0;
 
       return {
         key: slotKey,
@@ -351,7 +360,7 @@ export class PersonajeSheet extends ActorSheet {
       tipoObjeto: itemData.system?.tipoObjeto ?? "general",
       cantidad: itemData.system?.cantidad ?? 1,
       material: itemData.system?.material ?? "",
-      peso: itemData.system?.peso ?? itemData.system?.slots ?? 1,
+      peso: getItemUnitWeight(itemData),
       equipable: itemData.system?.equipable ?? false,
       equipado: false,
       slot: itemData.system?.slot ?? "",
@@ -405,17 +414,27 @@ export class PersonajeSheet extends ActorSheet {
       .off("click")
       .on("click", this._onAddCompetencia.bind(this));
 
-    html.find(".add-habilidad-combate")
-      .off("click")
-      .on("click", this._onAddHabilidadCombate.bind(this));
+    if (game.user.isGM) {
+      html.find(".add-habilidad-combate")
+        .off("click")
+        .on("click", this._onAddHabilidadCombate.bind(this));
 
-    html.find(".habilidad-combate-equip")
-      .off("click")
-      .on("click", this._onEquiparHabilidadCombate.bind(this));
+      html.find(".habilidad-combate-equip")
+        .off("click")
+        .on("click", this._onEquiparHabilidadCombate.bind(this));
 
-    html.find(".habilidad-combate-unequip")
-      .off("click")
-      .on("click", this._onDesequiparHabilidadCombate.bind(this));
+      html.find(".habilidad-combate-unequip")
+        .off("click")
+        .on("click", this._onDesequiparHabilidadCombate.bind(this));
+
+      html.find(".competencia-up")
+        .off("click")
+        .on("click", this._onCompetenciaUp.bind(this));
+
+      html.find(".competencia-down")
+        .off("click")
+        .on("click", this._onCompetenciaDown.bind(this));
+    }
 
     html.find(".mtrol-combat-card")
       .off("click")
@@ -424,14 +443,6 @@ export class PersonajeSheet extends ActorSheet {
     html.find(".mtrol-combat-card-detail")
       .off("click")
       .on("click", this._onCombatCardDetail.bind(this));
-
-    html.find(".competencia-up")
-      .off("click")
-      .on("click", this._onCompetenciaUp.bind(this));
-
-    html.find(".competencia-down")
-      .off("click")
-      .on("click", this._onCompetenciaDown.bind(this));
 
     html.find(".competencia-roll")
       .off("click")
@@ -675,13 +686,20 @@ export class PersonajeSheet extends ActorSheet {
   async _onCompetenciaUp(event) {
     event.preventDefault();
 
+    const item = this._getItemFromEvent(event);
+    if (!item) return;
+
+    if (
+      esHabilidadBarraCombate(item) &&
+      !this._puedeAdministrarBarraCombate()
+    ) {
+      return false;
+    }
+
     if (!game.user.isGM) {
       ui.notifications.warn("Solo el Game Master puede subir competencias.");
       return;
     }
-
-    const item = this._getItemFromEvent(event);
-    if (!item) return;
 
     const nivelActual = Number(item.system.nivel || 1);
     const nivelNuevo = Math.min(5, nivelActual + 1);
@@ -696,13 +714,20 @@ export class PersonajeSheet extends ActorSheet {
   async _onCompetenciaDown(event) {
     event.preventDefault();
 
+    const item = this._getItemFromEvent(event);
+    if (!item) return;
+
+    if (
+      esHabilidadBarraCombate(item) &&
+      !this._puedeAdministrarBarraCombate()
+    ) {
+      return false;
+    }
+
     if (!game.user.isGM) {
       ui.notifications.warn("Solo el Game Master puede bajar competencias.");
       return;
     }
-
-    const item = this._getItemFromEvent(event);
-    if (!item) return;
 
     const nivelActual = Number(item.system.nivel || 1);
     const nivelNuevo = Math.max(1, nivelActual - 1);
@@ -981,13 +1006,17 @@ export class PersonajeSheet extends ActorSheet {
     });
   }
 
+  _puedeAdministrarBarraCombate() {
+    if (game.user.isGM) return true;
+
+    ui.notifications.warn(MTROL_COMBAT_BAR_GM_WARNING);
+    return false;
+  }
+
   async _onAddHabilidadCombate(event) {
     event.preventDefault();
 
-    if (!game.user.isGM) {
-      ui.notifications.warn("Solo el Game Master puede crear habilidades de combate.");
-      return;
-    }
+    if (!this._puedeAdministrarBarraCombate()) return false;
 
     await this.actor.createEmbeddedDocuments("Item", [{
       name: "Nueva habilidad de combate",
@@ -1032,10 +1061,7 @@ export class PersonajeSheet extends ActorSheet {
   async _onEquiparHabilidadCombate(event) {
     event.preventDefault();
 
-    if (!game.user.isGM) {
-      ui.notifications.warn("Solo el Game Master puede equipar habilidades.");
-      return;
-    }
+    if (!this._puedeAdministrarBarraCombate()) return false;
 
     const item = this._getItemFromEvent(event);
     if (!item) return;
@@ -1051,10 +1077,7 @@ export class PersonajeSheet extends ActorSheet {
     event.preventDefault();
     event.stopPropagation();
 
-    if (!game.user.isGM) {
-      ui.notifications.warn("Solo el Game Master puede desequipar habilidades.");
-      return;
-    }
+    if (!this._puedeAdministrarBarraCombate()) return false;
 
     const item = this._getItemFromEvent(event);
     if (!item) return;
@@ -1213,6 +1236,13 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
+    if (
+      esHabilidadBarraCombate(item) &&
+      !this._puedeAdministrarBarraCombate()
+    ) {
+      return false;
+    }
+
     if (item.sheet) item.sheet.render(true);
   }
 
@@ -1222,19 +1252,21 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
+    if (
+      esHabilidadBarraCombate(item) &&
+      !this._puedeAdministrarBarraCombate()
+    ) {
+      return false;
+    }
+
     if (!game.user.isGM) {
       ui.notifications.warn("Solo el Game Master puede eliminar elementos.");
       return;
     }
 
-    if (
-      (item.type === "objeto" || item.type === "item") &&
-      item.system.equipado &&
-      item.system.slot
-    ) {
-      await this.actor.update({
-        [`system.equipamiento.${item.system.slot}`]: ""
-      });
+    if (isMtrolObject(item)) {
+      const unequipped = await desequiparObjeto(this.actor, item);
+      if (!unequipped) return;
     }
 
     await item.delete();
@@ -1248,12 +1280,12 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
-    await equiparObjeto(
+    const equipped = await equiparObjeto(
       this.actor,
       item
     );
 
-    this.render(false);
+    if (equipped) this.render(false);
   }
 
   async _onUnequipItem(event) {
@@ -1262,12 +1294,12 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
-    await desequiparObjeto(
+    const unequipped = await desequiparObjeto(
       this.actor,
       item
     );
 
-    this.render(false);
+    if (unequipped) this.render(false);
   }
 
   _getItemFromEvent(event) {

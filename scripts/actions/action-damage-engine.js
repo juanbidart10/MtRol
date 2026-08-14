@@ -21,6 +21,11 @@ import {
 } from "../combat/combat-card.js";
 
 import {
+  mtrolCreateRollMessage,
+  mtrolPrepareChatRolls
+} from "../rolls/chat-rolls.js";
+
+import {
   getPendingAction,
   updateResolutionMessage
 } from "./action-engine.js";
@@ -143,18 +148,26 @@ async function rollDamage({
 }
 
 async function createDamageFumbleMessage(actor, damageRoll, evaluacionDanio) {
-  const damageRollHTML =
-    await damageRoll.render({
-      flavor: "Tirada de Dano"
-    });
+  const chatRolls =
+    await mtrolPrepareChatRolls([
+      {
+        roll: damageRoll,
+        label: "Tirada de Dano"
+      },
+      ...(evaluacionDanio.extraRolls ?? []).map((extraRoll, index) => ({
+        roll: extraRoll,
+        label: `Cadena critica de dano ${index + 1}`
+      }))
+    ]);
 
-  await ChatMessage.create({
+  await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
+    rolls: chatRolls.rolls,
     content: `
       <div class="mtrol-chat-card mtrol-chat-pifia">
         <h2>PIFIA EN DANO</h2>
 
-        ${damageRollHTML}
+        ${chatRolls.html}
 
         <p>${foundry.utils.escapeHTML(evaluacionDanio.motivo)}</p>
 

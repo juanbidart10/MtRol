@@ -1,3 +1,12 @@
+import {
+  desequiparObjeto
+} from "./equipment-engine.js";
+
+import {
+  isItemActuallyEquipped,
+  normalizeEquippedFlag
+} from "./item-invariants.js";
+
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -59,9 +68,13 @@ async function restoreSnapshots(sourceActor, targetActor, snapshots) {
       await actor.deleteEmbeddedDocuments("Item", currentIds);
     }
 
-    if (snapshot.length) {
-      await actor.createEmbeddedDocuments("Item", snapshot);
+    if (snapshot.items.length) {
+      await actor.createEmbeddedDocuments("Item", snapshot.items);
     }
+
+    await actor.update({
+      "system.equipamiento": snapshot.equipamiento
+    });
   }
 }
 
@@ -85,10 +98,14 @@ async function moveItemQuantity(sourceActor, targetActor, itemId, quantity) {
   const remaining = available - quantity;
   const targetStack = findStack(targetActor, sourceItem);
 
-  if (sourceItem.system?.equipado) {
-    await sourceItem.update({
-      "system.equipado": false
-    });
+  if (
+    isItemActuallyEquipped(sourceActor, sourceItem) ||
+    normalizeEquippedFlag(sourceItem.system?.equipado)
+  ) {
+    const unequipped = await desequiparObjeto(sourceActor, sourceItem);
+    if (!unequipped) {
+      throw new Error(`No se pudo desequipar ${sourceItem.name} antes de transferirlo.`);
+    }
   }
 
   if (remaining > 0) {
@@ -152,8 +169,14 @@ export async function ejecutarComercioMtrol({
   }
 
   const snapshots = new Map([
-    [sourceActor.uuid, sourceActor.items.map(item => item.toObject())],
-    [targetActor.uuid, targetActor.items.map(item => item.toObject())]
+    [sourceActor.uuid, {
+      items: sourceActor.items.map(item => item.toObject()),
+      equipamiento: foundry.utils.duplicate(sourceActor.system?.equipamiento ?? {})
+    }],
+    [targetActor.uuid, {
+      items: targetActor.items.map(item => item.toObject()),
+      equipamiento: foundry.utils.duplicate(targetActor.system?.equipamiento ?? {})
+    }]
   ]);
 
   try {

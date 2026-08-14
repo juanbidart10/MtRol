@@ -1,44 +1,34 @@
+import {
+  getItemWeightContribution,
+  isMtrolActor,
+  isMtrolObject
+} from "../items/item-invariants.js";
+
 // =========================
 // MTROL - CARRY WEIGHT
 // =========================
-
-function isMtrolActor(actor) {
-  return actor?.type === "personaje" || actor?.type === "character";
-}
-
-function isCarryItem(itemData) {
-  return itemData?.type === "objeto" || itemData?.type === "item";
-}
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function getItemPesoUnitario(itemData) {
-  const tieneMaterial =
-    itemData?.system?.material !== undefined &&
-    itemData?.system?.material !== null &&
-    itemData?.system?.material !== "";
+export function calcularPesoMaximoPorFuerza(fuerza) {
+  if (
+    fuerza === null ||
+    fuerza === undefined ||
+    (typeof fuerza === "string" && fuerza.trim() === "")
+  ) {
+    throw new TypeError("La fuerza debe ser un valor numérico válido.");
+  }
 
-  const peso =
-    toNumber(itemData?.system?.peso, 0);
+  const fuerzaNumerica = Number(fuerza);
 
-  if (tieneMaterial) return peso;
+  if (!Number.isFinite(fuerzaNumerica)) {
+    throw new TypeError("La fuerza debe ser un valor numérico válido.");
+  }
 
-  if (peso > 0) return peso;
-
-  return toNumber(itemData?.system?.slots, 0);
-}
-
-function calcularPesoMaximoPorFuerza(fuerza) {
-  const fuerzaEntera =
-    Math.floor(toNumber(fuerza, 0));
-
-  const fuerzaCapacidad =
-    Math.min(Math.max(fuerzaEntera, 1), 5);
-
-  return fuerzaCapacidad * 10;
+  return Math.max(1, fuerzaNumerica) * 10;
 }
 
 function isTokenMovement(tokenDocument, changes) {
@@ -74,24 +64,19 @@ export function calcularCargaActor(actor) {
     actor.system?.atributos?.fuerza;
 
   const fuerza =
-    toNumber(fuerzaData?.value ?? fuerzaData, 0);
+    fuerzaData?.value ?? fuerzaData;
 
   const pesoMaximo =
     calcularPesoMaximoPorFuerza(fuerza);
 
   const objetos =
-    actor.items.filter(isCarryItem);
+    actor.items.filter(isMtrolObject);
 
   const pesoActual =
-    objetos.reduce((total, item) => {
-      const peso =
-        getItemPesoUnitario(item);
-
-      const cantidad =
-        toNumber(item.system?.cantidad, 1);
-
-      return total + (peso * cantidad);
-    }, 0);
+    objetos.reduce(
+      (total, item) => total + getItemWeightContribution(item),
+      0
+    );
 
   const pesoLibre =
     Math.max(pesoMaximo - pesoActual, 0);
@@ -100,51 +85,16 @@ export function calcularCargaActor(actor) {
     pesoActual,
     pesoMaximo,
     pesoLibre,
-    sobrecargado: pesoActual >= pesoMaximo
+    sobrecargado: pesoActual > pesoMaximo
   };
 }
 
-export function puedeCargarItem(actor, itemData) {
-  if (!actor || !isMtrolActor(actor)) return true;
-  if (!isCarryItem(itemData)) return true;
-
-  const carga =
-    calcularCargaActor(actor);
-
-  const pesoNuevo =
-    getItemPesoUnitario(itemData) *
-    toNumber(itemData?.system?.cantidad, 1);
-
-  return (carga.pesoActual + pesoNuevo) <= carga.pesoMaximo;
+export function puedeCargarItem(_actor, _itemData) {
+  // La capacidad limita el movimiento, no la adquisición de objetos.
+  return true;
 }
 
 export function registrarHooksPesoMtrol() {
-  Hooks.on("preCreateItem", (item) => {
-    const actor =
-      item.parent;
-
-    if (!actor || !isMtrolActor(actor)) return true;
-    if (!isCarryItem(item)) return true;
-
-    const carga =
-      calcularCargaActor(actor);
-
-    const pesoNuevo =
-      getItemPesoUnitario(item) *
-      toNumber(item.system?.cantidad, 1);
-
-    const pesoFinal =
-      carga.pesoActual + pesoNuevo;
-
-    if (pesoFinal <= carga.pesoMaximo) return true;
-
-    ui.notifications.warn(
-      `${actor.name} no puede cargar "${item.name}". Capacidad excedida: ${pesoFinal}/${carga.pesoMaximo}.`
-    );
-
-    return false;
-  });
-
   Hooks.on("preUpdateToken", (tokenDocument, changes, _options, userId) => {
     if (!isTokenMovement(tokenDocument, changes)) return true;
     if (isMovementRequestedByGM(userId)) return true;
@@ -157,7 +107,7 @@ export function registrarHooksPesoMtrol() {
     const carga =
       calcularCargaActor(actor);
 
-    if (carga.pesoActual < carga.pesoMaximo) return true;
+    if (!carga.sobrecargado) return true;
 
     ui.notifications.warn(
       "El personaje est\u00e1 sobrecargado y no puede desplazarse."

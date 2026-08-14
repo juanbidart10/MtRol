@@ -2,6 +2,11 @@
 // MTROL - COMBAT CARD UI
 // =========================
 
+import {
+  mtrolCreateRollMessage,
+  mtrolPrepareChatRolls
+} from "../rolls/chat-rolls.js";
+
 export async function crearCombatCard({
   actor,
   targetActor = null,
@@ -22,17 +27,27 @@ export async function crearCombatCard({
     return;
   }
 
-  const damageRollHTML =
-    await damageRoll.render({
-      flavor: "Tirada de Daño"
-    });
+  const damageChatRolls =
+    await mtrolPrepareChatRolls([
+      {
+        roll: damageRoll,
+        label: "Tirada de Daño"
+      },
+      ...(evaluacionDanio?.extraRolls ?? []).map((extraRoll, index) => ({
+        roll: extraRoll,
+        label: `Cadena crítica de daño ${index + 1}`
+      }))
+    ]);
 
-  const localizacionRollHTML =
-    resultadoDanio.localizacionRoll
-      ? await resultadoDanio.localizacionRoll.render({
-          flavor: "Tirada de Localización"
-        })
-      : "";
+  const localizationChatRolls =
+    await mtrolPrepareChatRolls(
+      resultadoDanio.localizacionRoll
+        ? {
+            roll: resultadoDanio.localizacionRoll,
+            label: "Tirada de Localización"
+          }
+        : []
+    );
 
   const objetivoMuerto =
     Number(resultadoDanio.hpNuevo ?? 1) <= 0;
@@ -74,8 +89,12 @@ export async function crearCombatCard({
     damageRoll.total ??
     0;
 
-  await ChatMessage.create({
+  await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
+    rolls: [
+      ...damageChatRolls.rolls,
+      ...localizationChatRolls.rolls
+    ],
     content: `
       <div class="mtrol-combat-card">
         <div class="mtrol-combat-header">
@@ -94,7 +113,7 @@ export async function crearCombatCard({
 
         <div class="mtrol-combat-section">
           <div class="mtrol-roll-block">
-            ${damageRollHTML}
+            ${damageChatRolls.html}
           </div>
 
           <p>
@@ -131,10 +150,10 @@ export async function crearCombatCard({
           }
 
           ${
-            localizacionRollHTML
+            localizationChatRolls.html
               ? `
                 <div class="mtrol-roll-block">
-                  ${localizacionRollHTML}
+                  ${localizationChatRolls.html}
                 </div>
               `
               : ""

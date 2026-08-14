@@ -18,6 +18,14 @@ import {
   requestPrimaryGM
 } from "../core/socket-requests.js";
 
+import {
+  mtrolCreateRollMessage,
+  mtrolPrepareChatRolls,
+  mtrolRestoreRolls,
+  mtrolSerializeRoll,
+  mtrolSerializeRolls
+} from "../rolls/chat-rolls.js";
+
 const pendingActions =
   new Map();
 
@@ -57,12 +65,20 @@ function rollToData(rollData = {}) {
   const roll =
     rollData.roll ?? null;
 
+  const rolls =
+    Array.isArray(rollData.rolls) && rollData.rolls.length
+      ? rollData.rolls
+      : roll
+        ? [roll]
+        : [];
+
   return {
     total: Number(rollData.total ?? roll?.total ?? 0),
     isFumble: rollData.isFumble === true || rollData.pifia === true,
     isCritical: rollData.isCritical === true || rollData.critico === true,
     formula: rollData.formula ?? roll?.formula ?? "",
-    chatMessageId: rollData.chatMessageId ?? null
+    chatMessageId: rollData.chatMessageId ?? null,
+    rolls: mtrolSerializeRolls(rolls)
   };
 }
 
@@ -97,7 +113,11 @@ function serializeResolutionResult(result = null) {
     tieBreaker: result.tieBreaker
       ? {
           total: Number(result.tieBreaker.total ?? 0),
-          winner: result.tieBreaker.winner ?? null
+          winner: result.tieBreaker.winner ?? null,
+          rollData:
+            mtrolSerializeRoll(result.tieBreaker.roll) ??
+            result.tieBreaker.rollData ??
+            null
         }
       : null
   };
@@ -111,7 +131,13 @@ function serializeShieldWear(shieldWear = null) {
     ...serializable
   } = shieldWear;
 
-  return foundry.utils.deepClone(serializable);
+  return foundry.utils.deepClone({
+    ...serializable,
+    wearRollData:
+      mtrolSerializeRoll(wearRoll) ??
+      serializable.wearRollData ??
+      null
+  });
 }
 
 export function serializePendingAction(pendingAction) {
@@ -387,7 +413,7 @@ function getResolutionOutcomeLabel(result = {}) {
   return result.success ? "Gana atacante" : "Gana defensor";
 }
 
-function buildResolutionContent(pendingAction, result) {
+function buildResolutionContent(pendingAction, result, rollsHTML = "") {
   const damageStatus =
     pendingAction.damage?.status ?? "unavailable";
 
@@ -457,6 +483,7 @@ function buildResolutionContent(pendingAction, result) {
       <h2>RESOLUCIÓN ENFRENTADA</h2>
       <p><strong>${escapeHTML(pendingAction.sourceItemName)}</strong> contra <strong>${escapeHTML(targetName)}</strong>.</p>
       <p>Atacante: <strong>${result.attackerTotal}</strong> | Defensor: <strong>${result.defenderTotal}</strong></p>
+      ${rollsHTML}
       ${tieMessages}
       <p>${outcomeMessage}</p>
       ${shieldWearMessages}
@@ -467,6 +494,59 @@ function buildResolutionContent(pendingAction, result) {
       ${damageButton}
     </div>
   `;
+}
+
+function appendRestoredRollEntries(entries, serializedRolls, label) {
+  for (const [index, roll] of mtrolRestoreRolls(serializedRolls).entries()) {
+    entries.push({
+      roll,
+      label: index === 0
+        ? label
+        : `${label} · cadena ${index}`
+    });
+  }
+}
+
+async function prepareResolutionChatRolls(pendingAction, result) {
+  const entries = [];
+
+  appendRestoredRollEntries(
+    entries,
+    pendingAction.attackerRoll?.rolls ?? [],
+    "Tirada atacante"
+  );
+
+  appendRestoredRollEntries(
+    entries,
+    pendingAction.defenderRoll?.rolls ?? [],
+    "Tirada defensiva"
+  );
+
+  const tieBreakerRoll =
+    result.tieBreaker?.roll ??
+    mtrolRestoreRolls(result.tieBreaker?.rollData ?? [])[0] ??
+    null;
+
+  if (tieBreakerRoll) {
+    entries.push({
+      roll: tieBreakerRoll,
+      label: "Desempate"
+    });
+  }
+
+  const shieldWearRoll =
+    pendingAction.shieldWear?.wearRoll ??
+    mtrolRestoreRolls(pendingAction.shieldWear?.wearRollData ?? [])[0] ??
+    null;
+
+  if (shieldWearRoll) {
+    entries.push({
+      roll: shieldWearRoll,
+      label: "Desgaste de escudo"
+    });
+  }
+
+  return mtrolPrepareChatRolls(entries);
 }
 
 async function createInvalidDefenseMessage(actor, message) {
@@ -504,14 +584,22 @@ async function createResolutionMessage(pendingAction, result) {
   pendingAction.targetActorName =
     defenderName;
 
+  const chatRolls =
+    await prepareResolutionChatRolls(
+      pendingAction,
+      result
+    );
+
   const message =
-    await ChatMessage.create({
+    await mtrolCreateRollMessage({
     user: pendingAction.sourceUserId ?? game.user?.id,
     speaker: actor ? ChatMessage.getSpeaker({ actor }) : undefined,
     content: buildResolutionContent(
       pendingAction,
-      result
+      result,
+      chatRolls.html
     ),
+    rolls: chatRolls.rolls,
     flags: {
       mtrol: {
         pendingActionId: pendingAction.id,
@@ -1379,10 +1467,17 @@ export async function updateResolutionMessage(pendingAction) {
 
   if (!message) return null;
 
+  const chatRolls =
+    await prepareResolutionChatRolls(
+      pendingAction,
+      pendingAction.result
+    );
+
   return message.update({
     content: buildResolutionContent(
       pendingAction,
-      pendingAction.result
+      pendingAction.result,
+      chatRolls.html
     ),
     flags: {
       mtrol: {

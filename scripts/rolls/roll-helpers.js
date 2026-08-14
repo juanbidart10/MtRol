@@ -8,6 +8,10 @@
 // - lectura de armas equipadas
 // =========================
 
+import {
+  getEquipmentItemForSlot
+} from "../items/item-invariants.js";
+
 export function mtrolSlug(texto) {
   return String(texto ?? "")
     .normalize("NFD")
@@ -63,107 +67,11 @@ export function mtrolNormalizarSlot(slot) {
   return slot;
 }
 
-function mtrolResolverItemEquipado(actor, equipado) {
-  const items =
-    Array.from(actor.items ?? []);
-
-  if (!equipado) return null;
-
-  // =====================================================
-  // STRING = ITEM ID
-  // =====================================================
-
-  if (typeof equipado === "string") {
-    return (
-      actor.items.get(equipado) ??
-      items.find(i =>
-        i.id === equipado ||
-        i._id === equipado ||
-        i.uuid === equipado ||
-        i.name === equipado
-      )
-    );
-  }
-
-  // =====================================================
-  // SI NO ES OBJETO
-  // =====================================================
-
-  if (typeof equipado !== "object") {
-    return null;
-  }
-
-  // =====================================================
-  // BUSQUEDA POR ID
-  // =====================================================
-
-  const itemId =
-    equipado.id ??
-    equipado._id ??
-    equipado.itemId ??
-    equipado.uuid ??
-    equipado.itemUuid ??
-    equipado.itemID ??
-    null;
-
-  if (itemId) {
-    const byId =
-      actor.items.get(itemId) ??
-      items.find(i =>
-        i.id === itemId ||
-        i._id === itemId ||
-        i.uuid === itemId
-      );
-
-    if (byId) return byId;
-  }
-
-  // =====================================================
-  // BUSQUEDA POR NOMBRE
-  // =====================================================
-
-  const itemName =
-    equipado.name ??
-    equipado.nombre ??
-    equipado.item?.name ??
-    equipado.label ??
-    null;
-
-  if (itemName) {
-    const byName =
-      items.find(i => i.name === itemName);
-
-    if (byName) return byName;
-  }
-
-  // =====================================================
-  // OBJETO PARCIAL
-  // =====================================================
-
-  if (
-    equipado.danio !== undefined ||
-    equipado.system?.danio !== undefined
-  ) {
-    return {
-      name: itemName ?? "Arma equipada",
-      system: {
-        danio:
-          equipado.danio ??
-          equipado.system?.danio ??
-          0
-      }
-    };
-  }
-
-  return null;
-}
-
 // =========================
 // OBTENER DAÑO DE MANOS
 // =========================
-// Lee:
-// - actor.system.equipamiento
-// - items equipados
+// Lee exclusivamente IDs referenciados por slots validos de
+// actor.system.equipamiento.
 //
 // Evita duplicar armas.
 // =========================
@@ -243,75 +151,15 @@ export function mtrolObtenerDanioManos(actor) {
   }
 
   // =====================================================
-  // FUENTE PRINCIPAL:
+  // FUENTE UNICA:
   // actor.system.equipamiento
   // =====================================================
 
-  const equipamiento =
-    actor.system?.equipamiento ?? {};
-
-  const slots = [
-    ["manoDer", "manoDer"],
-    ["manoDerecha", "manoDer"],
-    ["rightHand", "manoDer"],
-    ["handRight", "manoDer"],
-    ["derecha", "manoDer"],
-
-    ["manoIzq", "manoIzq"],
-    ["manoIzquierda", "manoIzq"],
-    ["leftHand", "manoIzq"],
-    ["handLeft", "manoIzq"],
-    ["izquierda", "manoIzq"]
-  ];
-
-  for (const [key, slot] of slots) {
-    const equipado =
-      equipamiento?.[key];
-
-    if (!equipado) continue;
-
-    const item =
-      mtrolResolverItemEquipado(
-        actor,
-        equipado
-      );
-
-    sumarUnaVez(item, slot);
-  }
-
-  // =====================================================
-  // FALLBACK:
-  // ITEMS MARCADOS COMO EQUIPADOS
-  // =====================================================
-
-  for (const item of actor.items ?? []) {
-
-    if (
-      item.type !== "objeto" &&
-      item.type !== "item"
-    ) {
-      continue;
-    }
-
-    const equipado =
-      item.system?.equipado === true ||
-      item.system?.equipado === "true";
-
-    const slot =
-      mtrolNormalizarSlot(
-        item.system?.slot
-      );
-
-    if (!equipado) continue;
-
-    if (
-      slot !== "manoDer" &&
-      slot !== "manoIzq"
-    ) {
-      continue;
-    }
-
-    sumarUnaVez(item, slot);
+  for (const slot of ["manoDer", "manoIzq"]) {
+    sumarUnaVez(
+      getEquipmentItemForSlot(actor, slot),
+      slot
+    );
   }
 
   resultado.total =

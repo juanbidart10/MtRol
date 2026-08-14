@@ -397,6 +397,7 @@
 
         </section>
 
+        {{#if esGM}}
         <section class="sheet-section combate-section">
 
           <h2>
@@ -483,6 +484,7 @@
           </div>
 
         </section>
+        {{/if}}
 
       </section>
 
@@ -852,7 +854,7 @@
 
         {{#if inventario.sobrecargado}}
           <div class="mtrol-warning">
-            Al alcanzar el umbral de sobrecarga, el personaje no puede desplazarse.
+            Al superar el umbral de sobrecarga, el personaje no puede desplazarse.
           </div>
         {{/if}}
 

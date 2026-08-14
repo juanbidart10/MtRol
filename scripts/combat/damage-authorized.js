@@ -7,6 +7,10 @@ import {
   destroyEquippedItem
 } from "../items/item-destruction-engine.js";
 
+import {
+  getEquipmentItemForSlot
+} from "../items/item-invariants.js";
+
 // =========================
 // MTROL - DAMAGE AUTHORIZED
 // =========================
@@ -73,13 +77,15 @@ export async function aplicarDanioAutorizado({
     false;
 
   if (slot) {
-    itemDefensivo =
-      targetActor.items.find(item =>
-        item.type === "objeto" &&
-        item.system?.equipado === true &&
-        item.system?.slot === slot &&
-        Number(item.system?.defensa ?? 0) > 0
-      );
+    const referencedItem =
+      getEquipmentItemForSlot(targetActor, slot);
+
+    if (
+      referencedItem?.type === "objeto" &&
+      Number(referencedItem.system?.defensa ?? 0) > 0
+    ) {
+      itemDefensivo = referencedItem;
+    }
 
     if (itemDefensivo) {
       defensaActual =

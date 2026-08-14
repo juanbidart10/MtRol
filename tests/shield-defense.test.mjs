@@ -44,6 +44,32 @@ class MockRoll {
     this.total = next.total;
     return this;
   }
+
+  async render({ flavor = "" } = {}) {
+    return `
+      <div class="dice-roll">
+        <div class="dice-flavor">${flavor}</div>
+        <div class="dice-tooltip">${this.total}</div>
+        <h4 class="dice-total">${this.total}</h4>
+      </div>
+    `;
+  }
+
+  static fromData(data) {
+    const roll =
+      new MockRoll(data.formula);
+
+    roll.total = data.total;
+    roll.terms = deepClone(data.terms ?? []);
+    roll.dice = roll.terms
+      .filter(term => term.class === "Die")
+      .map(term => ({
+        faces: term.faces,
+        results: deepClone(term.results ?? [])
+      }));
+
+    return roll;
+  }
 }
 
 globalThis.Roll = MockRoll;
@@ -384,7 +410,8 @@ async function createAuthoritativeAction({
   defender,
   attackSkill,
   attackerTotal = 8,
-  attackerFumble = false
+  attackerFumble = false,
+  attackerRolls = []
 }) {
   return actionModule.createPendingActionAuthoritative({
     sourceActorId: attacker.id,
@@ -395,7 +422,8 @@ async function createAuthoritativeAction({
     targetActorUuid: defender.uuid,
     attackerRoll: {
       total: attackerTotal,
-      pifia: attackerFumble
+      pifia: attackerFumble,
+      rolls: attackerRolls
     },
     requiresOpposition: true,
     damage: {
@@ -405,6 +433,24 @@ async function createAuthoritativeAction({
   }, {
     requestingUserId: ownerA.id
   });
+}
+
+function serializedRoll(formula, total, faces, results) {
+  return {
+    class: "Roll",
+    formula,
+    total,
+    evaluated: true,
+    terms: [{
+      class: "Die",
+      number: results.length,
+      faces,
+      results: results.map(result => ({
+        result,
+        active: true
+      }))
+    }]
+  };
 }
 
 test("helper canónico conserva mano izquierda y derecha", () => {
@@ -467,7 +513,7 @@ test("@mano excluye escudos en ambas combinaciones de mano", () => {
   );
 });
 
-test("@mano conserva dos armas, fallback legacy y excluye dos escudos", () => {
+test("@mano conserva dos armas, armas generales referenciadas y excluye dos escudos", () => {
   const rightWeapon = createWeapon("dual-r", "manoDer", "3");
   const leftWeapon = createWeapon("dual-l", "manoIzq", "2");
   const dualWeapons = createActor({
@@ -939,6 +985,16 @@ test("resolución autoritativa desgasta una sola vez y bloquea doble resolución
     /Defensa restante/
   );
 
+  assert.deepEqual(
+    resolutionMessage.rolls.map(roll => roll.formula),
+    ["1d4"]
+  );
+
+  assert.match(
+    resolutionMessage.content,
+    /Desgaste de escudo/
+  );
+
   await assert.rejects(
     actionModule.resolvePendingActionAuthoritative(
       pending.id,
@@ -950,6 +1006,87 @@ test("resolución autoritativa desgasta una sola vez y bloquea doble resolución
   );
 
   assert.equal(shield.system.defensa, 5);
+});
+
+test("socket autoritativo conserva los terminos oficiales de atacante y defensor", async () => {
+  const attackSkill = createAttackSkill("attack-roll-transport");
+  const defenseSkill = createItem({
+    id: "dodge-roll-transport",
+    name: "Esquiva",
+    type: "competencia",
+    actionType: "defense",
+    defenseType: "dodge",
+    effect: "none"
+  });
+
+  const attacker = createActor({
+    id: "attacker-roll-transport",
+    ownerIds: [ownerA.id],
+    items: [attackSkill]
+  });
+
+  const defender = createActor({
+    id: "defender-roll-transport",
+    ownerIds: [ownerB.id],
+    items: [defenseSkill]
+  });
+
+  const attackerRoll =
+    serializedRoll("2d10 + 3", 13, 10, [2, 8]);
+
+  const defenderRoll =
+    serializedRoll("2d10 + 3", 11, 10, [4, 4]);
+
+  const pending =
+    await createAuthoritativeAction({
+      attacker,
+      defender,
+      attackSkill,
+      attackerTotal: 13,
+      attackerRolls: [attackerRoll]
+    });
+
+  await actionModule.attachDefenseRollAuthoritative({
+    pendingActionId: pending.id,
+    defenderActorUuid: defender.uuid,
+    defenseItemId: defenseSkill.id,
+    defenderRoll: {
+      total: 11,
+      rolls: [defenderRoll]
+    },
+    requestingUserId: ownerB.id
+  });
+
+  const resolutionMessage =
+    chatMessages.findLast(message =>
+      message.flags?.mtrol?.pendingActionId === pending.id
+    );
+
+  assert.deepEqual(
+    resolutionMessage.rolls.map(roll =>
+      roll.terms[0].results.map(entry => entry.result)
+    ),
+    [[2, 8], [4, 4]]
+  );
+
+  assert.match(resolutionMessage.content, /Tirada atacante/);
+  assert.match(resolutionMessage.content, /Tirada defensiva/);
+
+  const synchronized =
+    socketEvents.findLast(event =>
+      event.data?.action === "mtrolPendingActionSync" &&
+      event.data?.pendingAction?.id === pending.id
+    );
+
+  assert.deepEqual(
+    synchronized.data.pendingAction.attackerRoll.rolls[0].terms[0].results,
+    attackerRoll.terms[0].results
+  );
+
+  assert.deepEqual(
+    synchronized.data.pendingAction.defenderRoll.rolls[0].terms[0].results,
+    defenderRoll.terms[0].results
+  );
 });
 
 test("dos defensas concurrentes no pueden resolver ni desgastar dos veces", async () => {
@@ -1131,10 +1268,16 @@ test("empate 1-5 no desgasta y empate 6-10 desgasta", async () => {
         requestingUserId: ownerB.id
       });
 
+    const resolutionMessage =
+      chatMessages.findLast(message =>
+        message.flags?.mtrol?.pendingActionId === pending.id
+      );
+
     return {
       result,
       pending,
-      shield
+      shield,
+      resolutionMessage
     };
   }
 
@@ -1156,6 +1299,12 @@ test("empate 1-5 no desgasta y empate 6-10 desgasta", async () => {
 
   assert.equal(defenderTie.result.resolutionResult.reason, "tie-defender");
   assert.equal(defenderTie.shield.system.defensa, 6);
+  assert.deepEqual(
+    defenderTie.resolutionMessage.rolls.map(roll => roll.formula),
+    ["1d10", "1d4"]
+  );
+  assert.match(defenderTie.resolutionMessage.content, /Desempate/);
+  assert.match(defenderTie.resolutionMessage.content, /Desgaste de escudo/);
 });
 
 test("GM cancela si el escudo cambia después de validarlo y antes del desgaste", async () => {

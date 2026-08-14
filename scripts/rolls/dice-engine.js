@@ -92,6 +92,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
 
   const detalles = [];
 
+  const extraRolls = [];
+
   let cantidadDharma = 0;
   let cantidadKarma = 0;
 
@@ -133,7 +135,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
           totalExtra,
           detalles,
           cantidadDharma,
-          cantidadKarma
+          cantidadKarma,
+          extraRolls
         };
       }
 
@@ -165,6 +168,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
 
         const extraRoll =
           await new Roll(`1d${caras}`).evaluate();
+
+        extraRolls.push(extraRoll);
 
         // =========================
         // VISUAL DICE SO NICE
@@ -208,7 +213,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
             totalExtra,
             detalles,
             cantidadDharma,
-            cantidadKarma
+            cantidadKarma,
+            extraRolls
           };
         }
 
@@ -239,7 +245,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
     totalExtra,
     detalles,
     cantidadDharma,
-    cantidadKarma
+    cantidadKarma,
+    extraRolls
   };
 }
 

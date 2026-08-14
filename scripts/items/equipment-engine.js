@@ -2,128 +2,146 @@ import {
   MTROL_BODY_SLOTS
 } from "../constants/body-slots.js";
 
+import {
+  getDocumentById,
+  getEquipmentItemForSlot,
+  getEquipmentState,
+  getReferencedSlotsForItem,
+  isMtrolObject,
+  toDocumentArray
+} from "./item-invariants.js";
+
 export const MTROL_HAND_SLOTS = [
   "manoIzq",
   "manoDer"
 ];
 
-function normalizeSlot(slot) {
-  const value =
-    String(slot ?? "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[\s_-]+/g, "");
-
-  if (["manoizq", "manoizquierda", "lefthand", "handleft", "izquierda"].includes(value)) {
-    return "manoIzq";
-  }
-
-  if (["manoder", "manoderecha", "righthand", "handright", "derecha"].includes(value)) {
-    return "manoDer";
-  }
-
-  return slot;
+function notifyWarning(message) {
+  globalThis.ui?.notifications?.warn?.(message);
 }
 
-function resolveEquippedReference(actor, reference) {
-  if (!actor || !reference) return null;
+function notifyError(message) {
+  globalThis.ui?.notifications?.error?.(message);
+}
 
-  const items =
-    Array.from(actor.items ?? []);
+function buildFlagUpdates(actor, equipmentState, affectedItemIds) {
+  const referencedIds = new Set(
+    equipmentState.entries
+      .map(entry => entry.resolvedItemId)
+      .filter(Boolean)
+  );
 
-  if (typeof reference === "string") {
-    return (
-      actor.items.get?.(reference) ??
-      items.find(item =>
-        item.id === reference ||
-        item.uuid === reference ||
-        item.name === reference
-      ) ??
-      null
+  return toDocumentArray(actor.items)
+    .filter(isMtrolObject)
+    .filter(item => affectedItemIds.has(item.id))
+    .map(item => ({
+      item,
+      desired: referencedIds.has(item.id),
+      original: item.system?.equipado
+    }))
+    .filter(entry => entry.original !== entry.desired);
+}
+
+async function updateItemFlags(actor, entries, valueSelector) {
+  if (!entries.length) return;
+
+  const updates = entries.map(entry => ({
+    _id: entry.item.id,
+    "system.equipado": valueSelector(entry)
+  }));
+
+  if (typeof actor.updateEmbeddedDocuments === "function") {
+    await actor.updateEmbeddedDocuments("Item", updates, { render: false });
+    return;
+  }
+
+  await Promise.all(entries.map(entry =>
+    entry.item.update(
+      { "system.equipado": valueSelector(entry) },
+      { render: false }
+    )
+  ));
+}
+
+async function applyEquipmentTransition(
+  actor,
+  slotOverrides,
+  affectedItemIds,
+  operation
+) {
+  const priorState = getEquipmentState(actor);
+  const nextState = getEquipmentState(actor, { slotOverrides });
+  const actorChanges = {};
+  const actorRollback = {};
+
+  for (const [slot, nextReference] of Object.entries(slotOverrides)) {
+    const priorReference = actor.system?.equipamiento?.[slot] ?? "";
+    if (priorReference === nextReference) continue;
+    actorChanges[`system.equipamiento.${slot}`] = nextReference;
+    actorRollback[`system.equipamiento.${slot}`] = priorReference;
+  }
+
+  const flagUpdates = buildFlagUpdates(actor, nextState, affectedItemIds);
+  let actorWasUpdated = false;
+
+  try {
+    if (Object.keys(actorChanges).length) {
+      await actor.update(actorChanges, { render: false });
+      actorWasUpdated = true;
+    }
+
+    await updateItemFlags(actor, flagUpdates, entry => entry.desired);
+    return true;
+  } catch (error) {
+    const rollbackErrors = [];
+
+    try {
+      await updateItemFlags(actor, flagUpdates, entry => entry.original);
+    } catch (rollbackError) {
+      rollbackErrors.push(rollbackError);
+    }
+
+    if (actorWasUpdated && Object.keys(actorRollback).length) {
+      try {
+        await actor.update(actorRollback, { render: false });
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+
+    console.error(`MTROL | Fallo al ${operation}; se intento restaurar el estado anterior.`, {
+      actor: actor?.uuid ?? actor?.id,
+      slotOverrides,
+      priorReferences: priorState.entries.map(entry => ({
+        slot: entry.slot,
+        reference: entry.reference
+      })),
+      error,
+      rollbackErrors
+    });
+
+    notifyError(
+      rollbackErrors.length
+        ? `No se pudo ${operation} y la restauracion fue incompleta. Revisa la consola del GM.`
+        : `No se pudo ${operation}. Se restauro el estado anterior.`
     );
+
+    return false;
   }
-
-  if (typeof reference !== "object") return null;
-
-  const itemId =
-    reference.id ??
-    reference._id ??
-    reference.itemId ??
-    reference.uuid ??
-    reference.itemUuid ??
-    null;
-
-  if (itemId) {
-    const byId =
-      actor.items.get?.(itemId) ??
-      items.find(item =>
-        item.id === itemId ||
-        item.uuid === itemId
-      );
-
-    if (byId) return byId;
-  }
-
-  const itemName =
-    reference.name ??
-    reference.nombre ??
-    reference.item?.name ??
-    null;
-
-  return itemName
-    ? items.find(item => item.name === itemName) ?? null
-    : null;
-}
-
-function isCanonicalHandItem(actor, item, slot) {
-  if (!actor || !item) return false;
-  if (item.type !== "objeto" && item.type !== "item") return false;
-
-  const itemSlot =
-    normalizeSlot(item.system?.slot);
-
-  const equipped =
-    item.system?.equipado === true ||
-    item.system?.equipado === "true";
-
-  return equipped && itemSlot === slot;
 }
 
 export function getEquippedHandItems(actor) {
-  const result = {
-    manoIzq: null,
-    manoDer: null
+  return {
+    manoIzq: getEquipmentItemForSlot(actor, "manoIzq"),
+    manoDer: getEquipmentItemForSlot(actor, "manoDer")
   };
-
-  if (!actor) return result;
-
-  for (const slot of MTROL_HAND_SLOTS) {
-    const reference =
-      actor.system?.equipamiento?.[slot] ?? null;
-
-    const item =
-      resolveEquippedReference(actor, reference);
-
-    result[slot] =
-      isCanonicalHandItem(actor, item, slot)
-        ? item
-        : null;
-  }
-
-  return result;
 }
 
 export function getEquippedShields(actor) {
-  const hands =
-    getEquippedHandItems(actor);
+  const hands = getEquippedHandItems(actor);
 
   return MTROL_HAND_SLOTS
-    .map(slot => ({
-      slot,
-      item: hands[slot]
-    }))
+    .map(slot => ({ slot, item: hands[slot] }))
     .filter(({ item }) =>
       String(item?.system?.tipoObjeto ?? "")
         .trim()
@@ -131,80 +149,61 @@ export function getEquippedShields(actor) {
     );
 }
 
-// =========================
-// MTROL - EQUIPMENT ENGINE
-// =========================
-// Motor centralizado de equipamiento.
-//
-// Responsabilidades:
-// ✔ Validar objetos equipables
-// ✔ Validar slots corporales
-// ✔ Equipar objetos
-// ✔ Reemplazar objeto ocupado
-// ✔ Desequipar objetos
-// =========================
-
 export async function equiparObjeto(actor, item) {
-  if (!actor || !item) return false;
+  if (!actor || !item || !isMtrolObject(item)) return false;
 
-  if (item.type !== "objeto" && item.type !== "item") return false;
+  const actorItem = getDocumentById(actor.items, item.id);
+  if (actorItem !== item) {
+    notifyWarning("El objeto no pertenece al actor seleccionado.");
+    return false;
+  }
 
   if (!item.system?.equipable) {
-    ui.notifications.warn("Este objeto no es equipable.");
+    notifyWarning("Este objeto no es equipable.");
     return false;
   }
 
   const slot = item.system?.slot;
 
   if (!slot) {
-    ui.notifications.warn("Este objeto no tiene un slot asignado.");
+    notifyWarning("Este objeto no tiene un slot asignado.");
     return false;
   }
 
   if (!MTROL_BODY_SLOTS.includes(slot)) {
-    ui.notifications.warn("El slot asignado al objeto no es válido.");
+    notifyWarning("El slot asignado al objeto no es valido.");
     return false;
   }
 
-  const ocupadoId = actor.system.equipamiento?.[slot];
+  const previousItem = getEquipmentItemForSlot(actor, slot);
+  const affectedItemIds = new Set([
+    item.id,
+    previousItem?.id
+  ].filter(Boolean));
 
-  if (ocupadoId && ocupadoId !== item.id) {
-    const itemOcupado = actor.items.get(ocupadoId);
-
-    if (itemOcupado) {
-      await itemOcupado.update({
-        "system.equipado": false
-      });
-    }
-  }
-
-  await actor.update({
-    [`system.equipamiento.${slot}`]: item.id
-  });
-
-  await item.update({
-    "system.equipado": true
-  });
-
-  return true;
+  return applyEquipmentTransition(
+    actor,
+    { [slot]: item.id },
+    affectedItemIds,
+    `equipar ${item.name ?? "el objeto"}`
+  );
 }
 
 export async function desequiparObjeto(actor, item) {
-  if (!actor || !item) return false;
+  if (!actor || !item || !isMtrolObject(item)) return false;
 
-  if (item.type !== "objeto" && item.type !== "item") return false;
+  const actorItem = getDocumentById(actor.items, item.id);
+  if (actorItem !== item) return false;
 
-  const slot = item.system?.slot;
+  const referencedSlots = getReferencedSlotsForItem(actor, item);
+  const slotOverrides = Object.fromEntries(
+    referencedSlots.map(slot => [slot, ""])
+  );
 
-  if (slot) {
-    await actor.update({
-      [`system.equipamiento.${slot}`]: ""
-    });
-  }
-
-  await item.update({
-    "system.equipado": false
-  });
-
-  return true;
+  return applyEquipmentTransition(
+    actor,
+    slotOverrides,
+    new Set([item.id]),
+    `desequipar ${item.name ?? "el objeto"}`
+  );
 }

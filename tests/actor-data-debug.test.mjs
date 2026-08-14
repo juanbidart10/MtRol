@@ -127,7 +127,7 @@ function installVisibleSheet(actor) {
   };
 }
 
-test("las cinco funciones se instalan dentro de game.mtrol.debug", () => {
+test("las auditorias de actor y mundo se instalan dentro de game.mtrol.debug", () => {
   const api = {};
   debugModule.installActorDataDebugApi(api);
 
@@ -136,13 +136,15 @@ test("las cinco funciones se instalan dentro de game.mtrol.debug", () => {
     "auditItems",
     "findGhostItems",
     "compareWeight",
-    "auditCollections"
+    "auditCollections",
+    "auditWorldItems",
+    "serializeWorldItemsAudit"
   ]) {
     assert.equal(typeof api[name], "function");
   }
 });
 
-test("la auditoria explica UI, colecciones visibles y peso fantasma sin mutar", () => {
+test("la auditoria refleja que los huerfanos vuelven al inventario sin mutar", () => {
   const actor = createActor();
   installVisibleSheet(actor);
 
@@ -154,25 +156,20 @@ test("la auditoria explica UI, colecciones visibles y peso fantasma sin mutar", 
 
   assert.equal(report.pesoMostradoSheet.pesoActual, 50);
   assert.equal(report.pesoCalculado, 35);
-  assert.equal(report.pesoInventario, 5);
+  assert.equal(report.pesoInventario, 25);
   assert.equal(report.pesoEquipamiento, 10);
-  assert.equal(report.pesoGhost, 20);
+  assert.equal(report.pesoGhost, 0);
 
-  assert.deepEqual(
-    ghosts.map(item => item.nombre),
-    ["Mineral de Plata Fortificada"]
-  );
-  assert.equal(ghosts[0].participaCalculoPeso, true);
-  assert.equal(ghosts[0].pesoAportado, 20);
+  assert.deepEqual(ghosts, []);
 
   assert.equal(comparison.pesoPersistido, 35);
   assert.equal(comparison.pesoCalculado, 35);
   assert.equal(comparison.pesoMostradoUI, 50);
 
   assert.equal(items.find(item => item.id === "skill").subtotal, 0);
-  assert.equal(collections.inventario.length, 1);
+  assert.equal(collections.inventario.length, 2);
   assert.equal(collections.itemsEnSlots, undefined);
-  assert.equal(collections.objetosOcultos.length, 1);
+  assert.equal(collections.objetosOcultos.length, 0);
 });
 
 test("las auditorias rechazan ejecucion para usuarios no GM", () => {
