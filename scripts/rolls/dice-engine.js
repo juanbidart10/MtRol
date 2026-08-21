@@ -9,6 +9,12 @@
 // - cadenas críticas
 // =========================
 
+import {
+  createDharmaDieId,
+  finalizeDharmaCritical,
+  resolveDharmaInitialDie
+} from "./dharma-engine.js";
+
 // =========================
 // DELAY CINEMÁTICO
 // =========================
@@ -82,13 +88,82 @@ export function mtrolReglaDado(caras, valor) {
   };
 }
 
+function prepareDharmaTraceState(roll, context) {
+  const empty = {
+    byResult: new Map(),
+    traces: []
+  };
+
+  if (!context) return empty;
+
+  if (
+    context.enabled !== true ||
+    context.state !== "consumed" ||
+    context.receipt?.authorized !== true
+  ) {
+    throw new Error("El contexto de Dharma no posee un consumo autorizado.");
+  }
+
+  const selectedIds =
+    new Set(context.selectedIds ?? []);
+
+  const foundIds = new Set();
+  const byResult = new Map();
+  const traces = [];
+
+  for (const [termIndex, term] of Array.from(roll?.terms ?? []).entries()) {
+    if (!Array.isArray(term?.results)) continue;
+
+    for (const [resultIndex, result] of term.results.entries()) {
+      const id =
+        createDharmaDieId(termIndex, resultIndex);
+
+      if (!selectedIds.has(id)) continue;
+
+      const trace =
+        resolveDharmaInitialDie({
+          die: {
+            id,
+            termIndex,
+            resultIndex,
+            faces: Number(term.faces)
+          },
+          naturalResult: Number(result?.result)
+        });
+
+      const traceIndex = traces.length;
+      traces.push(trace);
+      byResult.set(result, {
+        trace,
+        traceIndex
+      });
+      foundIds.add(id);
+    }
+  }
+
+  if (foundIds.size !== selectedIds.size) {
+    throw new Error(
+      "Los dados seleccionados para Dharma no coinciden con el Roll evaluado."
+    );
+  }
+
+  return {
+    byResult,
+    traces
+  };
+}
+
 // =========================
 // EVALUACIÓN CENTRAL MTROL
 // =========================
 
-export async function mtrolEvaluarDadosMtrol(roll) {
+export async function mtrolEvaluarDadosMtrol(roll, {
+  dharmaContext = null
+} = {}) {
 
   let totalExtra = 0;
+
+  let dharmaBonus = 0;
 
   const detalles = [];
 
@@ -96,6 +171,9 @@ export async function mtrolEvaluarDadosMtrol(roll) {
 
   let cantidadDharma = 0;
   let cantidadKarma = 0;
+
+  const dharmaState =
+    prepareDharmaTraceState(roll, dharmaContext);
 
   for (const die of roll.dice ?? []) {
 
@@ -109,8 +187,14 @@ export async function mtrolEvaluarDadosMtrol(roll) {
       const valor =
         Number(result.result);
 
+      const dharmaEntry =
+        dharmaState.byResult.get(result) ?? null;
+
+      const valorEfectivo =
+        Number(dharmaEntry?.trace?.effectiveResult ?? valor);
+
       const regla =
-        mtrolReglaDado(caras, valor);
+        mtrolReglaDado(caras, valorEfectivo);
 
       // =========================
       // DHARMA / KARMA
@@ -133,6 +217,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
           pifia: true,
           motivo: `El D${caras} mostró un ${valor}.`,
           totalExtra,
+          dharmaBonus,
+          dharmaTraces: dharmaState.traces,
           detalles,
           cantidadDharma,
           cantidadKarma,
@@ -145,6 +231,9 @@ export async function mtrolEvaluarDadosMtrol(roll) {
       // =========================
 
       if (!regla.critico) {
+        dharmaBonus +=
+          Number(dharmaEntry?.trace?.dharmaBonus ?? 0);
+
         continue;
       }
 
@@ -211,6 +300,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
             pifia: true,
             motivo: "La tirada fue cancelada durante la cadena crítica.",
             totalExtra,
+            dharmaBonus,
+            dharmaTraces: dharmaState.traces,
             detalles,
             cantidadDharma,
             cantidadKarma,
@@ -231,8 +322,28 @@ export async function mtrolEvaluarDadosMtrol(roll) {
         // SUMA FINAL
         // =========================
 
-        totalExtra +=
+        const criticalResolvedResult =
           extraValor * multiplicador;
+
+        totalExtra +=
+          criticalResolvedResult;
+
+        if (dharmaEntry?.trace?.requiresPostCriticalBonus) {
+          const finalizedTrace =
+            finalizeDharmaCritical(
+              dharmaEntry.trace,
+              criticalResolvedResult
+            );
+
+          dharmaState.traces[dharmaEntry.traceIndex] =
+            finalizedTrace;
+
+          dharmaEntry.trace =
+            finalizedTrace;
+
+          dharmaBonus +=
+            finalizedTrace.dharmaBonusAfterCritical;
+        }
 
         break;
       }
@@ -243,6 +354,8 @@ export async function mtrolEvaluarDadosMtrol(roll) {
     pifia: false,
     motivo: "",
     totalExtra,
+    dharmaBonus,
+    dharmaTraces: dharmaState.traces,
     detalles,
     cantidadDharma,
     cantidadKarma,

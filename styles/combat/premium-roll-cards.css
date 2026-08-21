@@ -1,0 +1,371 @@
+.chat-message.mtrol-chat-message--premium {
+  background-color: #030303 !important;
+  background-image: none !important;
+  border-color: #030303 !important;
+  box-shadow: none !important;
+}
+
+.chat-message.mtrol-chat-message--premium .message-header,
+.chat-message.mtrol-chat-message--premium .message-header .message-sender,
+.chat-message.mtrol-chat-message--premium .message-header .message-metadata,
+.chat-message.mtrol-chat-message--premium .message-header button {
+  color: #d8d8d8;
+}
+
+.chat-message.mtrol-chat-message--premium .message-content {
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+  background: transparent !important;
+}
+
+.chat-message .mtrol-roll-card {
+  --mtrol-card-accent: #d6a11d;
+  --mtrol-card-text: #f0dfb2;
+  --mtrol-die-result-ink: #17120f;
+  position: relative;
+  width: 303px;
+  height: 606px;
+  min-height: 606px;
+  max-height: 606px;
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  color: var(--mtrol-card-text);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  container-type: inline-size;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-family="spell"] {
+  --mtrol-card-accent: #d6a6eb;
+  --mtrol-card-text: #eadcf2;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-family="damagePhysical"] {
+  --mtrol-card-accent: #e56f5a;
+  --mtrol-card-text: #f3d0c7;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-family="defense"] {
+  --mtrol-card-accent: #7fc9ea;
+  --mtrol-card-text: #d7eff8;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-state="critical"] {
+  --mtrol-card-accent: #ffd66e;
+  --mtrol-card-text: #f6e8bd;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-state="fumble"] {
+  --mtrol-card-accent: #d55b4b;
+  --mtrol-card-text: #f0c0b7;
+}
+
+.chat-message .mtrol-roll-card__art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  object-fit: fill;
+  pointer-events: none;
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.chat-message .mtrol-roll-card__header,
+.chat-message .mtrol-roll-card__result,
+.chat-message .mtrol-roll-card__breakdown {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-message .mtrol-roll-card__header,
+.chat-message .mtrol-roll-card__result {
+  inset: 0;
+  pointer-events: none;
+}
+
+.chat-message .mtrol-roll-card__title {
+  position: absolute;
+  top: 11.7%;
+  left: 14%;
+  display: grid;
+  width: 72%;
+  height: 7.6%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  place-items: center;
+  color: var(--mtrol-card-accent);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(18px, 7cqw, 22px);
+  font-weight: 700;
+  line-height: 0.92;
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.chat-message .mtrol-roll-card__formula {
+  position: absolute;
+  top: 27.1%;
+  left: 13%;
+  display: grid;
+  width: 74%;
+  height: 3.4%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  place-items: center;
+  color: var(--mtrol-card-accent);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(9px, 3.55cqw, 12px);
+  line-height: 1;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.chat-message .mtrol-roll-card__total {
+  position: absolute;
+  top: 45.4%;
+  left: 50%;
+  display: grid;
+  width: 58%;
+  height: 17%;
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  color: var(--mtrol-card-accent);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(58px, 22cqw, 82px);
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  text-align: center;
+  text-shadow: none;
+}
+
+.chat-message .mtrol-roll-card__result[data-mtrol-total-length="3"] .mtrol-roll-card__total {
+  font-size: clamp(48px, 19cqw, 70px);
+}
+
+.chat-message .mtrol-roll-card__result[data-mtrol-total-length="long"] .mtrol-roll-card__total {
+  font-size: clamp(34px, 14cqw, 52px);
+}
+
+.chat-message .mtrol-roll-card__breakdown {
+  top: 62%;
+  right: 14.5%;
+  bottom: 6.8%;
+  left: 14.5%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--mtrol-card-text);
+}
+
+.chat-message .mtrol-roll-card__dice {
+  position: absolute;
+  top: 2%;
+  right: 1%;
+  left: 1%;
+  display: flex;
+  height: 59%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-message .mtrol-roll-card__dice[data-mtrol-scroll="true"] {
+  overflow-y: auto;
+}
+
+.chat-message .mtrol-roll-card__dice > .dice-roll {
+  min-height: 0;
+  margin: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.chat-message .mtrol-roll-card .dice-result {
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-message .mtrol-roll-card .mtrol-roll-breakdown {
+  display: grid !important;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-message .mtrol-roll-card[data-mtrol-dense="true"] .mtrol-roll-breakdown {
+  grid-auto-rows: minmax(0, 1fr);
+  grid-template-rows: none;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group {
+  display: grid;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  justify-self: center;
+  column-gap: 4px;
+  overflow: hidden;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group__label {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  color: var(--mtrol-card-accent);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(13px, 4.6cqw, 15px);
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group__results {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+  list-style: none;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group__results .roll {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  color: var(--mtrol-die-result-ink);
+  font-size: clamp(16px, 5.8cqw, 18px);
+  line-height: 32px;
+  text-align: center;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group[data-mtrol-density="compact"] .mtrol-die-group__results {
+  gap: 2px;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group[data-mtrol-density="compact"] .roll {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 28px;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group[data-mtrol-die-count="6"] .roll {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group[data-mtrol-density="dense"] .mtrol-die-group__results {
+  gap: 1px;
+}
+
+.chat-message .mtrol-roll-card .mtrol-die-group[data-mtrol-density="dense"] .roll {
+  width: 21px;
+  min-width: 21px;
+  height: 21px;
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.chat-message .mtrol-roll-card__modifier-grid {
+  position: absolute;
+  top: 77%;
+  right: 3.4%;
+  left: 3.4%;
+  display: grid;
+  height: 16.5%;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 4.1%;
+  list-style: none;
+}
+
+.chat-message .mtrol-roll-card__modifier-slot {
+  display: grid;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  overflow: hidden;
+  color: var(--mtrol-card-accent);
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(17px, 6cqw, 19px);
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-message .mtrol-roll-card__modifier-slot[data-mtrol-modifier-count]:not([data-mtrol-modifier-count="0"]):not([data-mtrol-modifier-count="1"]) {
+  font-size: clamp(14px, 5cqw, 16px);
+}
+
+.chat-message .mtrol-roll-card__modifier-value {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  text-align: center;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+}
+
+.chat-message .mtrol-roll-card::before,
+.chat-message .mtrol-roll-card::after,
+.chat-message .mtrol-roll-card *::before,
+.chat-message .mtrol-roll-card *::after {
+  content: none !important;
+}

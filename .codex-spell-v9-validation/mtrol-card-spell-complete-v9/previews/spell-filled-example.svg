@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="303" height="606" viewBox="0 0 303 606">
+  <image href="../assets/ui/chat/cards-premium/v9/spell.png" xlink:href="../assets/ui/chat/cards-premium/v9/spell.png" width="303" height="606" preserveAspectRatio="none"/>
+  <g font-family="Morpheus, Georgia, serif" text-anchor="middle" fill="#d6b0f0">
+    <text x="151.5" y="96" font-size="16" font-weight="700">EXPLOSIÓN</text>
+    <text x="151.5" y="114" font-size="16" font-weight="700">PRIMORDIAL</text>
+    <text x="151.5" y="168" font-size="9" fill="#ddd3df">2D10 + 1D12 + AURA + PERCEPCIÓN</text>
+    <text x="151.5" y="284" font-size="62" font-weight="700">43</text>
+  </g>
+  <g font-family="Morpheus, Georgia, serif" fill="#ded7df" font-size="9.5">
+    <text x="62" y="397">d10</text><text x="62" y="435">d10</text><text x="62" y="473">d12</text>
+    <g text-anchor="middle" font-size="12" font-weight="700" fill="#f0e8f2">
+      <text x="239" y="397">9</text><text x="239" y="435">10</text><text x="239" y="473">8</text>
+      <text x="80" y="546">+1</text><text x="127" y="546">+5</text><text x="175" y="546">+5</text><text x="223" y="546">+5</text>
+    </g>
+  </g>
+</svg>

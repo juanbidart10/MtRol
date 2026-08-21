@@ -1,0 +1,80 @@
+/* Documentation contract: adapt selectors to the central MtROL renderer. */
+.mtrol-card-v4 {
+  --mtrol-card-width: 100%;
+  position: relative;
+  width: var(--mtrol-card-width);
+  isolation: isolate;
+  color: var(--mtrol-card-body, #f1e7c6);
+  font-family: "Morpheus", serif;
+}
+
+.mtrol-card-v4::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--mtrol-card-shell) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+.mtrol-card-v4[data-format="compact"] { aspect-ratio: 720 / 1388; }
+.mtrol-card-v4[data-format="expanded"] { aspect-ratio: 720 / 1594; }
+.mtrol-card-v4[data-format="composite"] { aspect-ratio: 720 / 1721; }
+
+.mtrol-card-v4__slot {
+  position: absolute;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mtrol-card-v4__icon {
+  object-fit: contain;
+  border: 0;
+  background: transparent;
+}
+
+.mtrol-card-v4__title,
+.mtrol-card-v4__category,
+.mtrol-card-v4__formula,
+.mtrol-card-v4__result-label,
+.mtrol-card-v4__total,
+.mtrol-card-v4__state,
+.mtrol-card-v4__breakdown-title,
+.mtrol-card-v4__modifiers-title {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+}
+
+.mtrol-card-v4__total {
+  font-variant-numeric: lining-nums tabular-nums;
+  overflow: visible;
+}
+
+.mtrol-card-v4__dice-roll {
+  overflow: visible;
+}
+
+.mtrol-card-v4__dice-roll .dice-tooltip {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+
+.mtrol-card-v4__modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.mtrol-card-v4__modifier {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* layout.json is authoritative for the left/top/width/height percentages. */

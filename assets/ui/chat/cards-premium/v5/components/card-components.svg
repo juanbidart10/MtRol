@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="breakdown-panel" viewBox="0 0 600 420">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+      <path stroke-width="2" d="M20 1h560l19 19v380l-19 19H20L1 400V20Z"/>
+      <path stroke-width="1" opacity=".62" d="M27 10h546l16 17v366l-16 17H27l-16-17V27Z"/>
+      <path stroke-width="1.2" d="M12 84V32l20-20h80M488 12h80l20 20v52M12 336v52l20 20h80M488 408h80l20-20v-52"/>
+      <path stroke-width="1" opacity=".55" d="M22 72V38l17-17h56M505 21h56l17 17v34M22 348v34l17 17h56M505 399h56l17-17v-34"/>
+      <path stroke-width="1.2" d="M36 55h132m264 0h132M36 365h230m68 0h230"/>
+      <path stroke-width="1" opacity=".7" d="m286 365 14-10 14 10-14 10Z"/>
+      <path stroke-width="1" opacity=".55" d="m44 55 8-6 8 6-8 6Zm496 0 8-6 8 6-8 6Z"/>
+    </g>
+  </symbol>
+
+  <symbol id="die-value-slot" viewBox="0 0 56 56">
+    <path fill="#0b0907" fill-opacity=".96" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke" d="M8 1h40l7 7v40l-7 7H8l-7-7V8Z"/>
+    <path fill="none" stroke="currentColor" stroke-width=".8" opacity=".58" vector-effect="non-scaling-stroke" d="M11 5h34l6 6v34l-6 6H11l-6-6V11Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="1" opacity=".8" vector-effect="non-scaling-stroke" d="m5 15 10-10m26 0 10 10M5 41l10 10m26 0 10-10"/>
+    <path fill="currentColor" opacity=".45" d="m28 2 3 3-3 3-3-3Zm0 46 3 3-3 3-3-3Z"/>
+  </symbol>
+
+  <symbol id="modifier-slot" viewBox="0 0 84 52">
+    <path fill="#0b0907" fill-opacity=".96" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke" d="M8 1h68l7 7v36l-7 7H8l-7-7V8Z"/>
+    <path fill="none" stroke="currentColor" stroke-width=".8" opacity=".58" vector-effect="non-scaling-stroke" d="M11 5h62l6 6v30l-6 6H11l-6-6V11Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="1" opacity=".8" vector-effect="non-scaling-stroke" d="m5 15 10-10m54 0 10 10M5 37l10 10m54 0 10-10"/>
+    <path fill="currentColor" opacity=".42" d="m42 2 3 3-3 3-3-3Zm0 42 3 3-3 3-3-3Z"/>
+  </symbol>
+</svg>

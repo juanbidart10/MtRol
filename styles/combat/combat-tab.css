@@ -118,7 +118,7 @@
 
 .mtrol-tab-combate .mtrol-combat-card {
   position: relative;
-  min-height: 210px;
+  min-height: 286px;
   padding: 0;
   overflow: hidden;
 
@@ -266,7 +266,7 @@
   padding: 8px 9px 9px;
 
   display: grid;
-  grid-template-rows: 15px 46px 24px auto;
+  grid-template-rows: 15px 42px 24px 14px auto;
   gap: 5px;
 }
 
@@ -770,7 +770,7 @@
   }
 
   .mtrol-tab-combate .mtrol-combat-card {
-    min-height: 198px;
+    min-height: 274px;
     grid-template-rows: 78px 1fr;
   }
 

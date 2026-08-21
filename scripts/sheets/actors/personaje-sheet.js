@@ -1,11 +1,30 @@
 import { mtrolRoll } from "../../rolls/mtrol-rolls.js";
+import { evaluateProgression } from "../../actors/progression-engine.js";
 
 import {
+  requestLevelUp,
+  spendPendingAttributePoint,
+  spendPendingCompetencePoint
+} from "../../actors/progression-advancement-service.js";
+
+import {
+  getAttributeCap,
+  getCompetenceCap
+} from "../../progression/progression-caps.js";
+
+import {
+  isProgressionCompetence
+} from "../../progression/progression-competence.js";
+
+import {
+  getCompetenciaRollFormula,
   resolverCompetencia
 } from "../../combat/competencia-engine.js";
 
 import {
-  aplicarConsumoMP
+  aplicarConsumoMP,
+  calcularConsumoMP,
+  restaurarMPMeditacion
 } from "../../combat/mp-engine.js";
 
 import {
@@ -32,12 +51,19 @@ import {
 
 import {
   attachDefenseRollForActor,
-  createPendingActionFromCompetencia
+  createPendingActionFromCompetencia,
+  createReadyDamageActionFromCompetencia,
+  getActionDefinitionFromItem
 } from "../../actions/action-engine.js";
 
 import {
-  executeCompetenciaDamage
+  executeConfiguredCompetenciaDamage
 } from "../../actions/action-damage-engine.js";
+
+import {
+  getAbilityRoleLabel,
+  getItemAbilityDamageConfig
+} from "../../actions/ability-config.js";
 
 import {
   calcularCargaActor
@@ -55,6 +81,34 @@ import {
   installMtrolCustomResizeHandle
 } from "../mtrol-resize-handle.js";
 
+import {
+  selectDharmaSpendForRoll
+} from "../../ui/dharma-selector.js";
+
+import {
+  formulaHasDharmaEligibleDice
+} from "../../rolls/dharma-engine.js";
+
+import {
+  mtrolPrepararRollData
+} from "../../rolls/formula-parser.js";
+
+import {
+  getPrimaryActiveGM,
+  MTROL_GM_REQUIRED_MESSAGE
+} from "../../core/socket-requests.js";
+
+import {
+  getOrbLevelName,
+  MTROL_ORB_REGISTRY
+} from "../../progression/orb-registry.js";
+
+import {
+  addActorOrb,
+  deleteActorOrb,
+  updateActorOrb
+} from "../../progression/orb-management-service.js";
+
 const { ActorSheet } = foundry.appv1.sheets;
 
 const MTROL_FALLBACK_ACTOR_IMG = "icons/svg/mystery-man.svg";
@@ -67,6 +121,46 @@ const MTROL_COMBAT_BAR_CATEGORIES = new Set([
   "hechizo",
   "contraataque"
 ]);
+
+const MTROL_PROGRESSION_REQUIREMENT_VISUALS = Object.freeze({
+  mvp: Object.freeze({ label: "MVP", icon: "fa-trophy" }),
+  exp: Object.freeze({ label: "EXPERIENCIA", icon: "fa-star" }),
+  missionsCompleted: Object.freeze({ label: "MISIÓN COMPLETADA", icon: "fa-scroll" }),
+  dungeonsCompleted: Object.freeze({ label: "DUNGEON COMPLETADO", icon: "fa-dungeon" }),
+  attributesAtFive: Object.freeze({ label: "ATRIBUTOS EN 5", icon: "fa-chart-bar" }),
+  competencesAtLeastThree: Object.freeze({ label: "COMPETENCIA NIVEL 3", icon: "fa-book-open" }),
+  competencesAtFive: Object.freeze({ label: "COMPETENCIAS EN 5", icon: "fa-book-open" }),
+  meritCredits: Object.freeze({ label: "CRÉDITOS POR MÉRITO", icon: "fa-coins" }),
+  defeatedLevel5Enemy: Object.freeze({ label: "ENEMIGO NIVEL 5 DERROTADO", icon: "fa-skull-crossbones" }),
+  dmApproval: Object.freeze({ label: "APROBACIÓN DM", icon: "fa-shield-alt" })
+});
+
+function formatProgressionVisualNumber(value) {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function prepareProgressionEvaluationForSheet(evaluation) {
+  return {
+    ...evaluation,
+    requirements: evaluation.requirements.map(requirement => {
+      const visual = MTROL_PROGRESSION_REQUIREMENT_VISUALS[requirement.key] ?? {
+        label: String(requirement.label ?? requirement.key).toUpperCase(),
+        icon: "fa-circle"
+      };
+      const isBoolean = typeof requirement.required === "boolean";
+
+      return {
+        ...requirement,
+        label: visual.label,
+        icon: visual.icon,
+        valueText: isBoolean
+          ? "—"
+          : `${formatProgressionVisualNumber(requirement.current)} / ${formatProgressionVisualNumber(requirement.required)}`,
+        stateLabel: requirement.met ? "COMPLETADO" : "PENDIENTE"
+      };
+    })
+  };
+}
 
 
 function normalizarNombreBanner(nombre) {
@@ -141,6 +235,44 @@ function prepareItemImageData(item, fallback = MTROL_FALLBACK_ITEM_IMG) {
   };
 }
 
+function formulaCompetenciaPorNivel(nivel) {
+  switch (Number(nivel)) {
+    case 1: return "1d4 + 1";
+    case 2: return "1d6 + 2";
+    case 3: return "1d8 + 3";
+    case 4: return "1d10 + 4";
+    case 5: return "1d12 + 5";
+    default: return "1d4 + 1";
+  }
+}
+
+function prepareExecutableItemData(item, availableDharma, actor, fallback = MTROL_FALLBACK_ITEM_IMG) {
+  const formula = getCompetenciaRollFormula(item, {
+    formulaFallback: formulaCompetenciaPorNivel(item.system?.nivel)
+  });
+  const eligible = formulaHasDharmaEligibleDice(formula);
+  const hasDharma =
+    Number.isInteger(availableDharma) &&
+    availableDharma >= 1 &&
+    availableDharma <= 5;
+  const mpCost = calcularConsumoMP(actor, item);
+
+  return {
+    ...prepareItemImageData(item, fallback),
+    mtrolIsProgressionCompetence: isProgressionCompetence(item),
+    mtrolRollFormula: formula ?? "",
+    mtrolMpCost: mpCost.costoTotal,
+    mtrolRoleLabel: getAbilityRoleLabel(item.system?.rol),
+    mtrolDharmaEligible: eligible,
+    mtrolDharmaEnabled: hasDharma && eligible,
+    mtrolDharmaTitle: !hasDharma
+      ? "No tienes Dharma disponible."
+      : eligible
+        ? `Gastar Dharma (${availableDharma} disponible${availableDharma === 1 ? "" : "s"})`
+        : "Esta acción no contiene dados iniciales elegibles."
+  };
+}
+
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -212,7 +344,7 @@ export class PersonajeSheet extends ActorSheet {
     context.actor = this.actor;
     context.system = this.actor.system;
     context.esGM = game.user.isGM === true;
-    context.puedeEditarVitales = game.user.isGM || this.actor.isOwner;
+    context.puedeEditarVitales = game.user.isGM === true;
     context.actorImg = getSafeImageSrc(
       this.actor.img,
       MTROL_FALLBACK_ACTOR_IMG,
@@ -222,6 +354,84 @@ export class PersonajeSheet extends ActorSheet {
       hp: calcularPorcentajeVital(this.actor.system?.vitales?.hp),
       mp: calcularPorcentajeVital(this.actor.system?.vitales?.mp)
     };
+    context.progressionEvaluation = prepareProgressionEvaluationForSheet(
+      evaluateProgression(this.actor)
+    );
+    const attributePoints = Math.max(0, Number(
+      this.actor.system?.pendingAdvancement?.attributePoints ?? 0
+    ) || 0);
+    const competencePoints = Math.max(0, Number(
+      this.actor.system?.pendingAdvancement?.competencePoints ?? 0
+    ) || 0);
+    const attributeCap = getAttributeCap(this.actor);
+    const competenceCap = getCompetenceCap(this.actor);
+    context.mtrolPendingAdvancement = {
+      hasAny: attributePoints > 0 || competencePoints > 0,
+      attributePoints,
+      competencePoints,
+      attributeOptions: Object.entries(FX_ATRIBUTOS)
+        .filter(([key]) => Number(this.actor.system?.atributos?.[key]) < attributeCap)
+        .map(([key, definition]) => ({
+          key,
+          label: definition.label ?? key,
+          value: Number(this.actor.system?.atributos?.[key] ?? 0)
+        })),
+      competenceOptions: this.actor.items
+        .filter(item => isProgressionCompetence(item) && Number(item.system?.nivel) < competenceCap)
+        .map(item => ({
+          id: item.id,
+          name: item.name,
+          value: Number(item.system?.nivel ?? 0)
+        }))
+    };
+
+    const actorOrbs = Array.from(this.actor.system?.orbs ?? []);
+    const orbDefinitions = Object.values(MTROL_ORB_REGISTRY);
+    const ownedOrbTypes = new Set(actorOrbs.map(orb => orb.type));
+    const levelOptions = [1, 2, 3, 4, 5].map(level => ({
+      value: level,
+      label: `${level} — ${getOrbLevelName(level)}`
+    }));
+
+    context.mtrolOrbs = actorOrbs.map(orb => {
+      const definition = MTROL_ORB_REGISTRY[orb.type] ?? null;
+      return {
+        id: orb.id,
+        type: orb.type,
+        level: Number(orb.level),
+        name: definition?.name ?? orb.type,
+        levelName: getOrbLevelName(orb.level),
+        passiveName: definition?.passiveName ?? "",
+        passiveDescription: definition?.passiveDescription ?? "",
+        rollBonus: Number(orb.level) === 5 ? 5 : Number(orb.level) === 4 ? 2 : 0,
+        typeOptions: orbDefinitions.map(option => ({
+          value: option.id,
+          label: option.name,
+          selected: option.id === orb.type,
+          disabled: option.id !== orb.type && ownedOrbTypes.has(option.id)
+        })),
+        levelOptions: levelOptions.map(option => ({
+          ...option,
+          selected: option.value === Number(orb.level)
+        }))
+      };
+    });
+    context.mtrolOrbAddOptions = orbDefinitions
+      .filter(definition => !ownedOrbTypes.has(definition.id))
+      .map(definition => ({ value: definition.id, label: definition.name }));
+    context.mtrolOrbLevelOptions = levelOptions;
+
+    const availableDharma =
+      Number(this.actor.system?.recursos?.dharma);
+
+    context.mtrolDharmaAvailable = availableDharma;
+    context.mtrolDharmaEnabled =
+      Number.isInteger(availableDharma) &&
+      availableDharma >= 1 &&
+      availableDharma <= 5;
+    context.mtrolDharmaTitle = context.mtrolDharmaEnabled
+      ? `Gastar Dharma (${availableDharma} disponible${availableDharma === 1 ? "" : "s"})`
+      : "No tienes Dharma disponible.";
 
     const competencias = this.actor.items.filter(
       i => i.type === "competencia"
@@ -235,20 +445,18 @@ export class PersonajeSheet extends ActorSheet {
       i => !esHabilidadBarraCombate(i)
     );
 
-    context.competencias = competencias.map(i => prepareItemImageData(i));
+    context.competencias = competencias.map(i => prepareExecutableItemData(i, availableDharma, this.actor));
     context.habilidadesCombate = context.esGM
-      ? habilidadesCombate.map(i => prepareItemImageData(i))
+      ? habilidadesCombate.map(i => prepareExecutableItemData(i, availableDharma, this.actor))
       : [];
-    context.competenciasGenerales = competenciasGenerales.map(i => prepareItemImageData(i));
+    context.competenciasGenerales = competenciasGenerales.map(i =>
+      prepareExecutableItemData(i, availableDharma, this.actor)
+    );
 
     context.habilidadesEquipadasCombate = habilidadesCombate.filter(
       i => i.system?.equipadaCombate === true || i.system?.equipadaCombate === "true"
     ).map(i => ({
-      id: i.id,
-      name: i.name,
-      img: i.img,
-      imgSeguro: getSafeImageSrc(i.img, MTROL_FALLBACK_ITEM_IMG, `habilidad ${i.name}`),
-      system: i.system,
+      ...prepareExecutableItemData(i, availableDharma, this.actor),
       mtrolBanner: getCombatBanner(i)
     }));
 
@@ -381,6 +589,12 @@ export class PersonajeSheet extends ActorSheet {
 
   async _updateObject(event, formData) {
     if (!game.user.isGM) {
+      const vitalesBloqueados = new Set([
+        "system.vitales.hp.value",
+        "system.vitales.hp.max",
+        "system.vitales.mp.value",
+        "system.vitales.mp.max"
+      ]);
       const recursosBloqueados = [
         "system.recursos.nivel",
         "system.recursos.exp",
@@ -389,10 +603,20 @@ export class PersonajeSheet extends ActorSheet {
         "system.recursos.estres",
         "system.recursos.corrupcion"
       ];
+      const progressionBloqueada = new Set([
+        "system.progression.missionsCompleted",
+        "system.progression.dungeonsCompleted",
+        "system.progression.meritCredits",
+        "system.progression.defeatedLevel5Enemy",
+        "system.progression.dmApproval"
+      ]);
 
       for (const key of Object.keys(formData)) {
         if (key.startsWith("system.atributos.")) delete formData[key];
         if (recursosBloqueados.includes(key)) delete formData[key];
+        if (vitalesBloqueados.has(key)) delete formData[key];
+        if (progressionBloqueada.has(key)) delete formData[key];
+        if (key.startsWith("system.pendingAdvancement.")) delete formData[key];
       }
     }
 
@@ -406,15 +630,25 @@ export class PersonajeSheet extends ActorSheet {
 
     this._installImageFallbacks(html);
 
+    this._installDharmaBurnControls(html);
+
     html.find(".mtrol-roll-atributo")
       .off("click")
       .on("click", this._onRollAtributo.bind(this));
+
+    html.find(".mtrol-dharma-prepare")
+      .off("click")
+      .on("click", this._onPrepareDharma.bind(this));
 
     html.find(".add-competencia")
       .off("click")
       .on("click", this._onAddCompetencia.bind(this));
 
     if (game.user.isGM) {
+      html.find(".mtrol-level-up")
+        .off("click")
+        .on("click", this._onLevelUp.bind(this));
+
       html.find(".add-habilidad-combate")
         .off("click")
         .on("click", this._onAddHabilidadCombate.bind(this));
@@ -434,7 +668,27 @@ export class PersonajeSheet extends ActorSheet {
       html.find(".competencia-down")
         .off("click")
         .on("click", this._onCompetenciaDown.bind(this));
+
+      html.find(".mtrol-orb-add")
+        .off("click")
+        .on("click", this._onAddOrb.bind(this));
+
+      html.find(".mtrol-orb-type, .mtrol-orb-level")
+        .off("change")
+        .on("change", this._onUpdateOrb.bind(this));
+
+      html.find(".mtrol-orb-delete")
+        .off("click")
+        .on("click", this._onDeleteOrb.bind(this));
     }
+
+    html.find(".mtrol-spend-pending-attribute")
+      .off("click")
+      .on("click", this._onSpendPendingAttribute.bind(this));
+
+    html.find(".mtrol-spend-pending-competence")
+      .off("click")
+      .on("click", this._onSpendPendingCompetence.bind(this));
 
     html.find(".mtrol-combat-card")
       .off("click")
@@ -529,6 +783,117 @@ export class PersonajeSheet extends ActorSheet {
       });
   }
 
+  _installDharmaBurnControls(html) {
+    this._mtrolPreparedDharmaSpends = new Map();
+    this._mtrolDharmaRoot = html;
+
+    const availableDharma =
+      Number(this.actor.system?.recursos?.dharma);
+
+    const hasDharma =
+      Number.isInteger(availableDharma) &&
+      availableDharma >= 1 &&
+      availableDharma <= 5;
+
+    const controls =
+      html.find(".mtrol-dharma-action");
+
+    if (typeof controls?.each !== "function") return;
+
+    controls.each((_index, control) => {
+      const button =
+        control.querySelector(".mtrol-dharma-prepare");
+      if (!button) return;
+
+      const eligible =
+        control.dataset.mtrolDharmaEligible === "true";
+      button.disabled = !hasDharma || !eligible;
+    });
+  }
+
+  _getDharmaActionControl(event) {
+    return event?.currentTarget?.closest?.(".mtrol-dharma-action") ?? null;
+  }
+
+  _getPreparedDharmaSpend(event) {
+    const control = this._getDharmaActionControl(event);
+    const actionKey = control?.dataset?.mtrolActionKey;
+    if (!actionKey) return null;
+    return this._mtrolPreparedDharmaSpends?.get(actionKey) ?? null;
+  }
+
+  _updatePreparedDharmaState(actionKey, context = null) {
+    if (!actionKey) return;
+
+    if (context) {
+      this._mtrolPreparedDharmaSpends.set(actionKey, context);
+    } else {
+      this._mtrolPreparedDharmaSpends.delete(actionKey);
+    }
+
+    const controls =
+      this._mtrolDharmaRoot?.find?.(".mtrol-dharma-action");
+
+    if (typeof controls?.each !== "function") return;
+
+    controls.each((_index, control) => {
+      if (control.dataset.mtrolActionKey !== actionKey) return;
+
+      const button =
+        control.querySelector(".mtrol-dharma-prepare");
+      const label =
+        button?.querySelector(".mtrol-dharma-label");
+
+      control.dataset.mtrolDharmaPrepared = context ? "true" : "false";
+      if (label) {
+        label.textContent = context
+          ? `Dharma: ${context.cost}`
+          : "Gastar Dharma";
+      }
+    });
+  }
+
+  async _onPrepareDharma(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const button = event.currentTarget;
+    const control = this._getDharmaActionControl(event);
+    const actionKey = control?.dataset?.mtrolActionKey;
+    const formula = control?.dataset?.mtrolFormula;
+
+    if (!actionKey || !formula || button.disabled) return;
+
+    this._updatePreparedDharmaState(actionKey, null);
+    button.disabled = true;
+
+    try {
+      const { data } = mtrolPrepararRollData(this.actor);
+      const context = await selectDharmaSpendForRoll({
+        actor: this.actor,
+        formula,
+        data
+      });
+
+      this._updatePreparedDharmaState(actionKey, context);
+    } catch (error) {
+      console.warn("MTROL | No se pudo preparar Dharma Burn.", error);
+      ui.notifications.warn(
+        error.message ?? "No se pudo preparar Dharma Burn."
+      );
+      this._updatePreparedDharmaState(actionKey, null);
+    } finally {
+      if (button.isConnected) {
+        const availableDharma =
+          Number(this.actor.system?.recursos?.dharma);
+        button.disabled =
+          !Number.isInteger(availableDharma) ||
+          availableDharma < 1 ||
+          availableDharma > 5;
+      }
+    }
+  }
+
   _onVitalInput(event) {
     const input = event.currentTarget;
     const vital = input.dataset.vital;
@@ -559,6 +924,151 @@ export class PersonajeSheet extends ActorSheet {
     if (item.sheet) item.sheet.render(true);
   }
 
+  async _onLevelUp(event) {
+    event.preventDefault();
+    if (!game.user?.isGM) {
+      ui.notifications.warn("Sólo un GM puede ejecutar el level-up.");
+      return false;
+    }
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const receipt = await requestLevelUp(this.actor);
+      ui.notifications.info(`${this.actor.name} alcanzó el nivel ${receipt.levelAfter}.`);
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo completar el level-up.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
+  async _onAddOrb(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!game.user?.isGM) {
+      ui.notifications.warn("Sólo un GM puede administrar Orbes.");
+      return false;
+    }
+
+    const region = event.currentTarget.closest(".progresion-orbs");
+    const type = region?.querySelector(".mtrol-orb-add-type")?.value;
+    const level = Number(region?.querySelector(".mtrol-orb-add-level")?.value);
+    if (!type) return false;
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await addActorOrb(this.actor, { type, level });
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo agregar el Orbe.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
+  async _onUpdateOrb(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!game.user?.isGM) {
+      ui.notifications.warn("Sólo un GM puede administrar Orbes.");
+      return false;
+    }
+
+    const row = event.currentTarget.closest(".progresion-orb-row");
+    const orbId = row?.dataset?.orbId;
+    const type = row?.querySelector(".mtrol-orb-type")?.value;
+    const level = Number(row?.querySelector(".mtrol-orb-level")?.value);
+    if (!orbId || !type) return false;
+
+    row.querySelectorAll("select, button").forEach(control => {
+      control.disabled = true;
+    });
+    try {
+      await updateActorOrb(this.actor, orbId, { type, level });
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo editar el Orbe.");
+      this.render(true);
+      return false;
+    }
+  }
+
+  async _onDeleteOrb(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!game.user?.isGM) {
+      ui.notifications.warn("Sólo un GM puede administrar Orbes.");
+      return false;
+    }
+
+    const row = event.currentTarget.closest(".progresion-orb-row");
+    const orbId = row?.dataset?.orbId;
+    if (!orbId) return false;
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await deleteActorOrb(this.actor, orbId);
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo eliminar el Orbe.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
+  async _onSpendPendingAttribute(event) {
+    event.preventDefault();
+    const row = event.currentTarget.closest(".progresion-pending-row");
+    const attributeKey = row?.querySelector(".mtrol-pending-attribute-select")?.value;
+    if (!attributeKey) return false;
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const receipt = await spendPendingAttributePoint(this.actor, attributeKey);
+      ui.notifications.info(`Atributo mejorado a ${receipt.valueAfter}.`);
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo asignar el atributo.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
+  async _onSpendPendingCompetence(event) {
+    event.preventDefault();
+    const row = event.currentTarget.closest(".progresion-pending-row");
+    const itemId = row?.querySelector(".mtrol-pending-competence-select")?.value;
+    if (!itemId) return false;
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const receipt = await spendPendingCompetencePoint(this.actor, itemId);
+      ui.notifications.info(`Competencia mejorada a nivel ${receipt.valueAfter}.`);
+      this.render(true);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo asignar la competencia.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
   async _onRestaurarDia(event) {
     event.preventDefault();
 
@@ -585,12 +1095,29 @@ export class PersonajeSheet extends ActorSheet {
 
   async _onRollAtributo(event) {
     event.preventDefault();
+    event.stopPropagation();
 
     const attr =
       event.currentTarget.dataset.atributo ||
       event.currentTarget.dataset.attr;
 
     if (!attr) return;
+
+    const control = this._getDharmaActionControl(event);
+    const actionKey = control?.dataset?.mtrolActionKey;
+    const dharmaSpend = this._getPreparedDharmaSpend(event);
+    try {
+      await this._executeAtributoRoll(attr, {
+        dharmaSpend
+      });
+    } finally {
+      this._updatePreparedDharmaState(actionKey, null);
+    }
+  }
+
+  async _executeAtributoRoll(attr, {
+    dharmaSpend = null
+  } = {}) {
 
     const fxData = FX_ATRIBUTOS[attr];
 
@@ -602,13 +1129,31 @@ export class PersonajeSheet extends ActorSheet {
     const valor = Number(this.actor.system.atributos?.[attr] ?? 0);
     const formula = `1d10 + ${valor}`;
 
-    await mtrolRoll(
+    const args = [
       formula,
       this.actor,
-      `⚔️ Tirada de ${fxData.label}: ${formula.replaceAll("d", "D")}`
-    );
+      `⚔️ Tirada de ${fxData.label}: ${formula.replaceAll("d", "D")}`,
+      {
+        family: "check",
+        categoryLabel: "Atributo",
+        title: fxData.label,
+        icon: this.actor.img ?? ""
+      }
+    ];
+
+    if (dharmaSpend) {
+      args.push({
+        dharmaSpend
+      });
+    }
+
+    const result =
+      await mtrolRoll(...args);
+
+    if (!result) return null;
 
     await this._playAtributoFX(attr, fxData);
+    return result;
   }
 
   async _playAtributoFX(attr, fxData) {
@@ -667,8 +1212,9 @@ export class PersonajeSheet extends ActorSheet {
         effectDuration: 1,
         effectIntensity: 0,
         banner: "",
-        elemento: "",
-        rareza: "comun",
+        damageResolution: "immediate",
+        damageMode: "automatic",
+        damageCostType: "none",
         cooldown: 0,
         fx: {
           visual: "",
@@ -701,6 +1247,11 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
+    if (!isProgressionCompetence(item)) {
+      ui.notifications.warn("Este Item no es una competencia de progresión.");
+      return false;
+    }
+
     const nivelActual = Number(item.system.nivel || 1);
     const nivelNuevo = Math.min(5, nivelActual + 1);
 
@@ -727,6 +1278,11 @@ export class PersonajeSheet extends ActorSheet {
     if (!game.user.isGM) {
       ui.notifications.warn("Solo el Game Master puede bajar competencias.");
       return;
+    }
+
+    if (!isProgressionCompetence(item)) {
+      ui.notifications.warn("Este Item no es una competencia de progresión.");
+      return false;
     }
 
     const nivelActual = Number(item.system.nivel || 1);
@@ -763,13 +1319,35 @@ export class PersonajeSheet extends ActorSheet {
     const targetToken =
       Array.from(game.user.targets)[0] ?? null;
 
-    const resultado =
-      await resolverCompetencia({
+    const control = this._getDharmaActionControl(event);
+    const actionKey = control?.dataset?.mtrolActionKey;
+    const dharmaSpend = this._getPreparedDharmaSpend(event);
+    let resultado = null;
+
+    const costoMP =
+      calcularConsumoMP(actor, item).costoTotal;
+
+    if (
+      !game.user?.isGM &&
+      costoMP > 0 &&
+      !getPrimaryActiveGM()
+    ) {
+      this._updatePreparedDharmaState(actionKey, null);
+      ui.notifications.warn(MTROL_GM_REQUIRED_MESSAGE);
+      return;
+    }
+
+    try {
+      resultado = await resolverCompetencia({
         actor,
         item,
         targetToken,
-        formulaFallback: this._formulaCompetenciaPorNivel(nivel)
+        formulaFallback: this._formulaCompetenciaPorNivel(nivel),
+        dharmaSpend
       });
+    } finally {
+      this._updatePreparedDharmaState(actionKey, null);
+    }
 
     if (!resultado) return;
 
@@ -818,45 +1396,86 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    const pendingAction =
-      await createPendingActionFromCompetencia({
+    const actionDefinition =
+      getActionDefinitionFromItem(item);
+    const damageConfig =
+      getItemAbilityDamageConfig(item, {
+        requiresOpposition: actionDefinition.requiresOpposition
+      });
+    const hasDamage =
+      Boolean(danioFormula) && damageConfig.executesDamage;
+    const damageContext = {
+      available: hasDamage,
+      formula: danioFormula,
+      flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
+      localized: item.system?.usaDanioLocalizado !== false,
+      costoTotal
+    };
+
+    if (actionDefinition.requiresOpposition) {
+      const pendingAction = await createPendingActionFromCompetencia({
         actor,
         item,
         targetToken,
         attackerRoll: resultadoCompetencia,
-        damage: {
-          available: !!danioFormula,
-          formula: danioFormula,
-          flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
-          localized: item.system?.usaDanioLocalizado !== false,
-          costoTotal
+        damage: damageConfig.resolution === "onOppositionWin"
+          ? damageContext
+          : {
+              ...damageContext,
+              available: false
+            }
+      });
+
+      if (pendingAction) {
+        await this._finalizarConsumoCompetencia({
+          actor,
+          item,
+          consumoMP,
+          resultadoCompetencia
+        });
+
+        if (hasDamage && damageConfig.resolution === "immediate") {
+          if (damageConfig.mode === "enabled") {
+            await createReadyDamageActionFromCompetencia({
+              actor,
+              item,
+              targetToken,
+              attackerRoll: resultadoCompetencia,
+              damage: damageContext
+            });
+          } else {
+            try {
+              await executeConfiguredCompetenciaDamage({
+                actor,
+                targetActor,
+                targetToken,
+                formula: danioFormula,
+                flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
+                costoTotal,
+                damageCostType: damageConfig.costType,
+                damageContext: {
+                  item,
+                  title: item.name,
+                  icon: item.img ?? actor.img ?? ""
+                }
+              });
+            } catch (error) {
+              ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
+            }
+          }
         }
-      });
 
-    if (pendingAction) {
-      await this._finalizarConsumoCompetencia({
-        actor,
-        item,
-        consumoMP,
-        resultadoCompetencia
-      });
+        ui.notifications.info(
+          `${item.name} espera una defensa manual.`
+        );
 
-      ui.notifications.info(
-        `${item.name} espera una defensa manual.`
-      );
+        return;
+      }
 
       return;
     }
 
-    const requiereOposicion =
-      item.system?.requiresOpposition === true ||
-      item.system?.requiresOpposition === "true";
-
-    if (requiereOposicion) {
-      return;
-    }
-
-    if (!danioFormula) {
+    if (!hasDamage) {
       await this._finalizarConsumoCompetencia({
         actor,
         item,
@@ -867,17 +1486,25 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    try {
-      await executeCompetenciaDamage({
+    if (damageConfig.mode === "enabled") {
+      await this._finalizarConsumoCompetencia({
         actor,
-        targetActor,
+        item,
+        consumoMP,
+        resultadoCompetencia
+      });
+
+      const readyDamage = await createReadyDamageActionFromCompetencia({
+        actor,
+        item,
         targetToken,
-        formula: danioFormula,
-        flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
-        costoTotal
+        attackerRoll: resultadoCompetencia,
+        damage: damageContext
       });
-    } catch (error) {
-      ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
+
+      if (!readyDamage) return;
+
+      ui.notifications.info(`${item.name} habilitó su ejecución de daño.`);
       return;
     }
 
@@ -887,6 +1514,26 @@ export class PersonajeSheet extends ActorSheet {
       consumoMP,
       resultadoCompetencia
     });
+
+    try {
+      await executeConfiguredCompetenciaDamage({
+        actor,
+        targetActor,
+        targetToken,
+        formula: danioFormula,
+        flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
+        costoTotal,
+        damageCostType: damageConfig.costType,
+        damageContext: {
+          item,
+          title: item.name,
+          icon: item.img ?? actor.img ?? ""
+        }
+      });
+    } catch (error) {
+      ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
+      return;
+    }
 
     return;
 
@@ -901,7 +1548,8 @@ export class PersonajeSheet extends ActorSheet {
     if (!esCompetenciaMeditar(item)) {
       await aplicarConsumoMP(
         actor,
-        consumoMP
+        consumoMP,
+        { item }
       );
 
       return;
@@ -955,12 +1603,13 @@ export class PersonajeSheet extends ActorSheet {
         ? Math.min(mpMax, mpDespuesCoste + restauracion)
         : mpDespuesCoste;
 
-    await aplicarConsumoMP(
+    const consumoAplicado = await aplicarConsumoMP(
       actor,
       {
         ...consumoMP,
         mpNuevo: mpDespuesCoste
-      }
+      },
+      { item }
     );
 
     if (!exito) {
@@ -983,12 +1632,13 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    const mpRecuperado =
-      Math.max(0, mpFinal - mpDespuesCoste);
+    const restauracionAplicada = await restaurarMPMeditacion(
+      actor,
+      consumoAplicado,
+      resultadoCompetencia
+    );
 
-    await actor.update({
-      "system.vitales.mp.value": mpFinal
-    });
+    const mpRecuperado = Number(restauracionAplicada?.restored ?? 0);
 
     const mensaje =
       `Meditar exitoso: recupera ${mpRecuperado} MP.`;
@@ -1036,11 +1686,12 @@ export class PersonajeSheet extends ActorSheet {
         danio: "",
         atributo: "",
         tipo: "habilidad-combate",
-        costeMP: 1,
         usaDanioLocalizado: false,
+        ejecutaDanio: true,
+        damageResolution: "immediate",
+        damageMode: "automatic",
+        damageCostType: "none",
         banner: "",
-        elemento: "",
-        rareza: "comun",
         cooldown: 0,
         fx: {
           visual: "",
@@ -1122,10 +1773,12 @@ export class PersonajeSheet extends ActorSheet {
       getCombatBanner(item);
 
     const escuela =
-      item.system?.elemento ||
-      item.system?.tipo ||
+      getAbilityRoleLabel(item.system?.rol) ||
       item.system?.categoria ||
+      item.system?.tipo ||
       "-";
+    const costoMP =
+      calcularConsumoMP(this.actor, item).costoTotal;
 
     const formula =
       item.system?.danio ||
@@ -1142,7 +1795,7 @@ export class PersonajeSheet extends ActorSheet {
 
         <div class="mtrol-combat-detail-grid">
           <div><label>Escuela</label><strong>${escapeHTML(escuela)}</strong></div>
-          <div><label>MP</label><strong>${escapeHTML(item.system?.costeMP ?? 0)}</strong></div>
+          <div><label>MP</label><strong>${escapeHTML(costoMP)}</strong></div>
           <div><label>Cooldown</label><strong>${escapeHTML(item.system?.cooldown ?? 0)}</strong></div>
           <div class="wide"><label>Formula</label><strong>${escapeHTML(formula)}</strong></div>
         </div>
@@ -1175,7 +1828,14 @@ export class PersonajeSheet extends ActorSheet {
       stopPropagation() {},
       currentTarget: {
         dataset: { itemId: item.id },
-        closest: () => ({ dataset: { itemId: item.id } })
+        closest: selector => selector === ".mtrol-dharma-action"
+          ? {
+              dataset: {
+                itemId: item.id,
+                mtrolActionKey: `item:${item.id}`
+              }
+            }
+          : { dataset: { itemId: item.id } }
       }
     });
   }
@@ -1324,13 +1984,6 @@ export class PersonajeSheet extends ActorSheet {
   }
 
   _formulaCompetenciaPorNivel(nivel) {
-    switch (nivel) {
-      case 1: return "1d4 + 1";
-      case 2: return "1d6 + 2";
-      case 3: return "1d8 + 3";
-      case 4: return "1d10 + 4";
-      case 5: return "1d12 + 5";
-      default: return "1d4 + 1";
-    }
+    return formulaCompetenciaPorNivel(nivel);
   }
 }

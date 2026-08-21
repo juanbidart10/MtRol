@@ -73,12 +73,20 @@ import {
 } from "../actions/action-damage-engine.js";
 
 import {
+  registerMtrolPremiumRollCards
+} from "../ui/chat-roll-card-renderer.js";
+
+import {
   installMtrolStatesApi
 } from "../states/state-engine.js";
 
 import {
   installMtrolDeathApi
 } from "../states/death-engine.js";
+
+import {
+  installMtrolOrbAuthorityHooks
+} from "../progression/orb-authority.js";
 
 // =========================
 // INIT MTROL
@@ -191,8 +199,10 @@ export async function initMtrol() {
   installMtrolAmbientFxApi();
   installMtrolStatesApi();
   installMtrolDeathApi();
+  installMtrolOrbAuthorityHooks();
   installMtrolActionsApi();
   registerResolvedDamageChatHandler();
+  registerMtrolPremiumRollCards();
 
   // =========================
   // PATCH TEMPORAL

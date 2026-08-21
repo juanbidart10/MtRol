@@ -1,0 +1,22 @@
+{
+  "name": "MtROL Complete Spell Card",
+  "version": "9.0.0",
+  "asset": "assets/ui/chat/cards-premium/v9/spell.png",
+  "nativeSize": { "width": 720, "height": 1440 },
+  "runtimeSize": { "width": 303, "height": 606 },
+  "singleFlattenedAsset": true,
+  "embedded": [
+    "outer-frame",
+    "inner-texture",
+    "medallion",
+    "spell-emblem",
+    "HECHIZO",
+    "RESULTADO",
+    "result-sigil",
+    "DESGLOSE DE DADOS",
+    "three-dice-row-guides",
+    "MODIFICADORES",
+    "four-modifier-slots"
+  ],
+  "dynamicOnly": ["title", "formula", "total", "dice", "modifier-values"]
+}

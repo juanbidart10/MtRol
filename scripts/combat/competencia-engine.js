@@ -17,11 +17,20 @@ import {
   normalizarCategoria
 } from "../core/categories.js";
 
+import {
+  getActionDefinitionFromItem
+} from "../actions/action-engine.js";
+
 // =========================
 // HELPERS
 // =========================
 
-function obtenerFormulaTirada(item, categoria, formulaFallback = null) {
+export function getCompetenciaRollFormula(item, {
+  categoria = normalizarCategoria(
+    item?.system?.categoria ?? MTROL_CATEGORIES.COMPETENCIA
+  ),
+  formulaFallback = null
+} = {}) {
 
   const formulaManual =
     item.system?.formula?.toString().trim() ||
@@ -51,6 +60,10 @@ function requiereTarget(categoria, danioFormula) {
 
 function requiereTargetConfigurado(item, categoria, danioFormula) {
 
+  if (getActionDefinitionFromItem(item).requiresOpposition) {
+    return true;
+  }
+
   if (item.system?.requiresTarget === true || item.system?.requiresTarget === "true") {
     return true;
   }
@@ -71,7 +84,8 @@ export async function resolverCompetencia({
   actor,
   item,
   targetToken = null,
-  formulaFallback = null
+  formulaFallback = null,
+  dharmaSpend = null
 } = {}) {
 
   if (!actor || !item) {
@@ -94,10 +108,12 @@ export async function resolverCompetencia({
     item.system?.danio?.toString().trim() || "";
 
   const formulaTirada =
-    obtenerFormulaTirada(
+    getCompetenciaRollFormula(
       item,
-      categoria,
-      formulaFallback
+      {
+        categoria,
+        formulaFallback
+      }
     );
 
   const esHabilidadCombate =
@@ -157,11 +173,28 @@ export async function resolverCompetencia({
 
   if (formulaTirada) {
 
-    resultadoCompetencia = await mtrolRoll(
+    const rollArgs = [
       formulaTirada,
       actor,
-      `⚔️ ${item.name} | ${categoria.toUpperCase()}`
-    );
+      `⚔️ ${item.name} | ${categoria.toUpperCase()}`,
+      {
+        item,
+        actionType: item.system?.actionType,
+        defenseType: item.system?.defenseType,
+        effect: item.system?.effect,
+        category: categoria,
+        title: item.name,
+        icon: item.img ?? actor.img ?? ""
+      }
+    ];
+
+    if (dharmaSpend) {
+      rollArgs.push({
+        dharmaSpend
+      });
+    }
+
+    resultadoCompetencia = await mtrolRoll(...rollArgs);
 
   }
 

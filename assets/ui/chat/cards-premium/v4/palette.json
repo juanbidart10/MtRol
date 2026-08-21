@@ -1,0 +1,23 @@
+{
+  "bodyText": "#f1e7c6",
+  "mutedText": "#c2b89d",
+  "families": {
+    "attack": { "text": "#e9cb78", "accent": "#b98622" },
+    "defense": { "text": "#d98d88", "accent": "#8f393a" },
+    "damage": { "text": "#ee806c", "accent": "#b53222" },
+    "healing": { "text": "#91cf9d", "accent": "#3b8b53" },
+    "spell": { "text": "#c6a3e8", "accent": "#7650a4" },
+    "save": { "text": "#dca65f", "accent": "#9a641f" },
+    "check": { "text": "#8cbad5", "accent": "#3e7799" },
+    "utility": { "text": "#d5d0c8", "accent": "#637080" },
+    "critical": { "text": "#ffd66e", "accent": "#d6a11d" },
+    "fumble": { "text": "#d55b4b", "accent": "#7f1d17" }
+  },
+  "cssPolicy": {
+    "fontFamily": "Morpheus",
+    "textShadow": "none",
+    "filter": "none",
+    "imageRecolor": "none",
+    "gradient": "none"
+  }
+}

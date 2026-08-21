@@ -26,15 +26,35 @@ import {
 } from "../rolls/chat-rolls.js";
 
 import {
+  broadcastPendingAction,
   getPendingAction,
-  updateResolutionMessage
+  receivePendingActionSync,
+  updateResolutionMessage,
+  userCanControlActor
 } from "./action-engine.js";
+
+import {
+  requestPrimaryGM
+} from "../core/socket-requests.js";
+
+import {
+  applyOrbDamagePassives
+} from "../progression/orb-passive-effects.js";
+
+import {
+  aplicarConsumoMP,
+  reembolsarCostoResolucionMP,
+  validarCostoResolucionMP
+} from "../combat/mp-engine.js";
 
 const RESOLVED_DAMAGE_ACTION =
   "mtrol-resolved-damage";
 
 let chatHandlerRegistered =
   false;
+
+const executingResolvedDamageActions =
+  new Set();
 
 function toNumber(value, fallback = 0) {
   const number =
@@ -83,15 +103,37 @@ function assertCanExecuteResolvedDamage(pendingAction) {
     throw new Error("La accion resuelta no tiene dano valido.");
   }
 
-  if (["rolling", "rolled"].includes(pendingAction.damage.status)) {
-    throw new Error("El dano ya esta en ejecucion o ya fue ejecutado.");
+  if (
+    pendingAction.damage.status !== "available" ||
+    pendingAction.damage.rolled === true
+  ) {
+    throw new Error("El dano ya esta en ejecucion, fallo o ya fue ejecutado.");
   }
 }
 
-function validateUserCanExecuteDamage(actor) {
-  if (game.user.isGM || actor?.isOwner) return;
+function validateUserCanExecuteDamage(actor, userId) {
+  if (userCanControlActor(actor, userId)) return;
 
   throw new Error("No tenes permisos para ejecutar este dano.");
+}
+
+async function publishPendingDamageState(pendingAction) {
+  pendingAction.updatedAt =
+    Math.max(
+      Date.now(),
+      Number(pendingAction.updatedAt ?? 0) + 1
+    );
+
+  broadcastPendingAction(pendingAction);
+
+  try {
+    await updateResolutionMessage(pendingAction);
+  } catch (error) {
+    console.warn(
+      "MTROL | No se pudo actualizar la tarjeta de dano resuelto.",
+      error
+    );
+  }
 }
 
 function buildRollData(actor, damage = {}) {
@@ -147,7 +189,12 @@ async function rollDamage({
   throw new Error("Formula de dano vacia o invalida.");
 }
 
-async function createDamageFumbleMessage(actor, damageRoll, evaluacionDanio) {
+async function createDamageFumbleMessage(
+  actor,
+  damageRoll,
+  evaluacionDanio,
+  damageContext = {}
+) {
   const chatRolls =
     await mtrolPrepareChatRolls([
       {
@@ -163,6 +210,15 @@ async function createDamageFumbleMessage(actor, damageRoll, evaluacionDanio) {
   await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
     rolls: chatRolls.rolls,
+    mtrolCard: {
+      family: "damage",
+      state: "fumble",
+      title: damageContext.title ?? "Tirada de Daño",
+      categoryLabel: "Daño",
+      formula: damageRoll.formula ?? "",
+      total: 0,
+      icon: damageContext.icon ?? actor.img ?? ""
+    },
     content: `
       <div class="mtrol-chat-card mtrol-chat-pifia">
         <h2>PIFIA EN DANO</h2>
@@ -233,7 +289,8 @@ export async function executeCompetenciaDamage({
     await createDamageFumbleMessage(
       actor,
       damageRoll,
-      evaluacionDanio
+      evaluacionDanio,
+      damageContext
     );
 
     return {
@@ -252,9 +309,25 @@ export async function executeCompetenciaDamage({
       damageRoll
     );
 
-  const totalFinalDanio =
+  const totalBeforeOrbPassives =
     totalBaseDanio +
     evaluacionDanio.totalExtra;
+
+  const sourceItem =
+    damageContext.item ??
+    actor.items?.get?.(damageContext.competenciaId) ??
+    null;
+
+  const orbPassiveDamage =
+    applyOrbDamagePassives({
+      damage: totalBeforeOrbPassives,
+      sourceActor: actor,
+      targetActor,
+      sourceItem
+    });
+
+  const totalFinalDanio =
+    orbPassiveDamage.damage;
 
   const resultadoDanio =
     await aplicarDanioLocalizado({
@@ -266,7 +339,8 @@ export async function executeCompetenciaDamage({
       costoTotal,
       evaluacionDanio,
       totalBaseDanio,
-      totalFinalDanio
+      totalFinalDanio,
+      cardContext: damageContext
     });
 
   if (!resultadoDanio) {
@@ -301,56 +375,126 @@ export async function executeCompetenciaDamage({
     evaluacionDanio,
     totalBaseDanio,
     totalFinalDanio,
+    orbPassiveDamage,
     resultadoDanio
   };
 }
 
-export async function executeResolvedDamage(pendingActionId, options = {}) {
+export async function executeConfiguredCompetenciaDamage({
+  actor,
+  damageCostType = "none",
+  costoTotal = 0,
+  ...damageArgs
+} = {}) {
+  let additionalCostReceipt =
+    validarCostoResolucionMP(actor, damageCostType);
+
+  if (!additionalCostReceipt?.exito) {
+    throw new Error("No hay MP suficiente para ejecutar la resolución de daño.");
+  }
+
+  let additionalCostApplied = false;
+
+  try {
+    if (additionalCostReceipt.costoTotal > 0) {
+      additionalCostReceipt = await aplicarConsumoMP(actor, additionalCostReceipt);
+      additionalCostApplied = true;
+    }
+
+    return await executeCompetenciaDamage({
+      actor,
+      ...damageArgs,
+      costoTotal: Number(costoTotal ?? 0) + additionalCostReceipt.costoTotal
+    });
+  } catch (error) {
+    if (additionalCostApplied) {
+      await reembolsarCostoResolucionMP(actor, additionalCostReceipt);
+    }
+
+    throw error;
+  }
+}
+
+export async function executeResolvedDamageAuthoritative(
+  pendingActionId,
+  {
+    requestingUserId = game.user?.id
+  } = {}
+) {
+  if (!game.user?.isGM) {
+    throw new Error("Solo el GM autoritativo puede ejecutar el dano resuelto.");
+  }
+
   const pendingAction =
     getPendingAction(pendingActionId);
 
   assertCanExecuteResolvedDamage(pendingAction);
 
+  if (executingResolvedDamageActions.has(pendingActionId)) {
+    throw new Error("El dano ya esta en ejecucion.");
+  }
+
+  executingResolvedDamageActions.add(pendingActionId);
+
   const damage =
     pendingAction.damage;
 
-  const actor =
-    damage.sourceActorUuid
-      ? await fromUuid(damage.sourceActorUuid)
-      : null;
-
-  const targetActor =
-    damage.targetActorUuid
-      ? await fromUuid(damage.targetActorUuid)
-      : null;
-
-  const targetToken =
-    damage.targetTokenUuid
-      ? await fromUuid(damage.targetTokenUuid)
-      : null;
-
-  if (!actor) {
-    throw new Error("No se encontro el actor atacante.");
-  }
-
-  if (!targetActor) {
-    throw new Error("No se encontro el objetivo.");
-  }
-
-  validateUserCanExecuteDamage(actor);
-
-  damage.status =
-    "rolling";
-
-  damage.rolled =
-    false;
-
-  damage.lastUserId =
-    game.user.id;
-
-  await updateResolutionMessage(pendingAction);
-
   try {
+    const actor =
+      damage.sourceActorUuid
+        ? await fromUuid(damage.sourceActorUuid)
+        : null;
+
+    const targetActor =
+      damage.targetActorUuid
+        ? await fromUuid(damage.targetActorUuid)
+        : null;
+
+    const targetToken =
+      damage.targetTokenUuid
+        ? await fromUuid(damage.targetTokenUuid)
+        : null;
+
+    if (!actor) {
+      throw new Error("No se encontro el actor atacante.");
+    }
+
+    if (!targetActor) {
+      throw new Error("No se encontro el objetivo.");
+    }
+
+    validateUserCanExecuteDamage(
+      actor,
+      requestingUserId
+    );
+
+    const additionalCostReceipt =
+      validarCostoResolucionMP(actor, damage.costType ?? "none");
+
+    if (!additionalCostReceipt?.exito) {
+      throw new Error("No hay MP suficiente para ejecutar la resolución de daño.");
+    }
+
+    damage.status =
+      "rolling";
+
+    damage.rolled =
+      false;
+
+    damage.lastUserId =
+      requestingUserId;
+
+    damage.error =
+      null;
+
+    await publishPendingDamageState(pendingAction);
+
+    if (additionalCostReceipt.costoTotal > 0) {
+      const appliedCostReceipt = await aplicarConsumoMP(actor, additionalCostReceipt);
+      damage.additionalCostTransactionId = appliedCostReceipt?.transactionId ?? null;
+      damage.additionalCostApplied = true;
+    }
+
     const result =
       await executeCompetenciaDamage({
         actor,
@@ -358,8 +502,13 @@ export async function executeResolvedDamage(pendingActionId, options = {}) {
         targetToken,
         formula: damage.formula,
         flatValue: damage.flatValue,
-        costoTotal: damage.costoTotal,
+        costoTotal: damage.costoTotal + additionalCostReceipt.costoTotal,
         damageContext: damage
+          ? {
+              ...damage,
+              item: actor.items?.get?.(damage.competenciaId) ?? null
+            }
+          : damage
       });
 
     damage.status =
@@ -377,13 +526,25 @@ export async function executeResolvedDamage(pendingActionId, options = {}) {
     damage.fumble =
       result.fumble === true;
 
-    await updateResolutionMessage(pendingAction);
+    await publishPendingDamageState(pendingAction);
 
     return result;
   } catch (error) {
+    if (damage.additionalCostApplied === true && damage.rolled !== true) {
+      const actor = damage.sourceActorUuid
+        ? await fromUuid(damage.sourceActorUuid)
+        : null;
+
+      await reembolsarCostoResolucionMP(actor, {
+        transactionId: damage.additionalCostTransactionId
+      });
+      damage.additionalCostApplied = false;
+      damage.additionalCostTransactionId = null;
+    }
+
     if (damage.status === "rolling") {
       damage.status =
-        "available";
+        "failed";
 
       damage.rolled =
         false;
@@ -392,10 +553,46 @@ export async function executeResolvedDamage(pendingActionId, options = {}) {
         error.message;
     }
 
-    await updateResolutionMessage(pendingAction);
+    if (damage.status === "failed") {
+      await publishPendingDamageState(pendingAction);
+    }
 
     throw error;
+  } finally {
+    executingResolvedDamageActions.delete(pendingActionId);
   }
+}
+
+export async function executeResolvedDamage(pendingActionId, options = {}) {
+  if (game.user?.isGM) {
+    return executeResolvedDamageAuthoritative(
+      pendingActionId,
+      {
+        requestingUserId:
+          options.requestingUserId ?? game.user.id
+      }
+    );
+  }
+
+  const response =
+    await requestPrimaryGM(
+      "mtrolExecuteResolvedDamage",
+      {
+        pendingActionId
+      }
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      response.error ?? "No se pudo ejecutar el dano resuelto."
+    );
+  }
+
+  receivePendingActionSync(
+    response.result?.pendingAction
+  );
+
+  return response.result?.damageResult ?? null;
 }
 
 async function onResolvedDamageClick(event) {

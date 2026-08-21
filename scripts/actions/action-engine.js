@@ -26,6 +26,10 @@ import {
   mtrolSerializeRolls
 } from "../rolls/chat-rolls.js";
 
+import {
+  getItemAbilityDamageConfig
+} from "./ability-config.js";
+
 const pendingActions =
   new Map();
 
@@ -92,7 +96,7 @@ function isValidRollData(rollData = {}) {
   );
 }
 
-function userCanControlActor(actor, userId) {
+export function userCanControlActor(actor, userId) {
   const user =
     game.users.get(userId);
 
@@ -156,7 +160,7 @@ export function serializePendingAction(pendingAction) {
   };
 }
 
-function broadcastPendingAction(pendingAction) {
+export function broadcastPendingAction(pendingAction) {
   if (!game.user?.isGM || !pendingAction) return;
 
   game.socket.emit("system.mtrol", {
@@ -278,8 +282,15 @@ function normalizeDamageContext(data = {}) {
     competenciaUuid: data.competenciaUuid ?? null,
     competenciaId: data.competenciaId ?? null,
     competenciaName: data.competenciaName ?? null,
+    title: data.title ?? data.competenciaName ?? null,
+    icon: data.icon ?? "",
     localized: data.localized !== false,
     costoTotal: Number(data.costoTotal ?? 0),
+    resolution: data.resolution ?? "onOppositionWin",
+    mode: data.mode ?? "enabled",
+    costType: data.costType ?? "none",
+    additionalMpCost: data.costType === "basic" ? 1 : 0,
+    additionalCostApplied: false,
     rollData: foundry.utils.deepClone(data.rollData ?? {}),
     total: null,
     fumble: false,
@@ -297,6 +308,33 @@ function isTrue(value) {
   return value === true || value === "true";
 }
 
+function isFalse(value) {
+  return value === false || value === "false";
+}
+
+const OPPOSED_DAMAGE_ACTION_TYPES = new Set([
+  "attack",
+  "basicAttack",
+  "combatSkill",
+  "damage"
+]);
+
+function getItemDamageFormula(item) {
+  return String(item?.system?.danio ?? "").trim();
+}
+
+function isOpposedDamageAction(item) {
+  const system = item?.system ?? {};
+  const hasDamage = getItemDamageFormula(item).length > 0;
+
+  if (!hasDamage) return false;
+
+  return (
+    OPPOSED_DAMAGE_ACTION_TYPES.has(system.actionType) ||
+    system.effect === "damage"
+  );
+}
+
 function hasConfiguredActionDefinition(system = {}) {
   return (
     system.actionType !== undefined ||
@@ -308,11 +346,18 @@ function hasConfiguredActionDefinition(system = {}) {
   );
 }
 
-function getActionDefinitionFromItem(item) {
+export function getActionDefinitionFromItem(item) {
   const system =
     item?.system ?? {};
+  const persistedSystem =
+    item?._source?.system ?? system;
+  const hasExplicitOpposition =
+    Object.hasOwn(persistedSystem, "requiresOpposition");
 
-  if (isTrue(system.requiresOpposition)) {
+  if (
+    isTrue(system.requiresOpposition) ||
+    (!hasExplicitOpposition && isOpposedDamageAction(item))
+  ) {
     return {
       actionType: system.actionType ?? "utility",
       effect: system.effect ?? "none",
@@ -348,6 +393,53 @@ function getActionDefinitionFromItem(item) {
   };
 }
 
+function getCanonicalDamageContext({
+  sourceActor,
+  sourceItem,
+  targetActor,
+  requiresOpposition = true,
+  data = {}
+} = {}) {
+  const formula =
+    getItemDamageFormula(sourceItem);
+
+  const executesDamage =
+    !isFalse(sourceItem?.system?.ejecutaDanio);
+
+  const config =
+    getItemAbilityDamageConfig(sourceItem, {
+      requiresOpposition
+    });
+  const available =
+    executesDamage &&
+    formula.length > 0 &&
+    (!requiresOpposition || config.resolution === "onOppositionWin");
+
+  return {
+    available,
+    formula: available ? formula : "",
+    flatValue:
+      available && Number.isFinite(Number(formula))
+        ? Number(formula)
+        : null,
+    sourceActorUuid: sourceActor?.uuid ?? null,
+    sourceTokenUuid: data.sourceTokenUuid ?? null,
+    targetActorUuid: targetActor?.uuid ?? null,
+    targetTokenUuid: data.targetTokenUuid ?? null,
+    competenciaUuid: sourceItem?.uuid ?? null,
+    competenciaId: sourceItem?.id ?? null,
+    competenciaName: sourceItem?.name ?? null,
+    title: sourceItem?.name ?? "Tirada de Daño",
+    icon: sourceItem?.img ?? sourceActor?.img ?? "",
+    localized: !isFalse(sourceItem?.system?.usaDanioLocalizado),
+    costoTotal: Number(data.costoTotal ?? 0),
+    resolution: config.resolution,
+    mode: config.mode,
+    costType: config.costType,
+    rollData: {}
+  };
+}
+
 async function createPendingActionMessage(pendingAction) {
   const actor =
     pendingAction.sourceActorUuid
@@ -373,6 +465,7 @@ function canShowDamageButton(pendingAction, result) {
     pendingAction.damage?.available === true &&
     pendingAction.damage?.rolled !== true &&
     pendingAction.damage?.status === "available" &&
+    pendingAction.damage?.mode === "enabled" &&
     (
       pendingAction.targetActorUuid ||
       pendingAction.targetTokenUuid
@@ -426,8 +519,8 @@ function buildResolutionContent(pendingAction, result, rollsHTML = "") {
       : "";
 
   const damageErrorMessage =
-    pendingAction.damage?.error && damageStatus === "available"
-      ? `<p class="mtrol-chat-warning">Último intento de daño: ${escapeHTML(pendingAction.damage.error)}</p>`
+    pendingAction.damage?.error && damageStatus === "failed"
+      ? `<p class="mtrol-chat-warning">No se pudo completar el daño: ${escapeHTML(pendingAction.damage.error)}</p>`
       : "";
 
   const damageButton =
@@ -440,6 +533,19 @@ function buildResolutionContent(pendingAction, result, rollsHTML = "") {
         </button>
       `
       : "";
+
+  if (pendingAction.requiresOpposition !== true) {
+    return `
+      <div class="mtrol-chat-card">
+        <h2>DAÑO HABILITADO</h2>
+        <p><strong>${escapeHTML(pendingAction.sourceItemName)}</strong> completó su acción principal.</p>
+        ${rollsHTML}
+        ${damageExecutedMessage}
+        ${damageErrorMessage}
+        ${damageButton}
+      </div>
+    `;
+  }
 
   const targetName =
     pendingAction.targetActorName ?? "Defensor";
@@ -590,23 +696,52 @@ async function createResolutionMessage(pendingAction, result) {
       result
     );
 
+  const sourceItem =
+    actor?.items?.get?.(pendingAction.sourceItemId) ?? null;
+
+  const resolutionState =
+    ["attacker-fumble", "defender-fumble"].includes(result.reason)
+      ? "fumble"
+      : (
+          ["attacker-critical", "defender-critical"].includes(result.reason) ||
+          pendingAction.attackerRoll?.isCritical === true ||
+          pendingAction.defenderRoll?.isCritical === true
+        )
+        ? "critical"
+        : "normal";
+
   const message =
     await mtrolCreateRollMessage({
-    user: pendingAction.sourceUserId ?? game.user?.id,
-    speaker: actor ? ChatMessage.getSpeaker({ actor }) : undefined,
-    content: buildResolutionContent(
-      pendingAction,
-      result,
-      chatRolls.html
-    ),
-    rolls: chatRolls.rolls,
-    flags: {
-      mtrol: {
-        pendingActionId: pendingAction.id,
-        damageStatus: pendingAction.damage?.status ?? "unavailable"
+      user: pendingAction.sourceUserId ?? game.user?.id,
+      speaker: actor ? ChatMessage.getSpeaker({ actor }) : undefined,
+      content: buildResolutionContent(
+        pendingAction,
+        result,
+        chatRolls.html
+      ),
+      rolls: chatRolls.rolls,
+      mtrolCard: {
+        family: result.success ? "attack" : "defense",
+        state: resolutionState,
+        title: "Resolución enfrentada",
+        categoryLabel:
+          result.success
+            ? "Ataque vencedor"
+            : "Defensa vencedora",
+        formula: `Ataque ${result.attackerTotal} vs Defensa ${result.defenderTotal}`,
+        total:
+          result.success
+            ? result.attackerTotal
+            : result.defenderTotal,
+        icon: sourceItem?.img ?? actor?.img ?? ""
+      },
+      flags: {
+        mtrol: {
+          pendingActionId: pendingAction.id,
+          damageStatus: pendingAction.damage?.status ?? "unavailable"
+        }
       }
-    }
-  });
+    });
 
   pendingAction.resolutionMessageId =
     message?.id ?? null;
@@ -624,10 +759,12 @@ function buildPendingAction(data = {}) {
     sourceUserId: data.sourceUserId ?? null,
     sourceActorId: data.sourceActorId ?? null,
     sourceActorUuid: data.sourceActorUuid ?? null,
+    sourceActorName: data.sourceActorName ?? null,
     sourceTokenId: data.sourceTokenId ?? null,
     sourceTokenUuid: data.sourceTokenUuid ?? null,
     targetActorId: data.targetActorId ?? null,
     targetActorUuid: data.targetActorUuid ?? null,
+    targetActorName: data.targetActorName ?? null,
     targetTokenId: data.targetTokenId ?? null,
     targetTokenUuid: data.targetTokenUuid ?? null,
     sourceItemId: data.sourceItemId ?? null,
@@ -704,8 +841,10 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     sourceUserId: requestingUserId,
     sourceActorId: sourceActor.id,
     sourceActorUuid: sourceActor.uuid,
+    sourceActorName: sourceActor.name,
     targetActorId: targetActor.id,
     targetActorUuid: targetActor.uuid,
+    targetActorName: targetActor.name,
     sourceItemId: sourceItem.id,
     sourceItemName: sourceItem.name,
     actionType: definition.actionType,
@@ -714,7 +853,14 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     effectDuration: definition.effectDuration,
     effectIntensity: definition.effectIntensity,
     oppositionType: definition.oppositionType,
-    requiresOpposition: true
+    requiresOpposition: true,
+    damage: getCanonicalDamageContext({
+      sourceActor,
+      sourceItem,
+      targetActor,
+      requiresOpposition: true,
+      data: data.damage ?? {}
+    })
   };
 }
 
@@ -842,6 +988,133 @@ export async function createPendingActionFromCompetencia({
           competenciaUuid: item?.uuid ?? null,
           competenciaId: item?.id ?? null,
           competenciaName: item?.name ?? null
+        }
+      : null
+  });
+}
+
+export async function createReadyDamageActionAuthoritative(data = {}, {
+  requestingUserId = game.user?.id
+} = {}) {
+  if (!game.user?.isGM) {
+    throw new Error("Solo el GM autoritativo puede habilitar una resolución de daño.");
+  }
+
+  const sourceActor = data.sourceActorUuid
+    ? await fromUuid(data.sourceActorUuid)
+    : game.actors?.get?.(data.sourceActorId) ?? null;
+  const targetActor = data.targetActorUuid
+    ? await fromUuid(data.targetActorUuid)
+    : game.actors?.get?.(data.targetActorId) ?? null;
+
+  if (!sourceActor || !targetActor) {
+    throw new Error("La resolución de daño no contiene actores válidos.");
+  }
+
+  if (!userCanControlActor(sourceActor, requestingUserId)) {
+    throw new Error("El usuario no controla al actor atacante.");
+  }
+
+  const sourceItem = sourceActor.items.get(data.sourceItemId);
+
+  if (!sourceItem || sourceItem.type !== "competencia") {
+    throw new Error("La competencia atacante ya no existe.");
+  }
+
+  const definition = getActionDefinitionFromItem(sourceItem);
+  const config = getItemAbilityDamageConfig(sourceItem, {
+    requiresOpposition: definition.requiresOpposition
+  });
+
+  if (config.resolution !== "immediate" || config.mode !== "enabled") {
+    throw new Error("La habilidad no admite una ejecución de daño inmediata habilitada.");
+  }
+
+  const canonicalData = {
+    ...data,
+    sourceUserId: requestingUserId,
+    sourceActorId: sourceActor.id,
+    sourceActorUuid: sourceActor.uuid,
+    sourceActorName: sourceActor.name,
+    targetActorId: targetActor.id,
+    targetActorUuid: targetActor.uuid,
+    targetActorName: targetActor.name,
+    sourceItemId: sourceItem.id,
+    sourceItemName: sourceItem.name,
+    actionType: definition.actionType,
+    effect: definition.effect,
+    defenseType: definition.defenseType,
+    oppositionType: definition.oppositionType,
+    requiresOpposition: false,
+    damage: getCanonicalDamageContext({
+      sourceActor,
+      sourceItem,
+      targetActor,
+      requiresOpposition: false,
+      data: data.damage ?? {}
+    })
+  };
+  const pendingAction = buildPendingAction(canonicalData);
+
+  pendingAction.status = "resolved";
+  pendingAction.result = {
+    success: true,
+    reason: "no-opposition",
+    attackerTotal: Number(data.attackerRoll?.total ?? 0),
+    defenderTotal: 0,
+    tieBreaker: null
+  };
+  pendingAction.resolvedAt = Date.now();
+  pendingAction.updatedAt = pendingAction.resolvedAt;
+  pendingActions.set(pendingAction.id, pendingAction);
+
+  await createResolutionMessage(pendingAction, pendingAction.result);
+  broadcastPendingAction(pendingAction);
+  return pendingAction;
+}
+
+export async function createReadyDamageAction(data = {}) {
+  if (game.user?.isGM) return createReadyDamageActionAuthoritative(data);
+
+  const response = await requestPrimaryGM("mtrolCreateReadyDamageAction", {
+    pendingAction: {
+      ...data,
+      attackerRoll: rollToData(data.attackerRoll)
+    }
+  });
+
+  if (!response.ok) return null;
+  return receivePendingActionSync(response.result?.pendingAction);
+}
+
+export async function createReadyDamageActionFromCompetencia({
+  actor,
+  item,
+  targetToken,
+  attackerRoll,
+  damage = null
+} = {}) {
+  if (!targetToken?.actor) {
+    ui.notifications.warn("MTROL | La resolución de daño necesita un objetivo.");
+    return null;
+  }
+
+  return createReadyDamageAction({
+    sourceActorId: actor?.id ?? null,
+    sourceActorUuid: actor?.uuid ?? null,
+    sourceTokenUuid: getTokenUuid(actor?.getActiveTokens?.()[0]),
+    targetActorId: targetToken.actor.id,
+    targetActorUuid: targetToken.actor.uuid,
+    targetTokenUuid: getTokenUuid(targetToken),
+    sourceItemId: item?.id ?? null,
+    sourceItemName: item?.name ?? "Acción",
+    attackerRoll,
+    damage: damage
+      ? {
+          ...damage,
+          sourceActorUuid: actor?.uuid ?? null,
+          targetActorUuid: targetToken.actor.uuid,
+          targetTokenUuid: getTokenUuid(targetToken)
         }
       : null
   });
@@ -1096,37 +1369,98 @@ export async function attachDefenseRoll(pendingActionId, rollData = {}) {
   return processAuthoritativeResponse(response);
 }
 
+async function selectPendingActionForDefense(pendingForActor = []) {
+  if (pendingForActor.length <= 1) {
+    return pendingForActor[0]?.id ?? null;
+  }
+
+  if (typeof Dialog !== "function") {
+    throw new Error(
+      "Hay varias acciones pendientes; debe indicarse cuál se está defendiendo."
+    );
+  }
+
+  const options = pendingForActor
+    .map(pendingAction => `
+      <option value="${escapeHTML(pendingAction.id)}">
+        ${escapeHTML(pendingAction.sourceActorName ?? "Atacante")} ·
+        ${escapeHTML(pendingAction.sourceItemName ?? "Acción")} ·
+        ${escapeHTML(pendingAction.attackerRoll?.total ?? "-")}
+      </option>
+    `)
+    .join("");
+
+  return new Promise(resolve => {
+    let settled = false;
+
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      resolve(value || null);
+    };
+
+    new Dialog({
+      title: "Seleccionar ataque a defender",
+      content: `
+        <form class="mtrol-defense-selection">
+          <p>Hay varias acciones pendientes para este defensor.</p>
+          <label>
+            Ataque
+            <select name="pendingActionId">${options}</select>
+          </label>
+        </form>
+      `,
+      buttons: {
+        confirm: {
+          label: "Defender",
+          callback: html => {
+            const selected =
+              typeof html?.find === "function"
+                ? html.find('[name="pendingActionId"]').val()
+                : html?.querySelector?.('[name="pendingActionId"]')?.value;
+
+            finish(selected);
+          }
+        },
+        cancel: {
+          label: "Cancelar",
+          callback: () => finish(null)
+        }
+      },
+      default: "confirm",
+      close: () => finish(null)
+    }).render(true);
+  });
+}
+
 export async function attachDefenseRollForActor({
   actor,
   item,
-  defenderRoll
+  defenderRoll,
+  pendingActionId = null
 } = {}) {
   if (!actor || !item || item.system?.actionType !== "defense") return null;
 
-  if (game.user?.isGM) {
-    const result =
-      await attachDefenseRollAuthoritative({
-        defenderActorUuid: actor.uuid,
-        defenseItemId: item.id,
-        defenderRoll,
-        requestingUserId: game.user.id
-      });
+  let selectedPendingActionId =
+    pendingActionId;
 
-    return result.resolutionResult;
+  if (!selectedPendingActionId) {
+    const pendingForActor =
+      await requestPendingActionsForActor(actor);
+
+    selectedPendingActionId =
+      await selectPendingActionForDefense(pendingForActor);
   }
 
-  const response =
-    await requestPrimaryGM(
-      "mtrolAttachDefenseRoll",
-      {
-        pendingActionId: null,
-        defenderActorUuid: actor.uuid,
-        defenseItemId: item.id,
-        defenderRoll: rollToData(defenderRoll)
-      }
-    );
+  if (!selectedPendingActionId) return null;
 
-  return processAuthoritativeResponse(response);
+  return attachDefenseRoll(
+    selectedPendingActionId,
+    {
+      ...defenderRoll,
+      itemId: item.id
+    }
+  );
 }
 
 export async function resolvePendingActionAuthoritative(
@@ -1291,6 +1625,25 @@ export async function resolvePendingActionAuthoritative(
       "MTROL | La acción fue resuelta, pero no se pudo crear el mensaje de resolución.",
       error
     );
+  }
+
+  if (
+    result.success === true &&
+    pendingAction.damage?.available === true &&
+    pendingAction.damage?.mode === "automatic" &&
+    pendingAction.damage?.resolution === "onOppositionWin"
+  ) {
+    try {
+      const { executeResolvedDamageAuthoritative } =
+        await import("./action-damage-engine.js");
+
+      await executeResolvedDamageAuthoritative(
+        pendingAction.id,
+        { requestingUserId: pendingAction.sourceUserId ?? game.user?.id }
+      );
+    } catch (error) {
+      console.warn("MTROL | No se pudo ejecutar automáticamente el daño resuelto.", error);
+    }
   }
 
   broadcastPendingAction(pendingAction);
@@ -1480,7 +1833,9 @@ export async function updateResolutionMessage(pendingAction) {
       chatRolls.html
     ),
     flags: {
+      ...(message.flags ?? {}),
       mtrol: {
+        ...(message.flags?.mtrol ?? {}),
         pendingActionId: pendingAction.id,
         damageStatus: pendingAction.damage?.status ?? "unavailable",
         damageRolled: pendingAction.damage?.rolled === true
@@ -1495,6 +1850,9 @@ export function installMtrolActionsApi() {
     createPendingAction,
     createPendingActionAuthoritative,
     createPendingActionFromCompetencia,
+    createReadyDamageAction,
+    createReadyDamageActionAuthoritative,
+    createReadyDamageActionFromCompetencia,
     attachDefenseRoll,
     attachDefenseRollAuthoritative,
     attachDefenseRollForActor,

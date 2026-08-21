@@ -1,6 +1,44 @@
+import {
+  MTROL_ORB_IDS
+} from "../scripts/progression/orb-registry.js";
+
 const { fields } = foundry.data;
 
 export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
+
+  static migrateData(source) {
+    source ??= {};
+    const hasDamageFormula =
+      typeof source?.danio === "string" && source.danio.trim().length > 0;
+    const legacyDamageAction =
+      hasDamageFormula &&
+      (
+        ["attack", "basicAttack", "combatSkill", "damage"].includes(source?.actionType) ||
+        source?.effect === "damage"
+      );
+    const legacyRequiresOpposition =
+      source?.requiresOpposition === true ||
+      (source?.requiresOpposition === undefined && legacyDamageAction);
+
+    if (
+      source.rol === undefined ||
+      source.rol === null ||
+      (typeof source.rol === "string" && source.rol.trim().length === 0)
+    ) {
+      source.rol = null;
+    }
+    source.requiresOpposition ??= legacyRequiresOpposition;
+    source.damageResolution ??=
+      legacyRequiresOpposition ? "onOppositionWin" : "immediate";
+    source.damageMode ??=
+      legacyRequiresOpposition ? "enabled" : "automatic";
+    source.damageCostType ??= "none";
+    source.damageType ??= null;
+    source.damageElement ??= null;
+    source.spellTags ??= [];
+
+    return super.migrateData(source);
+  }
 
   static defineSchema() {
 
@@ -20,6 +58,62 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         nullable: false,
         initial: "competencia"
       }),
+
+      rol: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: [
+          "offensive",
+          "defensive",
+          "control",
+          "support",
+          "utility",
+          "mobility"
+        ]
+      }),
+
+      orbType: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: MTROL_ORB_IDS
+      }),
+
+      damageType: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: [
+          "physical",
+          "magical"
+        ]
+      }),
+
+      damageElement: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: [
+          "fire"
+        ]
+      }),
+
+      spellTags: new fields.ArrayField(
+        new fields.StringField({
+          required: true,
+          nullable: false,
+          choices: [
+            "sensory",
+            "destructive"
+          ]
+        }),
+        {
+          required: false,
+          nullable: false,
+          initial: []
+        }
+      ),
 
       actionType: new fields.StringField({
         required: false,
@@ -151,6 +245,7 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         initial: false
       }),
 
+      // Deprecated: se conserva para compatibilidad, pero el motor y la UI lo ignoran.
       costeMP: new fields.NumberField({
         required: false,
         nullable: false,
@@ -180,18 +275,56 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         initial: false
       }),
 
+      ejecutaDanio: new fields.BooleanField({
+        required: false,
+        nullable: false,
+        initial: true
+      }),
+
+      damageResolution: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "immediate",
+        choices: [
+          "immediate",
+          "onOppositionWin"
+        ]
+      }),
+
+      damageMode: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "automatic",
+        choices: [
+          "automatic",
+          "enabled"
+        ]
+      }),
+
+      damageCostType: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "none",
+        choices: [
+          "none",
+          "basic"
+        ]
+      }),
+
       banner: new fields.StringField({
         required: false,
         nullable: false,
         initial: ""
       }),
 
+      // Deprecated: se conserva para leer Items legacy, sin exponerlo en la UI.
       elemento: new fields.StringField({
         required: false,
         nullable: false,
         initial: ""
       }),
 
+      // Deprecated: se conserva para leer Items legacy, sin exponerlo en la UI.
       rareza: new fields.StringField({
         required: false,
         nullable: false,

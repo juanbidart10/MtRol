@@ -7,6 +7,25 @@ import {
 } from "../states/state-engine.js";
 
 import {
+  executeResolvedDamageAuthoritative
+} from "../actions/action-damage-engine.js";
+
+import {
+  consumeDharmaSpendAuthoritative
+} from "../rolls/dharma-spend-service.js";
+
+import {
+  aplicarConsumoMPAuthoritative,
+  reembolsarCostoMPAuthoritative,
+  restaurarMPMeditacionAuthoritative
+} from "../combat/mp-engine.js";
+
+import {
+  spendPendingAttributePointAuthoritative,
+  spendPendingCompetencePointAuthoritative
+} from "../actors/progression-advancement-service.js";
+
+import {
   handleSocketResponse,
   isPrimaryActiveGM,
   respondToSocketRequest
@@ -59,6 +78,65 @@ export function registerMtrolSockets() {
     try {
       switch (data.action) {
 
+        case "mtrolConsumeDharma": {
+          await respondWithResult(data, async () => ({
+            receipt:
+              await consumeDharmaSpendAuthoritative(
+                data.payload ?? {},
+                {
+                  requestingUserId: data.requestingUserId
+                }
+              )
+          }));
+
+          break;
+        }
+
+        case "mtrolSpendMP": {
+          await respondWithResult(data, async () => ({
+            receipt: await aplicarConsumoMPAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
+        case "mtrolRefundMP": {
+          await respondWithResult(data, async () => ({
+            receipt: await reembolsarCostoMPAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
+        case "mtrolRestoreMeditationMP": {
+          await respondWithResult(data, async () => ({
+            receipt: await restaurarMPMeditacionAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
+        case "mtrolSpendPendingAttribute": {
+          await respondWithResult(data, async () => ({
+            receipt: await spendPendingAttributePointAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
+        case "mtrolSpendPendingCompetence": {
+          await respondWithResult(data, async () => ({
+            receipt: await spendPendingCompetencePointAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
         // =========================
         // MTROL - ACCIONES ENFRENTADAS AUTORITATIVAS
         // =========================
@@ -75,6 +153,22 @@ export function registerMtrolSockets() {
             return {
               pendingAction:
                 game.mtrol.actions.serializePendingAction(pendingAction)
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolCreateReadyDamageAction": {
+          await respondWithResult(data, async () => {
+            const pendingAction =
+              await game.mtrol.actions.createReadyDamageActionAuthoritative(
+                data.payload?.pendingAction ?? {},
+                { requestingUserId: data.requestingUserId }
+              );
+
+            return {
+              pendingAction: game.mtrol.actions.serializePendingAction(pendingAction)
             };
           });
 
@@ -120,6 +214,53 @@ export function registerMtrolSockets() {
             return {
               pendingAction,
               resolutionResult: pendingAction?.result ?? null
+            };
+          });
+
+          break;
+        }
+
+        case "mtrolExecuteResolvedDamage": {
+          await respondWithResult(data, async () => {
+            const result =
+              await executeResolvedDamageAuthoritative(
+                data.payload?.pendingActionId,
+                {
+                  requestingUserId: data.requestingUserId
+                }
+              );
+
+            const pendingAction =
+              game.mtrol.actions.getPendingAction(
+                data.payload?.pendingActionId
+              );
+
+            return {
+              pendingAction:
+                game.mtrol.actions.serializePendingAction(pendingAction),
+              damageResult: {
+                success: result?.success === true,
+                fumble: result?.fumble === true,
+                totalBaseDanio: Number(result?.totalBaseDanio ?? 0),
+                totalFinalDanio: Number(result?.totalFinalDanio ?? 0),
+                resultadoDanio: result?.resultadoDanio
+                  ? {
+                      numeroLocalizacion: Number(result.resultadoDanio.numeroLocalizacion ?? 0),
+                      slot: result.resultadoDanio.slot ?? null,
+                      zona: result.resultadoDanio.zona ?? null,
+                      item: result.resultadoDanio.item ?? null,
+                      defensaInicial: Number(result.resultadoDanio.defensaInicial ?? 0),
+                      defensaFinal: Number(result.resultadoDanio.defensaFinal ?? 0),
+                      danioOriginal: Number(result.resultadoDanio.danioOriginal ?? 0),
+                      danioAbsorbido: Number(result.resultadoDanio.danioAbsorbido ?? 0),
+                      hpPerdido: Number(result.resultadoDanio.hpPerdido ?? 0),
+                      hpAnterior: Number(result.resultadoDanio.hpAnterior ?? 0),
+                      hpNuevo: Number(result.resultadoDanio.hpNuevo ?? 0),
+                      itemDestruido: result.resultadoDanio.itemDestruido === true,
+                      aplicacion: result.resultadoDanio.aplicacion ?? null
+                    }
+                  : null
+              }
             };
           });
 

@@ -34,7 +34,55 @@ import {
   mtrolPrepareChatRolls
 } from "./chat-rolls.js";
 
-export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
+import {
+  getDharmaEligibleInitialDice,
+  markDharmaSpendConsumed,
+  validateDharmaSpend
+} from "./dharma-engine.js";
+
+import {
+  consumeDharmaSpend
+} from "./dharma-spend-service.js";
+
+import {
+  resolveSpellOrbRollBonus
+} from "../progression/orb-roll-bonus.js";
+
+import {
+  resolveOrbRollPassiveBonus
+} from "../progression/orb-passive-effects.js";
+
+function buildDharmaCardAudit(context, traces = []) {
+  if (!context || !Array.isArray(traces)) return null;
+
+  return {
+    used: context.cost,
+    traces: traces.map(trace => ({
+      termIndex: trace.termIndex,
+      resultIndex: trace.resultIndex,
+      faces: trace.faces,
+      naturalResult: trace.naturalResult,
+      effectiveResult: trace.effectiveResult,
+      finalResult: trace.finalResult,
+      fumblePrevented: trace.fumblePrevented,
+      naturalCritical: trace.naturalCritical,
+      criticalResolvedResult: trace.criticalResolvedResult,
+      dharmaBonus: trace.dharmaBonus,
+      dharmaBonusAfterCritical: trace.dharmaBonusAfterCritical
+    }))
+  };
+}
+
+export async function mtrolRoll(
+  formula,
+  actor,
+  flavor = "Tirada MtRol",
+  cardContext = {},
+  {
+    dharmaSpend = null,
+    consumeDharma = consumeDharmaSpend
+  } = {}
+) {
   if (!actor) {
     ui.notifications.warn("MtRol | No hay actor para la tirada.");
     return null;
@@ -53,14 +101,52 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
     mtrolNormalizarFormulaVisual(formulaVisual);
 
   const roll =
-    await new Roll(formula, data).evaluate();
+    new Roll(formula, data);
+
+  let activeDharmaContext = null;
+
+  if (dharmaSpend?.enabled === true) {
+    const eligibleDice =
+      getDharmaEligibleInitialDice(roll);
+
+    const validation =
+      validateDharmaSpend({
+        availableDharma:
+          actor.system?.recursos?.dharma,
+        selectedDice:
+          dharmaSpend.selectedIds ?? dharmaSpend.selectedDice,
+        eligibleDice
+      });
+
+    if (!validation.valid) {
+      const message =
+        validation.errors[0]?.message ??
+        "La seleccion de Dharma no es valida.";
+
+      ui.notifications.warn(message);
+      return null;
+    }
+
+    const receipt =
+      await consumeDharma(actor, dharmaSpend);
+
+    activeDharmaContext =
+      markDharmaSpendConsumed(
+        dharmaSpend,
+        receipt
+      );
+  }
+
+  await roll.evaluate();
 
   // Esta visual pertenece a tiradas normales MtRol.
   // No afecta el daño localizado si ese daño no llama a mtrolRoll().
   await mtrolMostrarDados(roll);
 
   const evaluacion =
-    await mtrolEvaluarDadosMtrol(roll);
+    await mtrolEvaluarDadosMtrol(roll, {
+      dharmaContext: activeDharmaContext
+    });
 
   const chatRolls =
     await mtrolPrepareChatRolls([
@@ -74,6 +160,19 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
       }))
     ]);
 
+  const baseCardContext = {
+    ...cardContext,
+    title: cardContext.title ?? flavor,
+    icon: cardContext.icon ?? actor.img ?? "",
+    formula: cardContext.formula ?? formulaVisualFinal
+  };
+
+  const dharmaCardAudit =
+    buildDharmaCardAudit(
+      activeDharmaContext,
+      evaluacion.dharmaTraces
+    );
+
   if (evaluacion.pifia) {
     await mtrolAplicarDharmaKarma(
       actor,
@@ -84,6 +183,12 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
     await mtrolCreateRollMessage({
       speaker: ChatMessage.getSpeaker({ actor }),
       rolls: chatRolls.rolls,
+      mtrolCard: {
+        ...baseCardContext,
+        state: "fumble",
+        total: 0,
+        dharma: dharmaCardAudit
+      },
       content: `
         <div class="mtrol-chat-card mtrol-chat-pifia">
           <h2>💀 PIFIA 💀</h2>
@@ -95,11 +200,18 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
 
     return {
       pifia: true,
+      critico: false,
       total: 0,
       roll,
       rolls: chatRolls.rolls,
       dharma: evaluacion.cantidadDharma,
       karma: evaluacion.cantidadKarma,
+      dharmaSpend: activeDharmaContext
+        ? {
+            context: activeDharmaContext,
+            traces: evaluacion.dharmaTraces ?? []
+          }
+        : null,
       mano: danioManos.total,
       manoDer: danioManos.manoDer,
       manoIzq: danioManos.manoIzq
@@ -109,8 +221,18 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
   const totalBase =
     mtrolCalcularTotalBaseSinCriticos(roll);
 
+  const orbRollBonus =
+    resolveSpellOrbRollBonus(actor, cardContext.item);
+
+  const orbPassiveBonus =
+    resolveOrbRollPassiveBonus(actor, cardContext.item);
+
   const totalFinal =
-    totalBase + evaluacion.totalExtra;
+    totalBase +
+    evaluacion.totalExtra +
+    Number(evaluacion.dharmaBonus ?? 0) +
+    orbRollBonus.bonus +
+    orbPassiveBonus.bonus;
 
   await mtrolAplicarDharmaKarma(
     actor,
@@ -141,6 +263,17 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
   await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
     rolls: chatRolls.rolls,
+    mtrolCard: {
+      ...baseCardContext,
+      state:
+        evaluacion.detalles.length > 0
+          ? "critical"
+          : "normal",
+      total: totalFinal,
+      dharma: dharmaCardAudit,
+      orbBonus: orbRollBonus.bonus > 0 ? orbRollBonus : null,
+      orbPassiveBonus: orbPassiveBonus.bonus > 0 ? orbPassiveBonus : null
+    },
     content: `
       <div class="mtrol-chat-card mtrol-chat-success">
 
@@ -179,6 +312,23 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
 
         <hr>
 
+        ${
+          orbRollBonus.bonus > 0
+            ? `<div class="mtrol-details mtrol-orb-roll-bonus">
+                Orbe ${orbRollBonus.name} ${orbRollBonus.level === 5 ? "V" : "IV"}
+                <strong>+${orbRollBonus.bonus}</strong>
+              </div>
+              <hr>`
+            : ""
+        }
+
+        ${orbPassiveBonus.sources.map(source => `
+          <div class="mtrol-details mtrol-orb-passive-bonus">
+            ${source.passiveName} <strong>+${source.bonus}</strong>
+          </div>
+          <hr>
+        `).join("")}
+
         <div class="mtrol-total">
           Total final:
           <strong>${totalFinal}</strong>
@@ -190,10 +340,22 @@ export async function mtrolRoll(formula, actor, flavor = "Tirada MtRol") {
 
   return {
     pifia: false,
+    critico: evaluacion.detalles.length > 0,
     total: totalFinal,
     roll,
     rolls: chatRolls.rolls,
     extra: evaluacion.totalExtra,
+    dharmaBonus: Number(evaluacion.dharmaBonus ?? 0),
+    orbBonus: orbRollBonus.bonus,
+    orb: orbRollBonus.bonus > 0 ? orbRollBonus : null,
+    orbPassiveBonus: orbPassiveBonus.bonus,
+    orbPassives: orbPassiveBonus.sources,
+    dharmaSpend: activeDharmaContext
+      ? {
+          context: activeDharmaContext,
+          traces: evaluacion.dharmaTraces ?? []
+        }
+      : null,
     mano: danioManos.total,
     manoDer: danioManos.manoDer,
     manoIzq: danioManos.manoIzq

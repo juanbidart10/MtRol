@@ -1,6 +1,40 @@
+import {
+  MTROL_ORB_IDS
+} from "../scripts/progression/orb-registry.js";
+
 const fields = foundry.data.fields;
 
+const MTROL_ALIGNMENT_TYPES = Object.freeze([
+  "tanque",
+  "soporte",
+  "arcano",
+  "destructor",
+  "dungeoner"
+]);
+
 export class PersonajeDataModel extends foundry.abstract.TypeDataModel {
+  static migrateData(source) {
+    source ??= {};
+
+    // Actor.update() also runs migration against partial system sources.  Do
+    // not materialize absent containers here: doing so turns an unrelated
+    // update into an implicit reset. Schema initials provide legacy defaults
+    // when a complete document is constructed.
+    if (
+      source.alignment &&
+      Object.hasOwn(source.alignment, "type") &&
+      (
+        source.alignment.type === undefined ||
+        source.alignment.type === null ||
+        (typeof source.alignment.type === "string" && source.alignment.type.trim().length === 0)
+      )
+    ) {
+      source.alignment.type = null;
+    }
+
+    return super.migrateData(source);
+  }
+
   static defineSchema() {
     return {
       vitales: new fields.SchemaField({
@@ -52,6 +86,98 @@ export class PersonajeDataModel extends foundry.abstract.TypeDataModel {
         despertar: new fields.StringField({ initial: "" }),
         habilidadEspecial1: new fields.StringField({ initial: "" }),
         habilidadEspecial2: new fields.StringField({ initial: "" })
+      }),
+
+      progression: new fields.SchemaField({
+        missionsCompleted: new fields.NumberField({
+          required: false,
+          nullable: false,
+          initial: 0,
+          integer: true,
+          min: 0
+        }),
+        dungeonsCompleted: new fields.NumberField({
+          required: false,
+          nullable: false,
+          initial: 0,
+          integer: true,
+          min: 0
+        }),
+        meritCredits: new fields.NumberField({
+          required: false,
+          nullable: false,
+          initial: 0,
+          integer: true,
+          min: 0
+        }),
+        defeatedLevel5Enemy: new fields.BooleanField({
+          required: false,
+          nullable: false,
+          initial: false
+        }),
+        dmApproval: new fields.BooleanField({
+          required: false,
+          nullable: false,
+          initial: false
+        })
+      }),
+
+      pendingAdvancement: new fields.SchemaField({
+        attributePoints: new fields.NumberField({
+          required: false,
+          nullable: false,
+          initial: 0,
+          integer: true,
+          min: 0
+        }),
+        competencePoints: new fields.NumberField({
+          required: false,
+          nullable: false,
+          initial: 0,
+          integer: true,
+          min: 0
+        })
+      }),
+
+      orbs: new fields.ArrayField(
+        new fields.SchemaField({
+          id: new fields.StringField({
+            required: true,
+            nullable: false,
+            blank: false
+          }),
+          type: new fields.StringField({
+            required: true,
+            nullable: false,
+            choices: MTROL_ORB_IDS
+          }),
+          level: new fields.NumberField({
+            required: true,
+            nullable: false,
+            integer: true,
+            min: 1,
+            max: 5
+          })
+        }),
+        {
+          required: false,
+          nullable: false,
+          initial: []
+        }
+      ),
+
+      alignment: new fields.SchemaField({
+        type: new fields.StringField({
+          required: false,
+          nullable: true,
+          initial: null,
+          choices: MTROL_ALIGNMENT_TYPES
+        }),
+        unlocked: new fields.BooleanField({
+          required: false,
+          nullable: false,
+          initial: false
+        })
       }),
 
       inventarioMaxSlots: new fields.NumberField({

@@ -6,6 +6,8 @@
 // Las tiradas deben llamar manualmente a mtrolAplicarDharmaKarma().
 // =========================
 
+import { buildMtrolDestinyCardContent } from "../ui/destiny-chat-card.js";
+
 export function registerDharmaKarmaHooks() {
   console.log("MtRol | Dharma/Karma hooks desactivados. Sistema manual activo.");
 }
@@ -25,19 +27,14 @@ export async function mtrolAplicarDharmaKarma(actor, cantidadDharma = 0, cantida
     dharmaActual++;
 
     if (dharmaActual >= 5) {
-      ui.notifications.info(`🏆 ${actor.name} obtuvo una Carta de Dharma`);
+      ui.notifications.info(`${actor.name} obtuvo una Carta de Dharma`);
 
       await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `
-          <div style="text-align:center; font-size:18px; padding:10px;">
-            🏆 <strong>Carta de Dharma</strong> 🏆
-            <br><br>
-            ${actor.name} alcanzó 5 puntos de Dharma.
-            <br>
-            Sus puntos de Dharma se reinician.
-          </div>
-        `
+        content: buildMtrolDestinyCardContent({
+          type: "dharma",
+          actorName: actor.name
+        })
       });
 
       dharmaActual = 0;
@@ -48,19 +45,14 @@ export async function mtrolAplicarDharmaKarma(actor, cantidadDharma = 0, cantida
     karmaActual++;
 
     if (karmaActual >= 5) {
-      ui.notifications.info(`💀 ${actor.name} obtuvo una Carta de Karma`);
+      ui.notifications.info(`${actor.name} obtuvo una Carta de Karma`);
 
       await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
-        content: `
-          <div style="text-align:center; font-size:18px; padding:10px;">
-            💀 <strong>Carta de Karma</strong> 💀
-            <br><br>
-            ${actor.name} alcanzó 5 puntos de Karma.
-            <br>
-            Sus puntos de Karma se reinician.
-          </div>
-        `
+        content: buildMtrolDestinyCardContent({
+          type: "karma",
+          actorName: actor.name
+        })
       });
 
       karmaActual = 0;

@@ -58,6 +58,15 @@ export async function rollMtrolInitiative(actor) {
     await mtrolCreateRollMessage({
       speaker: ChatMessage.getSpeaker({ actor }),
       rolls: mainChatRolls.rolls,
+      mtrolCard: {
+        family: "check",
+        state: "fumble",
+        title: "Iniciativa MtROL",
+        categoryLabel: "Iniciativa",
+        formula: "1D10 + DESTREZA",
+        total: 0,
+        icon: actor.img ?? ""
+      },
       content: `
         <div class="mtrol-chat-card mtrol-chat-pifia">
           <h2>💀 PIFIA DE INICIATIVA 💀</h2>
@@ -104,6 +113,18 @@ export async function rollMtrolInitiative(actor) {
       ...mainChatRolls.rolls,
       ...secondaryChatRolls.rolls
     ],
+    mtrolCard: {
+      family: "check",
+      state:
+        evaluacion.detalles.length > 0
+          ? "critical"
+          : "normal",
+      title: "Iniciativa MtROL",
+      categoryLabel: "Iniciativa",
+      formula: "1D10 + DESTREZA + 1D10",
+      total: totalFinal,
+      icon: actor.img ?? ""
+    },
     content: `
       <div class="mtrol-chat-card mtrol-chat-success">
         <h2>⚡ Iniciativa MtRol</h2>

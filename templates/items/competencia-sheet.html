@@ -22,6 +22,7 @@
 
       <div class="mtrol-competencia-badges">
         <span>{{system.categoria}}</span>
+        {{#if rolLabel}}<span>{{rolLabel}}</span>{{/if}}
         <span>Nv. {{system.nivel}}</span>
       </div>
     </div>
@@ -68,6 +69,32 @@
                 <option value="pasiva" {{#if (eq system.categoria "pasiva")}}selected{{/if}}>Pasiva</option>
               </select>
             </div>
+
+            <div class="mtrol-field">
+              <label>Rol</label>
+              <select name="system.rol">
+                <option value="" {{#unless system.rol}}selected{{/unless}}>Sin definir</option>
+                <option value="offensive" {{#if (eq system.rol "offensive")}}selected{{/if}}>Ofensivo</option>
+                <option value="defensive" {{#if (eq system.rol "defensive")}}selected{{/if}}>Defensivo</option>
+                <option value="control" {{#if (eq system.rol "control")}}selected{{/if}}>Control</option>
+                <option value="support" {{#if (eq system.rol "support")}}selected{{/if}}>Soporte</option>
+                <option value="utility" {{#if (eq system.rol "utility")}}selected{{/if}}>Utilidad</option>
+                <option value="mobility" {{#if (eq system.rol "mobility")}}selected{{/if}}>Movilidad</option>
+              </select>
+            </div>
+
+            {{#if showOrbAssociation}}
+              <div class="mtrol-field wide">
+                <label>Orbe asociado</label>
+                <select name="system.orbType">
+                  <option value="" {{#unless system.orbType}}selected{{/unless}}>Sin Orbe asociado</option>
+                  {{#each orbOptions}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                  {{/each}}
+                </select>
+                <small>El bonus depende exclusivamente del Orbe de este tipo otorgado al Actor.</small>
+              </div>
+            {{/if}}
 
             <label class="mtrol-toggle">
               <span>Equipada en combate</span>
@@ -135,7 +162,7 @@
                      {{checked system.requiresOpposition}} />
             </label>
 
-            <div class="mtrol-field wide">
+            <div class="mtrol-field wide" data-mtrol-context="opposition" {{#unless showOppositionType}}hidden{{/unless}}>
               <label>Tipo de oposicion</label>
               <select name="system.oppositionType">
                 <option value="free" {{#if (eq system.oppositionType "free")}}selected{{/if}}>Libre</option>
@@ -218,11 +245,10 @@
             </div>
 
             <div class="mtrol-field">
-              <label>Coste MP</label>
-              <input type="number"
-                     name="system.costeMP"
-                     value="{{system.costeMP}}"
-                     min="0" />
+              <label>Costo Base</label>
+              <output>{{costoMP.base}} MP</output>
+              <small>{{costoMP.detalle}}</small>
+              {{#if costoMP.stackeable}}<small>Próximo uso: {{costoMP.proximoUso}} MP</small>{{/if}}
             </div>
 
             <div class="mtrol-field wide">
@@ -233,6 +259,7 @@
                      placeholder="1d10 + @atributos.aura" />
             </div>
 
+            <div class="mtrol-competencia-grid wide" data-mtrol-context="damage" {{#unless showDamageConfiguration}}hidden{{/unless}}>
             <div class="mtrol-field wide">
               <label>Formula de Dano</label>
               <input type="text"
@@ -246,6 +273,43 @@
               <input type="checkbox"
                      name="system.usaDanioLocalizado"
                      {{checked system.usaDanioLocalizado}} />
+            </label>
+
+              <div class="mtrol-field wide">
+                <label>Resolución de Daño</label>
+                <select name="system.damageResolution">
+                  <option value="immediate" {{#if (eq damageConfig.resolution "immediate")}}selected{{/if}}>Inmediato</option>
+                  <option value="onOppositionWin" {{#if (eq damageConfig.resolution "onOppositionWin")}}selected{{/if}}>Al ganar oposición</option>
+                </select>
+              </div>
+
+              <div class="mtrol-field">
+                <label>Modo</label>
+                <select name="system.damageMode">
+                  <option value="automatic" {{#if (eq damageConfig.mode "automatic")}}selected{{/if}}>Automático</option>
+                  <option value="enabled" {{#if (eq damageConfig.mode "enabled")}}selected{{/if}}>Habilitar ejecución</option>
+                </select>
+              </div>
+
+              <div class="mtrol-field">
+                <label>Tipo de Resolución</label>
+                <select name="system.damageCostType">
+                  <option value="none" {{#if (eq damageConfig.costType "none")}}selected{{/if}}>Sin costo adicional</option>
+                  <option value="basic" {{#if (eq damageConfig.costType "basic")}}selected{{/if}}>Básico</option>
+                </select>
+              </div>
+
+              <div class="mtrol-field wide">
+                <label>Costo Adicional</label>
+                <output data-mtrol-damage-additional-cost>{{#if damageConfig.additionalMpCost}}+{{damageConfig.additionalMpCost}} MP al ejecutar{{else}}Sin costo adicional{{/if}}</output>
+              </div>
+            </div>
+
+            <label class="mtrol-toggle">
+              <span>Ejecuta Dano</span>
+              <input type="checkbox"
+                     name="system.ejecutaDanio"
+                     {{checked system.ejecutaDanio}} />
             </label>
 
           </div>
@@ -266,25 +330,6 @@
                      name="system.banner"
                      value="{{system.banner}}"
                      placeholder="systems/mtrol/assets/skills/fireball.webp" />
-            </div>
-
-            <div class="mtrol-field">
-              <label>Elemento</label>
-              <input type="text"
-                     name="system.elemento"
-                     value="{{system.elemento}}"
-                     placeholder="fuego, hielo, sombra..." />
-            </div>
-
-            <div class="mtrol-field">
-              <label>Rareza</label>
-              <select name="system.rareza">
-                <option value="comun" {{#if (eq system.rareza "comun")}}selected{{/if}}>Comun</option>
-                <option value="magica" {{#if (eq system.rareza "magica")}}selected{{/if}}>Magica</option>
-                <option value="rara" {{#if (eq system.rareza "rara")}}selected{{/if}}>Rara</option>
-                <option value="epica" {{#if (eq system.rareza "epica")}}selected{{/if}}>Epica</option>
-                <option value="legendaria" {{#if (eq system.rareza "legendaria")}}selected{{/if}}>Legendaria</option>
-              </select>
             </div>
 
             <div class="mtrol-field">

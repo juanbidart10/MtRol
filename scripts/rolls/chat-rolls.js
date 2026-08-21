@@ -5,6 +5,10 @@
 // Este helper nunca evalua ni modifica una tirada.
 // =========================
 
+import {
+  buildMtrolCardMetadata
+} from "../ui/chat-card-assets.js";
+
 function normalizeEntry(entry) {
   if (!entry) return null;
 
@@ -132,14 +136,36 @@ export async function mtrolPrepareChatRolls(entries = []) {
 }
 
 export async function mtrolCreateRollMessage(data = {}, options = {}) {
+  const {
+    mtrolCard = null,
+    ...baseMessageData
+  } = data;
+
   const hasRolls =
-    Array.isArray(data.rolls) && data.rolls.length > 0;
+    Array.isArray(baseMessageData.rolls) && baseMessageData.rolls.length > 0;
+
+  const messageData =
+    hasRolls || mtrolCard
+      ? {
+          ...baseMessageData,
+          flags: {
+            ...(baseMessageData.flags ?? {}),
+            mtrol: {
+              ...(baseMessageData.flags?.mtrol ?? {}),
+              rollCard: buildMtrolCardMetadata(
+                mtrolCard ?? {},
+                baseMessageData.rolls ?? []
+              )
+            }
+          }
+        }
+      : baseMessageData;
 
   const dice3d =
     hasRolls ? game.dice3d : null;
 
   if (!dice3d) {
-    return ChatMessage.create(data, options);
+    return ChatMessage.create(messageData, options);
   }
 
   // Estas tiradas ya fueron mostradas por mtrolMostrarDados. Dice So Nice
@@ -155,7 +181,7 @@ export async function mtrolCreateRollMessage(data = {}, options = {}) {
     true;
 
   try {
-    return await ChatMessage.create(data, options);
+    return await ChatMessage.create(messageData, options);
   } finally {
     if (hadOwnSetting) {
       dice3d.messageHookDisabled =

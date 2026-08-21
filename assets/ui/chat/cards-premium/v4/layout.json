@@ -1,0 +1,54 @@
+{
+  "coordinateSystem": {
+    "unit": "percent of rendered card box",
+    "origin": "top-left",
+    "note": "Apply each box with absolute positioning over a 100% x 100% PNG shell. Keep the card aspect ratio from manifest.json."
+  },
+  "sharedRules": {
+    "topMedallion": "runtime action icon only",
+    "centralRuneCircle": "final result only",
+    "typeface": "Morpheus",
+    "dice": "Foundry native Roll DOM; never rasterize",
+    "modifiers": "derive from actual parsed/evaluated formula; never invent or duplicate"
+  },
+  "compact": {
+    "icon": { "left": 39.0, "top": 1.5, "width": 22.0, "height": 13.5 },
+    "title": { "left": 12.0, "top": 14.0, "width": 76.0, "height": 11.0 },
+    "category": { "left": 31.0, "top": 25.5, "width": 38.0, "height": 5.0 },
+    "formula": { "left": 13.0, "top": 31.0, "width": 74.0, "height": 4.0 },
+    "resultLabel": { "left": 25.0, "top": 37.0, "width": 50.0, "height": 3.5 },
+    "total": { "left": 18.0, "top": 40.0, "width": 64.0, "height": 28.0 },
+    "state": { "left": 33.0, "top": 74.2, "width": 34.0, "height": 5.0 },
+    "toggle": { "left": 22.0, "top": 82.0, "width": 56.0, "height": 5.0 }
+  },
+  "expanded": {
+    "icon": { "left": 39.0, "top": 1.0, "width": 22.0, "height": 12.0 },
+    "title": { "left": 12.0, "top": 12.5, "width": 76.0, "height": 10.0 },
+    "category": { "left": 31.0, "top": 23.0, "width": 38.0, "height": 4.7 },
+    "formula": { "left": 13.0, "top": 28.0, "width": 74.0, "height": 3.8 },
+    "resultLabel": { "left": 25.0, "top": 33.0, "width": 50.0, "height": 3.2 },
+    "total": { "left": 20.0, "top": 35.5, "width": 60.0, "height": 18.5 },
+    "state": { "left": 33.0, "top": 53.8, "width": 34.0, "height": 4.0 },
+    "breakdown": { "left": 15.0, "top": 57.0, "width": 70.0, "height": 35.0 },
+    "breakdownTitle": { "left": 20.0, "top": 58.0, "width": 60.0, "height": 3.5 },
+    "diceRows": { "left": 20.0, "top": 62.0, "width": 60.0, "height": 16.0 },
+    "modifiersTitle": { "left": 20.0, "top": 79.2, "width": 60.0, "height": 3.5 },
+    "modifiers": { "left": 20.0, "top": 83.0, "width": 60.0, "height": 7.0 },
+    "toggle": { "left": 25.0, "top": 92.0, "width": 50.0, "height": 3.0 }
+  },
+  "composite": {
+    "icon": { "left": 39.0, "top": 1.0, "width": 22.0, "height": 11.0 },
+    "title": { "left": 12.0, "top": 11.2, "width": 76.0, "height": 8.0 },
+    "category": { "left": 31.0, "top": 19.0, "width": 38.0, "height": 4.2 },
+    "formula": { "left": 13.0, "top": 23.5, "width": 74.0, "height": 3.3 },
+    "resultLabel": { "left": 25.0, "top": 28.0, "width": 50.0, "height": 3.0 },
+    "total": { "left": 20.0, "top": 30.0, "width": 60.0, "height": 15.0 },
+    "state": { "left": 34.0, "top": 45.5, "width": 32.0, "height": 3.5 },
+    "breakdownPrimary": { "left": 15.0, "top": 49.0, "width": 70.0, "height": 21.5 },
+    "breakdownSecondary": { "left": 15.0, "top": 71.2, "width": 70.0, "height": 21.5 },
+    "panelTitleHeight": 3.0,
+    "panelDiceRowsHeight": 10.0,
+    "panelModifiersHeight": 5.0,
+    "toggle": { "left": 25.0, "top": 93.0, "width": 50.0, "height": 2.8 }
+  }
+}

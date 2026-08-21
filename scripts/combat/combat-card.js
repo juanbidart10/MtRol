@@ -15,7 +15,8 @@ export async function crearCombatCard({
   costoTotal = 0,
   evaluacionDanio = null,
   totalBaseDanio = null,
-  totalFinalDanio = null
+  totalFinalDanio = null,
+  cardContext = {}
 } = {}) {
   if (!actor) {
     console.warn("MTROL | crearCombatCard cancelado: falta actor.");
@@ -95,6 +96,19 @@ export async function crearCombatCard({
       ...damageChatRolls.rolls,
       ...localizationChatRolls.rolls
     ],
+    mtrolCard: {
+      ...cardContext,
+      family: "damage",
+      state:
+        hayCritico
+          ? "critical"
+          : "normal",
+      title: cardContext.title ?? "Resultado de Combate",
+      categoryLabel: "Daño localizado",
+      formula: damageRoll.formula ?? "",
+      total: finalDanio,
+      icon: cardContext.icon ?? actor.img ?? ""
+    },
     content: `
       <div class="mtrol-combat-card">
         <div class="mtrol-combat-header">

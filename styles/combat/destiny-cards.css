@@ -1,0 +1,93 @@
+.mtrol-destiny-card {
+  position: relative;
+  width: 100%;
+  max-width: 285px;
+  margin: 0 auto;
+  overflow: hidden;
+  color: #f3e5c2;
+  background: transparent;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+}
+
+.mtrol-destiny-card__art {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mtrol-destiny-card__content {
+  position: absolute;
+  top: 30%;
+  left: 9%;
+  right: 9%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.mtrol-destiny-card__actor,
+.mtrol-destiny-card__event,
+.mtrol-destiny-card__resource,
+.mtrol-destiny-card__reset {
+  width: 100%;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  overflow-wrap: anywhere;
+}
+
+.mtrol-destiny-card__actor {
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mtrol-destiny-card__event {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.mtrol-destiny-card__resource {
+  margin-top: 5px;
+  font-size: 23px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.mtrol-destiny-card__reset {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  opacity: 0.82;
+}
+
+.mtrol-destiny-card--dharma .mtrol-destiny-card__content {
+  color: #d6b45c;
+}
+
+.mtrol-destiny-card--dharma .mtrol-destiny-card__resource {
+  color: #e2be58;
+  text-shadow:
+    0 1px 0 #5c3c0d,
+    0 -1px 0 #f2d77e,
+    0 0 5px rgb(220 172 58 / 45%);
+}
+
+.mtrol-destiny-card--karma .mtrol-destiny-card__content {
+  color: #b84a43;
+}
+
+.mtrol-destiny-card--karma .mtrol-destiny-card__resource {
+  color: #b5433f;
+  text-shadow:
+    0 1px 0 #3b0b0c,
+    0 -1px 0 #db6860,
+    0 0 5px rgb(155 25 30 / 50%);
+}

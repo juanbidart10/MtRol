@@ -11,6 +11,14 @@ import {
   getEquipmentItemForSlot
 } from "../items/item-invariants.js";
 
+import {
+  mtrolCreateRollMessage
+} from "../rolls/chat-rolls.js";
+
+import {
+  applyDamageToHpAuthoritative
+} from "../actors/actor-resource-service.js";
+
 // =========================
 // MTROL - DAMAGE AUTHORIZED
 // =========================
@@ -33,6 +41,10 @@ function getDeathUpdateOptions(targetTokenDocument) {
   return {
     mtrolDeathTargetTokenUuid: targetTokenDocument?.uuid ?? null
   };
+}
+
+function createDamageTransactionId(prefix) {
+  return `${prefix}:${globalThis.foundry?.utils?.randomID?.() ?? crypto.randomUUID()}`;
 }
 
 // =========================
@@ -123,20 +135,26 @@ export async function aplicarDanioAutorizado({
     }
   }
 
-  const hpNuevo =
-    Math.max(0, hpActual - danioRestante);
+  const hpWrite = await applyDamageToHpAuthoritative(targetActor, danioRestante, {
+    transactionId: createDamageTransactionId("damage-simple"),
+    updateOptions: getDeathUpdateOptions(targetTokenDocument)
+  });
+  const hpNuevo = hpWrite.hpAfter;
 
-  await targetActor.update(
-    {
-      "system.vitales.hp.value": hpNuevo
-    },
-    getDeathUpdateOptions(targetTokenDocument)
-  );
-
-  await ChatMessage.create({
+  await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({
       actor: attackerActor
     }),
+
+    mtrolCard: {
+      family: "damage",
+      state: "normal",
+      title: "Daño aplicado",
+      categoryLabel: "Daño autorizado",
+      formula: String(danio),
+      total: danio,
+      icon: attackerActor?.img ?? ""
+    },
 
     content: `
       <div class="mtrol-chat-card">
@@ -233,15 +251,11 @@ export async function aplicarDanioLocalizadoAutorizado({
   };
 
   if (!item) {
-    const hpNuevo =
-      Math.max(0, hpActual - danioFinal);
-
-    await targetActor.update(
-      {
-        "system.vitales.hp.value": hpNuevo
-      },
-      getDeathUpdateOptions(targetTokenDocument)
-    );
+    const hpWrite = await applyDamageToHpAuthoritative(targetActor, danioFinal, {
+      transactionId: createDamageTransactionId("damage-localized-unarmored"),
+      updateOptions: getDeathUpdateOptions(targetTokenDocument)
+    });
+    const hpNuevo = hpWrite.hpAfter;
 
     resultado.hpPerdido =
       danioFinal;
@@ -293,15 +307,11 @@ export async function aplicarDanioLocalizadoAutorizado({
     }
 
     if (danioSobrante > 0) {
-      const hpNuevo =
-        Math.max(0, hpActual - danioSobrante);
-
-      await targetActor.update(
-        {
-          "system.vitales.hp.value": hpNuevo
-        },
-        getDeathUpdateOptions(targetTokenDocument)
-      );
+      const hpWrite = await applyDamageToHpAuthoritative(targetActor, danioSobrante, {
+        transactionId: createDamageTransactionId("damage-localized-armored"),
+        updateOptions: getDeathUpdateOptions(targetTokenDocument)
+      });
+      const hpNuevo = hpWrite.hpAfter;
 
       resultado.hpNuevo =
         hpNuevo;

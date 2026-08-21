@@ -1,0 +1,55 @@
+{
+  "id": "mtrol-chat-cards-premium-v4",
+  "version": 4,
+  "runtimeRoot": "systems/mtrol/assets/ui/chat/cards-premium/v4",
+  "rendering": {
+    "width": 720,
+    "alpha": true,
+    "backgroundMode": "single transparent foreground shell",
+    "backgroundSize": "100% 100%",
+    "dynamicContentBakedIntoPng": false
+  },
+  "formats": {
+    "compact": {
+      "height": 1388,
+      "use": "desglose cerrado"
+    },
+    "expanded": {
+      "height": 1594,
+      "use": "un Roll con desglose abierto"
+    },
+    "composite": {
+      "height": 1721,
+      "use": "dos Rolls relacionados con desglose abierto"
+    }
+  },
+  "families": [
+    "attack",
+    "defense",
+    "damage",
+    "healing",
+    "spell",
+    "save",
+    "check",
+    "utility",
+    "critical",
+    "fumble"
+  ],
+  "filePattern": "{format}/{family}.png",
+  "selectionPriority": [
+    "fumble",
+    "critical",
+    "semantic family"
+  ],
+  "runtimeSlots": [
+    "action icon",
+    "title",
+    "category",
+    "formula",
+    "final total",
+    "critical or fumble state",
+    "native Foundry dice rows",
+    "real formula modifiers",
+    "breakdown toggle"
+  ]
+}

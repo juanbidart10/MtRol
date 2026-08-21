@@ -173,27 +173,42 @@
 
             <div class="mtrol-attribute-group-grid">
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="resistencia" data-atributo="resistencia">
+              <div class="atributo mtrol-attribute-card" data-attr="resistencia" data-atributo="resistencia">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-shield-alt"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Resistencia</label>
                   <input type="number" name="system.atributos.resistencia" value="{{system.atributos.resistencia}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.resistencia}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:resistencia" data-mtrol-formula="1d10 + {{system.atributos.resistencia}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="resistencia">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="fuerza" data-atributo="fuerza">
+              <div class="atributo mtrol-attribute-card" data-attr="fuerza" data-atributo="fuerza">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-fist-raised"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Fuerza</label>
                   <input type="number" name="system.atributos.fuerza" value="{{system.atributos.fuerza}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.fuerza}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:fuerza" data-mtrol-formula="1d10 + {{system.atributos.fuerza}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="fuerza">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="destreza" data-atributo="destreza">
+              <div class="atributo mtrol-attribute-card" data-attr="destreza" data-atributo="destreza">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-running"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Destreza</label>
                   <input type="number" name="system.atributos.destreza" value="{{system.atributos.destreza}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.destreza}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:destreza" data-mtrol-formula="1d10 + {{system.atributos.destreza}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="destreza">Ejecutar</button>
                 </div>
               </div>
             </div>
@@ -206,27 +221,42 @@
 
             <div class="mtrol-attribute-group-grid">
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="inteligencia" data-atributo="inteligencia">
+              <div class="atributo mtrol-attribute-card" data-attr="inteligencia" data-atributo="inteligencia">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-brain"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Inteligencia</label>
                   <input type="number" name="system.atributos.inteligencia" value="{{system.atributos.inteligencia}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.inteligencia}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:inteligencia" data-mtrol-formula="1d10 + {{system.atributos.inteligencia}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="inteligencia">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="voluntad" data-atributo="voluntad">
+              <div class="atributo mtrol-attribute-card" data-attr="voluntad" data-atributo="voluntad">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-fire"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Voluntad</label>
                   <input type="number" name="system.atributos.voluntad" value="{{system.atributos.voluntad}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.voluntad}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:voluntad" data-mtrol-formula="1d10 + {{system.atributos.voluntad}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="voluntad">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="percepcion" data-atributo="percepcion">
+              <div class="atributo mtrol-attribute-card" data-attr="percepcion" data-atributo="percepcion">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-eye"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Percepción</label>
                   <input type="number" name="system.atributos.percepcion" value="{{system.atributos.percepcion}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.percepcion}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:percepcion" data-mtrol-formula="1d10 + {{system.atributos.percepcion}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="percepcion">Ejecutar</button>
                 </div>
               </div>
             </div>
@@ -239,27 +269,42 @@
 
             <div class="mtrol-attribute-group-grid">
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="carisma" data-atributo="carisma">
+              <div class="atributo mtrol-attribute-card" data-attr="carisma" data-atributo="carisma">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-theater-masks"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Carisma</label>
                   <input type="number" name="system.atributos.carisma" value="{{system.atributos.carisma}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.carisma}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:carisma" data-mtrol-formula="1d10 + {{system.atributos.carisma}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="carisma">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="aura" data-atributo="aura">
+              <div class="atributo mtrol-attribute-card" data-attr="aura" data-atributo="aura">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-sun"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Aura</label>
                   <input type="number" name="system.atributos.aura" value="{{system.atributos.aura}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.aura}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:aura" data-mtrol-formula="1d10 + {{system.atributos.aura}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="aura">Ejecutar</button>
                 </div>
               </div>
 
-              <div class="atributo rollable mtrol-roll-atributo mtrol-attribute-card" data-attr="suerte" data-atributo="suerte">
+              <div class="atributo mtrol-attribute-card" data-attr="suerte" data-atributo="suerte">
                 <div class="mtrol-attribute-icon" aria-hidden="true"><i class="fas fa-dice-d20"></i></div>
                 <div class="mtrol-attribute-main">
                   <label>Suerte</label>
                   <input type="number" name="system.atributos.suerte" value="{{system.atributos.suerte}}" {{#unless esGM}}disabled{{/unless}}>
+                  <span class="mtrol-action-formula">1D10 + {{system.atributos.suerte}}</span>
+                </div>
+                <div class="mtrol-dharma-action" data-mtrol-section="atributos" data-mtrol-action-key="attribute:suerte" data-mtrol-formula="1d10 + {{system.atributos.suerte}}" data-mtrol-dharma-eligible="true">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{mtrolDharmaTitle}}" {{#unless mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute mtrol-roll-atributo" data-atributo="suerte">Ejecutar</button>
                 </div>
               </div>
             </div>
@@ -334,8 +379,7 @@
             {{#each habilidadesEquipadasCombate}}
 
               <article class="mtrol-combat-card mtrol-item"
-                       data-item-id="{{this.id}}"
-                       data-elemento="{{this.system.elemento}}">
+                       data-item-id="{{this.id}}">
 
                 <div class="mtrol-combat-card-image">
                   <img src="{{this.mtrolBanner}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
@@ -345,26 +389,31 @@
                 <div class="mtrol-combat-card-body">
 
                   <div class="mtrol-combat-card-school">
-                    {{#if this.system.elemento}}
-                      {{this.system.elemento}}
+                    {{#if this.mtrolRoleLabel}}
+                      {{this.mtrolRoleLabel}}
                     {{else}}
-                      {{this.system.tipo}}
+                      {{this.system.categoria}}
                     {{/if}}
                   </div>
 
                   <h3 class="mtrol-combat-card-title">{{this.name}}</h3>
 
                   <div class="mtrol-combat-card-meta">
-                    <span><i class="fas fa-tint"></i> MP {{this.system.costeMP}}</span>
+                    <span><i class="fas fa-tint"></i> MP {{this.mtrolMpCost}}</span>
                     <span><i class="fas fa-hourglass-half"></i> CD {{this.system.cooldown}}</span>
                   </div>
 
+                  <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
+
                   <div class="mtrol-combat-card-actions">
-                    <button type="button"
-                            class="mtrol-combat-use competencia-roll"
-                            data-item-id="{{this.id}}">
-                      Usar
-                    </button>
+                    <div class="mtrol-dharma-action"
+                         data-mtrol-section="combate"
+                         data-mtrol-action-key="item:{{this.id}}"
+                         data-mtrol-formula="{{this.mtrolRollFormula}}"
+                         data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
+                      <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                      <button type="button" class="mtrol-action-execute mtrol-combat-use competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
+                    </div>
 
                     <button type="button"
                             class="mtrol-combat-card-detail"
@@ -441,14 +490,25 @@
                     </div>
                   </div>
 
+                  <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
+
                   <div class="combat-skill-actions">
 
                     {{#if ../esGM}}
-                      <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
-                      <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                      {{#if this.mtrolIsProgressionCompetence}}
+                        <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                        <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                      {{/if}}
                     {{/if}}
 
-                    <a class="competencia-roll" data-item-id="{{this.id}}" title="Usar habilidad"><i class="fas fa-bolt"></i></a>
+                    <div class="mtrol-dharma-action mtrol-dharma-action--compact"
+                         data-mtrol-section="combate"
+                         data-mtrol-action-key="item:{{this.id}}"
+                         data-mtrol-formula="{{this.mtrolRollFormula}}"
+                         data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
+                      <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                      <button type="button" class="mtrol-action-execute competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
+                    </div>
 
                     {{#if this.system.equipadaCombate}}
                       {{#if ../esGM}}
@@ -531,22 +591,34 @@
                   <div class="competencia-info">
                     <span class="competencia-nombre">{{this.name}}</span>
                     <span class="competencia-subtitle">Competencia</span>
+                    <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
                   </div>
+                </div>
+
+                <div class="mtrol-dharma-action"
+                     data-mtrol-section="competencias"
+                     data-mtrol-action-key="item:{{this.id}}"
+                     data-mtrol-formula="{{this.mtrolRollFormula}}"
+                     data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
+                  <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
+                  <button type="button" class="mtrol-action-execute competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
                 </div>
 
                 <span class="competencia-controles">
 
                   {{#if ../esGM}}
-                    <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                    {{#if this.mtrolIsProgressionCompetence}}
+                      <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                    {{/if}}
                   {{/if}}
 
                   <span class="competencia-nivel">{{this.system.nivel}}</span>
 
                   {{#if ../esGM}}
-                    <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                    {{#if this.mtrolIsProgressionCompetence}}
+                      <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
+                    {{/if}}
                   {{/if}}
-
-                  <a class="competencia-roll" data-item-id="{{this.id}}" title="Tirar competencia"><i class="fas fa-dice"></i></a>
 
                   {{#if ../esGM}}
                     <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
@@ -960,7 +1032,14 @@
               <div class="progresion-card progresion-card--resource progresion-card--exp">
                 <label>EXP</label>
                 <input type="number" name="system.recursos.exp" value="{{system.recursos.exp}}" {{#unless esGM}}disabled{{/unless}}>
-                <div class="progresion-exp-bar" aria-hidden="true"><span></span></div>
+                {{#unless progressionEvaluation.maximumLevel}}
+                  <span class="progresion-exp-value">{{progressionEvaluation.expProgress.text}}</span>
+                  <div class="progresion-exp-bar" role="progressbar" aria-label="Progreso de experiencia" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{progressionEvaluation.expProgress.percent}}">
+                    <span style="--progresion-exp: {{progressionEvaluation.expProgress.percent}}%;"></span>
+                  </div>
+                {{else}}
+                  <span class="progresion-exp-value">Nivel m&aacute;ximo</span>
+                {{/unless}}
               </div>
 
               <div class="progresion-card progresion-card--resource">
@@ -973,6 +1052,168 @@
                 <input type="number" name="system.recursos.mvp" value="{{system.recursos.mvp}}" {{#unless esGM}}disabled{{/unless}}>
               </div>
             </div>
+          </section>
+
+          <section class="progresion-section progresion-section--requirements">
+            <div class="progresion-section-header progresion-section-header--status">
+              <div class="progresion-requirements-title-wrap">
+                {{#if progressionEvaluation.maximumLevel}}
+                  <div class="progresion-requirements-heading">
+                    <span aria-hidden="true"></span>
+                    <h3>NIVEL M&Aacute;XIMO ALCANZADO</h3>
+                    <span aria-hidden="true"></span>
+                  </div>
+                {{else}}
+                  <div class="progresion-requirements-heading">
+                    <span aria-hidden="true"></span>
+                    <h3>REQUISITOS PARA SUBIR DE NIVEL</h3>
+                    <span aria-hidden="true"></span>
+                  </div>
+                  <span class="progresion-current-level">Objetivo actual: Nivel {{progressionEvaluation.level}} &rarr; {{progressionEvaluation.nextLevel}}</span>
+                {{/if}}
+              </div>
+              {{#if esGM}}
+                {{#if progressionEvaluation.eligible}}
+                  <div class="progresion-level-up-wrap">
+                    <span class="progresion-eligible">Elegible para subir</span>
+                    <button type="button" class="mtrol-level-up">Subir de nivel</button>
+                  </div>
+                {{/if}}
+              {{/if}}
+            </div>
+
+            {{#unless progressionEvaluation.maximumLevel}}
+              <ul class="progresion-requirements">
+                {{#each progressionEvaluation.requirements}}
+                  <li class="{{#if met}}is-complete{{else}}is-pending{{/if}}">
+                    <span class="progresion-requirement-identity">
+                      <span class="progresion-requirement-icon" aria-hidden="true"><i class="fas {{icon}}"></i></span>
+                      <span class="progresion-requirement-label">{{label}}</span>
+                    </span>
+                    <span class="progresion-requirement-value">{{valueText}}</span>
+                    <span class="progresion-requirement-state">
+                      <i class="fas {{#if met}}fa-check{{else}}fa-circle{{/if}}" aria-hidden="true"></i>
+                      <span>{{stateLabel}}</span>
+                    </span>
+                  </li>
+                {{/each}}
+              </ul>
+            {{/unless}}
+
+            {{#if esGM}}
+              <div class="progresion-admin-grid">
+                <label>
+                  <span>Misiones completadas</span>
+                  <input type="number" min="0" step="1" name="system.progression.missionsCompleted" value="{{system.progression.missionsCompleted}}">
+                </label>
+                <label>
+                  <span>Dungeons completados</span>
+                  <input type="number" min="0" step="1" name="system.progression.dungeonsCompleted" value="{{system.progression.dungeonsCompleted}}">
+                </label>
+                <label>
+                  <span>Cr&eacute;ditos de m&eacute;rito</span>
+                  <input type="number" min="0" step="1" name="system.progression.meritCredits" value="{{system.progression.meritCredits}}">
+                </label>
+                <label class="progresion-admin-toggle">
+                  <input type="checkbox" name="system.progression.defeatedLevel5Enemy" {{checked system.progression.defeatedLevel5Enemy}}>
+                  <span>Enemigo nivel 5 derrotado</span>
+                </label>
+                <label class="progresion-admin-toggle">
+                  <input type="checkbox" name="system.progression.dmApproval" {{checked system.progression.dmApproval}}>
+                  <span>Aprobaci&oacute;n DM</span>
+                </label>
+              </div>
+            {{/if}}
+
+            {{#if mtrolPendingAdvancement.hasAny}}
+              <div class="progresion-pending">
+                <h4>Mejoras pendientes</h4>
+
+                {{#if mtrolPendingAdvancement.attributePoints}}
+                  <div class="progresion-pending-row">
+                    <label for="mtrol-pending-attribute">Atributo +1 ({{mtrolPendingAdvancement.attributePoints}})</label>
+                    <select id="mtrol-pending-attribute" class="mtrol-pending-attribute-select" {{#unless mtrolPendingAdvancement.attributeOptions.length}}disabled{{/unless}}>
+                      {{#each mtrolPendingAdvancement.attributeOptions}}
+                        <option value="{{key}}">{{label}} ({{value}})</option>
+                      {{else}}
+                        <option value="">Todos los atributos alcanzaron su m&aacute;ximo</option>
+                      {{/each}}
+                    </select>
+                    <button type="button" class="mtrol-spend-pending-attribute" {{#unless mtrolPendingAdvancement.attributeOptions.length}}disabled{{/unless}}>Asignar</button>
+                  </div>
+                {{/if}}
+
+                {{#if mtrolPendingAdvancement.competencePoints}}
+                  <div class="progresion-pending-row">
+                    <label for="mtrol-pending-competence">Competencia +1 ({{mtrolPendingAdvancement.competencePoints}})</label>
+                    <select id="mtrol-pending-competence" class="mtrol-pending-competence-select" {{#unless mtrolPendingAdvancement.competenceOptions.length}}disabled{{/unless}}>
+                      {{#each mtrolPendingAdvancement.competenceOptions}}
+                        <option value="{{id}}">{{name}} (nivel {{value}})</option>
+                      {{else}}
+                        <option value="">Todas las competencias alcanzaron su m&aacute;ximo</option>
+                      {{/each}}
+                    </select>
+                    <button type="button" class="mtrol-spend-pending-competence" {{#unless mtrolPendingAdvancement.competenceOptions.length}}disabled{{/unless}}>Asignar</button>
+                  </div>
+                {{/if}}
+              </div>
+            {{/if}}
+          </section>
+
+          <section class="progresion-section progresion-orbs">
+            <div class="progresion-section-header">
+              <h3>Orbes otorgados</h3>
+            </div>
+
+            <div class="progresion-orb-list">
+              {{#each mtrolOrbs}}
+                <article class="progresion-orb-row" data-orb-id="{{id}}">
+                  <div class="progresion-orb-main">
+                    {{#if ../esGM}}
+                      <select class="mtrol-orb-type" aria-label="Tipo de Orbe">
+                        {{#each typeOptions}}
+                          <option value="{{value}}" {{#if selected}}selected{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}</option>
+                        {{/each}}
+                      </select>
+                      <select class="mtrol-orb-level" aria-label="Nivel de Orbe">
+                        {{#each levelOptions}}
+                          <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                        {{/each}}
+                      </select>
+                      <button type="button" class="mtrol-orb-delete" aria-label="Eliminar Orbe">Eliminar</button>
+                    {{else}}
+                      <strong>{{name}}</strong>
+                      <span>Nivel {{level}} — {{levelName}}</span>
+                    {{/if}}
+                  </div>
+                  <div class="progresion-orb-detail">
+                    <span>Pasiva: {{passiveName}}</span>
+                    <small>{{passiveDescription}}</small>
+                    <span>Bonus de tirada: +{{rollBonus}}</span>
+                  </div>
+                </article>
+              {{else}}
+                <p class="progresion-orb-empty">Este Actor no posee Orbes otorgados.</p>
+              {{/each}}
+            </div>
+
+            {{#if esGM}}
+              <div class="progresion-orb-add">
+                <select class="mtrol-orb-add-type" aria-label="Tipo del nuevo Orbe" {{#unless mtrolOrbAddOptions.length}}disabled{{/unless}}>
+                  {{#each mtrolOrbAddOptions}}
+                    <option value="{{value}}">{{label}}</option>
+                  {{else}}
+                    <option value="">Todos los tipos ya fueron otorgados</option>
+                  {{/each}}
+                </select>
+                <select class="mtrol-orb-add-level" aria-label="Nivel inicial del nuevo Orbe">
+                  {{#each mtrolOrbLevelOptions}}
+                    <option value="{{value}}">{{label}}</option>
+                  {{/each}}
+                </select>
+                <button type="button" class="mtrol-orb-add" {{#unless mtrolOrbAddOptions.length}}disabled{{/unless}}>+ AGREGAR ORBE</button>
+              </div>
+            {{/if}}
           </section>
 
           <section class="progresion-section progresion-section--spiritual">

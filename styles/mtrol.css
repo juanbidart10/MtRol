@@ -20,6 +20,7 @@
 @import url("./ui/tabs.css");
 @import url("./ui/scrollbars.css");
 @import url("./ui/trade-dialog.css");
+@import url("./ui/dharma-selector.css");
 
 @import url("./apps/ambient-fx.css");
 
@@ -64,3 +65,9 @@
 @import url("./combat/combat-chat.css");
 @import url("./combat/combat-tab.css");
 @import url("./combat/initiative.css");
+@import url("./combat/premium-roll-cards.css");
+@import url("./combat/destiny-cards.css");
+
+#hotbar {
+  display: none !important;
+}

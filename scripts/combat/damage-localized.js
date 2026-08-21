@@ -11,6 +11,10 @@ import {
   destroyEquippedItem
 } from "../items/item-destruction-engine.js";
 
+import {
+  applyDamageToHpAuthoritative
+} from "../actors/actor-resource-service.js";
+
 // =========================
 // MTROL - DAMAGE LOCALIZED ENGINE
 // =========================
@@ -35,6 +39,10 @@ function getDeathUpdateOptions(targetTokenDocument) {
   return {
     mtrolDeathTargetTokenUuid: targetTokenDocument?.uuid ?? null
   };
+}
+
+function createDamageTransactionId(prefix) {
+  return `${prefix}:${globalThis.foundry?.utils?.randomID?.() ?? crypto.randomUUID()}`;
 }
 
 function previewDamageToTarget({
@@ -110,15 +118,11 @@ async function applyDamageToTarget({
     itemId ? actorObjetivo.items.get(itemId) : null;
 
   if (!item) {
-    const hpNuevo =
-      Math.max(0, resultado.hpAnterior - danioFinal);
-
-    await actorObjetivo.update(
-      {
-        "system.vitales.hp.value": hpNuevo
-      },
-      getDeathUpdateOptions(targetTokenDocument)
-    );
+    const hpWrite = await applyDamageToHpAuthoritative(actorObjetivo, danioFinal, {
+      transactionId: createDamageTransactionId("damage-localized-direct-unarmored"),
+      updateOptions: getDeathUpdateOptions(targetTokenDocument)
+    });
+    const hpNuevo = hpWrite.hpAfter;
 
     resultado.hpPerdido =
       danioFinal;
@@ -171,15 +175,11 @@ async function applyDamageToTarget({
   }
 
   if (danioSobrante > 0) {
-    const hpNuevo =
-      Math.max(0, resultado.hpAnterior - danioSobrante);
-
-    await actorObjetivo.update(
-      {
-        "system.vitales.hp.value": hpNuevo
-      },
-      getDeathUpdateOptions(targetTokenDocument)
-    );
+    const hpWrite = await applyDamageToHpAuthoritative(actorObjetivo, danioSobrante, {
+      transactionId: createDamageTransactionId("damage-localized-direct-armored"),
+      updateOptions: getDeathUpdateOptions(targetTokenDocument)
+    });
+    const hpNuevo = hpWrite.hpAfter;
 
     resultado.hpNuevo =
       hpNuevo;
@@ -304,7 +304,7 @@ export async function aplicarDanioLocalizado({
     aplicacion: "pendiente"
   };
 
-  if (game.user.isGM || actorObjetivo.isOwner) {
+  if (game.user.isGM) {
     console.log("MTROL | Applying damage directly");
 
     await applyDamageToTarget({

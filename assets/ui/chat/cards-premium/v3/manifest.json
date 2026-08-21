@@ -1,0 +1,71 @@
+{
+  "package": "mtrol-cards-premium-assets",
+  "version": "3.0.0",
+  "font": "Morpheus",
+  "formats": {
+    "compact": {
+      "purpose": "Resultado cerrado",
+      "width": 720,
+      "height": 1242,
+      "directory": "cards/compact"
+    },
+    "expanded": {
+      "purpose": "Un Roll desplegado",
+      "width": 720,
+      "height": 1260,
+      "directory": "cards/expanded"
+    },
+    "composite": {
+      "purpose": "Dos Rolls o secciones de resolución",
+      "width": 720,
+      "height": 1458,
+      "directory": "cards/composite"
+    }
+  },
+  "normalFamilies": [
+    "attack",
+    "defense",
+    "damage",
+    "healing",
+    "spell",
+    "save",
+    "check",
+    "utility"
+  ],
+  "priorityStates": [
+    "critical",
+    "fumble"
+  ],
+  "selectionPriority": [
+    "fumble",
+    "critical",
+    "normal-family"
+  ],
+  "dynamicContent": [
+    "action-icon",
+    "title",
+    "category",
+    "formula",
+    "total",
+    "native-foundry-roll",
+    "real-modifiers"
+  ],
+  "cssPolicy": {
+    "allowed": [
+      "layout",
+      "responsive-sizing",
+      "Morpheus-typography",
+      "semantic-text-color",
+      "expanded-content-visibility",
+      "native-roll-interaction"
+    ],
+    "forbidden": [
+      "drawn-borders",
+      "decorative-gradients",
+      "ornamental-pseudo-elements",
+      "generated-textures",
+      "decorative-box-shadows",
+      "CSS-glow-as-primary-art"
+    ]
+  }
+}

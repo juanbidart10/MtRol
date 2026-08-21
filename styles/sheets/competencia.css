@@ -296,6 +296,10 @@
   gap: 10px;
 }
 
+.mtrol-competencia-grid.wide {
+  grid-column: 1 / -1;
+}
+
 .mtrol-competencia-sheet .mtrol-field,
 .mtrol-competencia-sheet .mtrol-toggle {
   min-width: 0;
@@ -328,6 +332,19 @@
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+
+.mtrol-competencia-sheet .mtrol-field output {
+  display: block;
+  color: #f6ebcc;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.mtrol-competencia-sheet .mtrol-field small {
+  display: block;
+  color: rgba(236, 216, 160, .64);
+  font-size: 10px;
 }
 
 .mtrol-competencia-sheet input,
