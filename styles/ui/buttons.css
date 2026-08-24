@@ -51,8 +51,6 @@
 
 .item-edit,
 .item-delete,
-.item-equip,
-.item-unequip,
 .competencia-roll,
 .competencia-up,
 .competencia-down,
@@ -70,8 +68,6 @@
 }
 
 .item-edit:hover,
-.item-equip:hover,
-.item-unequip:hover,
 .competencia-roll:hover,
 .competencia-up:hover,
 .competencia-down:hover,

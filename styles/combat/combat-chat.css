@@ -25,6 +25,11 @@
     inset 0 0 14px rgba(255,220,120,0.035);
 }
 
+/* 57,5% equivale a aumentar un 15% el tamaño anterior de 50%. */
+.chat-message :is(.mtrol-chat-card, .mtrol-roll-card, .mtrol-destiny-card) {
+  zoom: .575;
+}
+
 .mtrol-chat-card h2 {
   margin: 0 0 12px 0;
 

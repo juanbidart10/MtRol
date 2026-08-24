@@ -129,6 +129,7 @@ export function evaluateProgression(actor) {
       counts,
       requiredExp: null,
       expProgress: { current: current.exp, required: null, percent: 100 },
+      globalProgress: { completed: 0, total: 0, percent: 100, text: "Nivel máximo" },
       requirements: [],
       eligible: false
     };
@@ -154,6 +155,11 @@ export function evaluateProgression(actor) {
   const rawPercent = definition.requiredExp > 0
     ? (current.exp / definition.requiredExp) * 100
     : 100;
+  const completedRequirements = requirements.filter(requirement => requirement.met).length;
+  const totalRequirements = requirements.length;
+  const globalPercent = totalRequirements > 0
+    ? Math.round((completedRequirements / totalRequirements) * 100)
+    : 100;
 
   return {
     level,
@@ -167,6 +173,12 @@ export function evaluateProgression(actor) {
       required: definition.requiredExp,
       percent: Math.min(100, Math.max(0, rawPercent)),
       text: `${formatProgressionNumber(current.exp)} / ${formatProgressionNumber(definition.requiredExp)} EXP`
+    },
+    globalProgress: {
+      completed: completedRequirements,
+      total: totalRequirements,
+      percent: globalPercent,
+      text: `${completedRequirements} / ${totalRequirements}`
     },
     requirements,
     eligible: requirements.every(requirement => requirement.met)

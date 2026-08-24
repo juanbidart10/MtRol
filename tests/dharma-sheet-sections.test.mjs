@@ -28,11 +28,11 @@ function sectionCount(section) {
   ).length;
 }
 
-test("Atributos, Competencias y Combate contienen el mismo patrón Gastar Dharma → Ejecutar", () => {
+test("Atributos y Competencias conservan Gastar Dharma; Combate usa Ejecutar → Quemar Dharma", () => {
   assert.equal(sectionCount("atributos"), 9);
   assert.equal(sectionCount("competencias"), 1);
   assert.equal(sectionCount("combate"), 2);
-  assert.equal((template.match(/class="mtrol-action-formula"/g) ?? []).length, 12);
+  assert.equal((template.match(/class="mtrol-action-formula"/g) ?? []).length, 11);
 
   const controls = template.match(
     /<div class="mtrol-dharma-action[^"]*"[\s\S]*?<\/div>/g
@@ -41,10 +41,16 @@ test("Atributos, Competencias y Combate contienen el mismo patrón Gastar Dharma
   assert.equal(controls.length, 12);
 
   for (const control of controls) {
-    const prepareIndex = control.indexOf("mtrol-dharma-prepare");
-    const executeIndex = control.indexOf("mtrol-action-execute");
+    const prepareIndex = control.indexOf('class="mtrol-dharma-prepare"');
+    const executeIndex = control.indexOf('class="mtrol-action-execute');
     assert.ok(prepareIndex >= 0, "cada acción ofrece preparación");
-    assert.ok(executeIndex > prepareIndex, "Ejecutar aparece después de Gastar Dharma");
+    if (control.includes('data-mtrol-section="combate"')) {
+      assert.ok(executeIndex < prepareIndex, "Ejecutar es el CTA principal de Combate");
+      assert.match(control, /Quemar Dharma/);
+    } else {
+      assert.ok(executeIndex > prepareIndex, "Ejecutar aparece después de Gastar Dharma");
+      assert.match(control, /Gastar Dharma/);
+    }
     assert.match(control, /data-mtrol-action-key=/);
     assert.match(control, /data-mtrol-formula=/);
     assert.match(control, /data-mtrol-dharma-eligible=/);

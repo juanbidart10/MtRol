@@ -175,3 +175,32 @@ test("los requisitos públicos son independientes entre llamadas", () => {
   assert.equal(first.nextLevel, 2);
   assert.equal(first.requiredExp, 1000);
 });
+
+test("progreso global cuenta sólo requisitos completos de forma binaria", () => {
+  const actor = makeActor({ level: 2, exp: 7500 });
+
+  let evaluation = evaluateProgression(actor);
+  assert.deepEqual(evaluation.globalProgress, { completed: 0, total: 6, percent: 0, text: "0 / 6" });
+
+  actor.system.recursos.mvp = 20;
+  evaluation = evaluateProgression(actor);
+  assert.equal(evaluation.globalProgress.completed, 1);
+  assert.equal(evaluation.globalProgress.percent, 17);
+  assert.equal(evaluation.requirements.find(requirement => requirement.key === "exp").met, false);
+
+  actor.system.progression.dungeonsCompleted = 1;
+  actor.system.progression.meritCredits = 5;
+  evaluation = evaluateProgression(actor);
+  assert.equal(evaluation.globalProgress.completed, 3);
+  assert.equal(evaluation.globalProgress.percent, 50);
+
+  actor.system.recursos.exp = 15000;
+  actor.system.atributos.resistencia = 5;
+  actor.system.atributos.carisma = 5;
+  actor.items.push(
+    { type: "competencia", system: { nivel: 5, categoria: "competencia", tipo: "" } },
+    { type: "competencia", system: { nivel: 5, categoria: "competencia", tipo: "" } }
+  );
+  evaluation = evaluateProgression(actor);
+  assert.deepEqual(evaluation.globalProgress, { completed: 6, total: 6, percent: 100, text: "6 / 6" });
+});

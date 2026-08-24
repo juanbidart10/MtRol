@@ -65,11 +65,8 @@
 
 .mtrol-attribute-group-header::before,
 .mtrol-attribute-group-header::after {
-  content: "";
-  height: 1px;
-  flex: 1 1 auto;
-
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, .50), transparent);
+  display: none;
+  content: none;
 }
 
 .mtrol-attribute-group-header span {

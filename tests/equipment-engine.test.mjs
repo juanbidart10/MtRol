@@ -8,6 +8,10 @@ globalThis.ui = {
   }
 };
 
+globalThis.game = {
+  user: { id: "gm", isGM: true }
+};
+
 const equipment =
   await import("../scripts/items/equipment-engine.js");
 const invariants =
@@ -94,7 +98,7 @@ test("reemplazar equipamiento devuelve el anterior al inventario sin crear docum
   assert.equal(actor.system.equipamiento.pies, "boots-b");
   assert.equal(bootsA.system.equipado, false);
   assert.equal(bootsB.system.equipado, true);
-  assert.equal(historicalOrphan.system.equipado, true);
+  assert.equal(historicalOrphan.system.equipado, false);
   assert.deepEqual(
     invariants.getInventoryItems(actor).map(item => item.id),
     ["boots-a", "historical-orphan"]

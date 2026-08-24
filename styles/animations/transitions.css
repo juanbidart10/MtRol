@@ -68,6 +68,29 @@
 
 }
 
+/* Cambio de pestaña: suficiente para mantener continuidad sin demorar la UI. */
+.mtrol-personaje-sheet .mtrol-sheet-body-v2 > .tab.active {
+  animation: mtrolSectionEnter .2s ease-out both;
+}
+
+@keyframes mtrolSectionEnter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtrol-personaje-sheet .mtrol-sheet-body-v2 > .tab.active {
+    animation: none;
+  }
+}
+
 /* =========================
    POP
 ========================= */

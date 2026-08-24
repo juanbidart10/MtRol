@@ -57,7 +57,8 @@ function createActor({
   mpValue = 30,
   mpMax = 100,
   attributePoints = 0,
-  competencePoints = 0
+  competencePoints = 0,
+  classId = undefined
 } = {}) {
   const req = requirementsFor(level);
   const items = (req.skills ?? []).map((nivel, index) => ({
@@ -77,6 +78,7 @@ function createActor({
     id: "hero",
     uuid: "Actor.hero",
     system: {
+      identidad: classId === undefined ? { clase: "Mago" } : { clase: "Mago", classId },
       recursos: {
         nivel: level,
         exp: req.exp + expExtra - (eligible ? 0 : 1),
@@ -211,6 +213,189 @@ test("pending existente se acumula con el ascenso", async () => {
     attributePoints: 2,
     competencePoints: 2
   });
+});
+
+test("Actor legacy sin classId sube de nivel con un único +10/+10 sin reconstrucción de Clase", async () => {
+  const actor = createActor({
+    level: 2,
+    hpValue: 24,
+    hpMax: 40,
+    mpValue: 13,
+    mpMax: 30,
+    classId: undefined
+  });
+  const before = structuredClone(actor.system.vitales);
+
+  await levelUpActorAuthoritative(levelPayload(actor, "legacy-no-class-level-up"), {
+    requestingUserId: "gm"
+  });
+
+  assert.equal(Object.hasOwn(actor.system.identidad, "classId"), false);
+  assert.deepEqual(actor.system.vitales.hp, {
+    value: before.hp.value + 10,
+    max: before.hp.max + 10
+  });
+  assert.deepEqual(actor.system.vitales.mp, {
+    value: before.mp.value + 10,
+    max: before.mp.max + 10
+  });
+  assert.equal(actor.updates.length, 1);
+});
+
+test("level-up con classId activo mantiene delta global exactamente +10/+10", async () => {
+  const actor = createActor({
+    level: 2,
+    hpValue: 24,
+    hpMax: 40,
+    mpValue: 13,
+    mpMax: 30,
+    classId: "mago"
+  });
+  actor.system.atributos.resistencia = 4;
+  actor.system.atributos.inteligencia = 1;
+  actor.system.atributos.fuerza = 5;
+  const before = structuredClone(actor.system.vitales);
+
+  await levelUpActorAuthoritative(levelPayload(actor, "active-class-level-up"), {
+    requestingUserId: "gm"
+  });
+
+  assert.equal(actor.system.vitales.hp.value - before.hp.value, 10);
+  assert.equal(actor.system.vitales.hp.max - before.hp.max, 10);
+  assert.equal(actor.system.vitales.mp.value - before.mp.value, 10);
+  assert.equal(actor.system.vitales.mp.max - before.mp.max, 10);
+  assert.equal(actor.updates.length, 1);
+});
+
+test("Owner mejora Resistencia con classId activo y el GM aplica también la transición HP", async () => {
+  const actor = createActor({
+    attributePoints: 1,
+    hpValue: 24,
+    hpMax: 30,
+    mpValue: 30,
+    mpMax: 30,
+    classId: "guerrero"
+  });
+  actor.system.atributos.resistencia = 2;
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "owner-resistance-transition",
+    attributeKey: "resistencia",
+    expectedValue: 2,
+    expectedPendingPoints: 1
+  }, { requestingUserId: "player" });
+
+  assert.equal(actor.system.atributos.resistencia, 3);
+  assert.deepEqual(actor.system.vitales.hp, { value: 34, max: 40 });
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 0);
+  assert.equal(actor.updates.length, 1);
+});
+
+test("Owner mejora Inteligencia con classId activo y el GM aplica también la transición MP", async () => {
+  const actor = createActor({
+    attributePoints: 1,
+    mpValue: 18,
+    mpMax: 30,
+    hpValue: 4,
+    hpMax: 30,
+    classId: "mago"
+  });
+  actor.system.atributos.inteligencia = 2;
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "owner-intelligence-transition",
+    attributeKey: "inteligencia",
+    expectedValue: 2,
+    expectedPendingPoints: 1
+  }, { requestingUserId: "player" });
+
+  assert.equal(actor.system.atributos.inteligencia, 3);
+  assert.deepEqual(actor.system.vitales.mp, { value: 28, max: 40 });
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 0);
+  assert.equal(actor.updates.length, 1);
+});
+
+test("Owner mejora Resistencia mágica y recibe exactamente +5 HP", async () => {
+  const actor = createActor({
+    level: 2,
+    attributePoints: 1,
+    hpValue: 24,
+    hpMax: 30,
+    mpValue: 30,
+    mpMax: 60,
+    classId: "mago"
+  });
+  actor.system.atributos.resistencia = 2;
+  actor.system.atributos.inteligencia = 4;
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "owner-magic-resistance-transition",
+    attributeKey: "resistencia",
+    expectedValue: 2,
+    expectedPendingPoints: 1
+  }, { requestingUserId: "player" });
+
+  assert.deepEqual(actor.system.vitales.hp, { value: 29, max: 35 });
+  assert.equal(actor.updates.length, 1);
+});
+
+test("Owner mejora Inteligencia física y recibe exactamente +5 MP", async () => {
+  const actor = createActor({
+    attributePoints: 1,
+    hpValue: 24,
+    hpMax: 50,
+    mpValue: 18,
+    mpMax: 30,
+    classId: "guerrero"
+  });
+  actor.system.atributos.resistencia = 4;
+  actor.system.atributos.inteligencia = 4;
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "owner-physical-intelligence-transition",
+    attributeKey: "inteligencia",
+    expectedValue: 4,
+    expectedPendingPoints: 1
+  }, { requestingUserId: "player" });
+
+  assert.deepEqual(actor.system.vitales.mp, { value: 23, max: 35 });
+  assert.equal(actor.updates.length, 1);
+});
+
+test("Owner mejora Resistencia e Inteligencia legacy sin classId sin recalcular HP/MP", async () => {
+  const actor = createActor({
+    attributePoints: 2,
+    hpValue: 17,
+    hpMax: 33,
+    mpValue: 19,
+    mpMax: 27,
+    classId: undefined
+  });
+  const vitalsBefore = structuredClone(actor.system.vitales);
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "legacy-resistance",
+    attributeKey: "resistencia",
+    expectedValue: actor.system.atributos.resistencia,
+    expectedPendingPoints: 2
+  }, { requestingUserId: "player" });
+
+  await spendPendingAttributePointAuthoritative({
+    actorUuid: actor.uuid,
+    transactionId: "legacy-intelligence",
+    attributeKey: "inteligencia",
+    expectedValue: actor.system.atributos.inteligencia,
+    expectedPendingPoints: 1
+  }, { requestingUserId: "player" });
+
+  assert.deepEqual(actor.system.vitales, vitalsBefore);
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 0);
+  assert.equal(actor.updates.length, 2, "una escritura por cada intención pending independiente");
 });
 
 test("Owner gasta un punto de atributo 4→5", async () => {

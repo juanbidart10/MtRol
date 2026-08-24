@@ -12,8 +12,13 @@ const RESOURCE_ORIGINS = new Set([
   "meditate",
   "level-up",
   "pending-attribute",
-  "pending-competence"
+  "pending-competence",
+  "class-resource-update",
+  "permanent-resource-update",
+  "gm-resource-set"
 ]);
+
+const MANUAL_SPIRITUAL_RESOURCES = new Set(["karma", "dharma"]);
 
 const completedTransactions = new Map();
 const actorResourceQueues = new Map();
@@ -116,6 +121,83 @@ export async function applyDamageToHpAuthoritative(actor, damage, {
       hpBefore,
       hpAfter
     };
+  });
+}
+
+function createResourceTransactionId() {
+  return foundry.utils.randomID?.() ?? crypto.randomUUID();
+}
+
+function getRequestingUser(userId) {
+  if (typeof game.users?.get === "function") return game.users.get(userId);
+  return Array.from(game.users ?? []).find(user => user.id === userId) ?? null;
+}
+
+async function getCanonicalActor(payload, trustedActor = null) {
+  if (trustedActor?.uuid === payload.actorUuid) return trustedActor;
+  return fromUuid(String(payload.actorUuid ?? ""));
+}
+
+export async function setActorSpiritualResourceAuthoritative(payload = {}, {
+  requestingUserId = game.user?.id,
+  trustedActor = null
+} = {}) {
+  const allowedKeys = new Set(["actorUuid", "transactionId", "resource", "value"]);
+  const unexpected = Object.keys(payload).filter(key => !allowedKeys.has(key));
+  if (unexpected.length > 0) {
+    throw new Error(`Payload de recurso manual inválido: ${unexpected.join(", ")}.`);
+  }
+
+  const requestingUser = getRequestingUser(requestingUserId);
+  if (!game.user?.isGM || !requestingUser?.isGM) {
+    throw new Error("Sólo un GM puede fijar Karma o Dharma manualmente.");
+  }
+
+  const resource = String(payload.resource ?? "").trim().toLowerCase();
+  if (!MANUAL_SPIRITUAL_RESOURCES.has(resource)) {
+    throw new TypeError("El recurso manual debe ser karma o dharma.");
+  }
+
+  const value = Number(payload.value);
+  if (!Number.isInteger(value) || value < 0 || value > 5) {
+    throw new RangeError("Karma y Dharma deben ser enteros entre 0 y 5.");
+  }
+
+  const actor = await getCanonicalActor(payload, trustedActor);
+  if (!actor) throw new Error("No se encontró el Actor autoritativo.");
+
+  return runActorResourceTransaction(actor, {
+    transactionId: payload.transactionId,
+    origin: "gm-resource-set"
+  }, async canonicalActor => {
+    const valueBefore = Number(canonicalActor.system?.recursos?.[resource] ?? 0);
+
+    await canonicalActor.update({
+      [`system.recursos.${resource}`]: value
+    }, { mtrolResourceOrigin: "gm-resource-set" });
+
+    return {
+      authorized: true,
+      resource,
+      valueBefore,
+      valueAfter: value
+    };
+  });
+}
+
+export async function setActorSpiritualResource(actor, resource, value) {
+  if (!game.user?.isGM) {
+    throw new Error("Sólo un GM puede fijar Karma o Dharma manualmente.");
+  }
+
+  return setActorSpiritualResourceAuthoritative({
+    actorUuid: actor?.uuid,
+    transactionId: createResourceTransactionId(),
+    resource,
+    value
+  }, {
+    requestingUserId: game.user.id,
+    trustedActor: actor
   });
 }
 

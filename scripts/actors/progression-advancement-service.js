@@ -21,6 +21,10 @@ import {
   isProgressionCompetence
 } from "../progression/progression-competence.js";
 
+import {
+  getActorResourceTransitionUpdate
+} from "./class-resource-service.js";
+
 function createTransactionId() {
   return foundry.utils.randomID?.() ?? crypto.randomUUID();
 }
@@ -145,15 +149,25 @@ export async function levelUpActorAuthoritative(payload = {}, {
       "system.recursos.nivel": currentLevel + 1,
       "system.recursos.exp": evaluation.current.exp - requiredExp,
       "system.recursos.mvp": evaluation.current.mvp - requiredMvp,
-      "system.vitales.hp.value": hpValue + 10,
-      "system.vitales.hp.max": hpMax + 10,
-      "system.vitales.mp.value": mpValue + 10,
-      "system.vitales.mp.max": mpMax + 10,
       "system.pendingAdvancement.attributePoints": attributePoints + 1,
       "system.pendingAdvancement.competencePoints": competencePoints + 1
     };
 
-    await canonicalActor.update(changes);
+    const resourceTransition = getActorResourceTransitionUpdate(canonicalActor, {
+      level: currentLevel + 1
+    });
+    if (resourceTransition.transition.active) {
+      Object.assign(changes, resourceTransition.changes);
+    } else {
+      Object.assign(changes, {
+        "system.vitales.hp.value": hpValue + 10,
+        "system.vitales.hp.max": hpMax + 10,
+        "system.vitales.mp.value": mpValue + 10,
+        "system.vitales.mp.max": mpMax + 10
+      });
+    }
+
+    await canonicalActor.update(changes, { mtrolClassResourceTransition: true });
 
     return {
       authorized: true,
@@ -202,11 +216,17 @@ export async function spendPendingAttributePointAuthoritative(payload = {}, {
     if (!Number.isInteger(current)) throw new Error("El valor actual del atributo es inválido.");
     if (current >= cap) throw new Error("El atributo ya alcanzó su máximo actual.");
 
+    const resourceTransition = getActorResourceTransitionUpdate(canonicalActor, {
+      ...(attributeKey === "resistencia" ? { resistance: current + 1 } : {}),
+      ...(attributeKey === "inteligencia" ? { intelligence: current + 1 } : {})
+    });
+
     await canonicalActor.update({
       ...getMigrationStableFields(canonicalActor),
       [`system.atributos.${attributeKey}`]: current + 1,
-      "system.pendingAdvancement.attributePoints": pending - 1
-    });
+      "system.pendingAdvancement.attributePoints": pending - 1,
+      ...resourceTransition.changes
+    }, { mtrolClassResourceTransition: true });
 
     return {
       authorized: true,

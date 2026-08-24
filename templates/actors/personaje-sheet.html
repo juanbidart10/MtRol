@@ -1,4 +1,4 @@
-﻿<form class="{{cssClass}} mtrol-personaje-sheet mtrol-sheet-v2" autocomplete="off">
+<form class="{{cssClass}} mtrol-personaje-sheet mtrol-sheet-v2" autocomplete="off">
 
   <!-- =============================== -->
   <!-- HEADER MASTER -->
@@ -14,22 +14,51 @@
              data-fallback="icons/svg/mystery-man.svg"
              data-edit="img"
              title="{{actor.name}}" />
+        <div class="mtrol-particle-field mtrol-particle-field--portrait mtrol-particle-field--gold is-active" aria-hidden="true">
+          <i class="mtrol-particle" style="--x: 9%; --y: 68%; --delay: -1.2s; --duration: 4.8s; --drift: -5px;"></i>
+          <i class="mtrol-particle" style="--x: 18%; --y: 28%; --delay: -3.4s; --duration: 5.6s; --drift: 4px;"></i>
+          <i class="mtrol-particle" style="--x: 30%; --y: 91%; --delay: -2.1s; --duration: 5.1s; --drift: -3px;"></i>
+          <i class="mtrol-particle" style="--x: 47%; --y: 7%; --delay: -4.7s; --duration: 6.2s; --drift: 5px;"></i>
+          <i class="mtrol-particle" style="--x: 65%; --y: 92%; --delay: -.8s; --duration: 5.4s; --drift: 3px;"></i>
+          <i class="mtrol-particle" style="--x: 79%; --y: 17%; --delay: -2.8s; --duration: 4.9s; --drift: -4px;"></i>
+          <i class="mtrol-particle" style="--x: 91%; --y: 55%; --delay: -4.1s; --duration: 5.8s; --drift: 4px;"></i>
+          <i class="mtrol-particle" style="--x: 84%; --y: 82%; --delay: -1.7s; --duration: 6.4s; --drift: -5px;"></i>
+          <i class="mtrol-particle" style="--x: 4%; --y: 43%; --delay: -3.8s; --duration: 6s; --drift: 3px;"></i>
+          <i class="mtrol-particle" style="--x: 55%; --y: 96%; --delay: -5.2s; --duration: 6.7s; --drift: -3px;"></i>
+          <i class="mtrol-particle" style="--x: 2%; --y: 24%; --delay: -.4s; --drift: 7px;"></i>
+          <i class="mtrol-particle" style="--x: 13%; --y: 88%; --delay: -1.9s; --drift: -6px;"></i>
+          <i class="mtrol-particle" style="--x: 24%; --y: 6%; --delay: -1.1s; --drift: 5px;"></i>
+          <i class="mtrol-particle" style="--x: 35%; --y: 82%; --delay: -2.3s; --drift: -7px;"></i>
+          <i class="mtrol-particle" style="--x: 42%; --y: 97%; --delay: -.7s; --drift: 6px;"></i>
+          <i class="mtrol-particle" style="--x: 53%; --y: 3%; --delay: -1.6s; --drift: -5px;"></i>
+          <i class="mtrol-particle" style="--x: 62%; --y: 12%; --delay: -2.5s; --drift: 7px;"></i>
+          <i class="mtrol-particle" style="--x: 72%; --y: 96%; --delay: -1.3s; --drift: -6px;"></i>
+          <i class="mtrol-particle" style="--x: 88%; --y: 27%; --delay: -.2s; --drift: 5px;"></i>
+          <i class="mtrol-particle" style="--x: 97%; --y: 42%; --delay: -2s; --drift: -7px;"></i>
+          <i class="mtrol-particle" style="--x: 95%; --y: 73%; --delay: -.9s; --drift: 6px;"></i>
+          <i class="mtrol-particle" style="--x: 76%; --y: 8%; --delay: -2.7s; --drift: -5px;"></i>
+          <i class="mtrol-particle" style="--x: 7%; --y: 57%; --delay: -1.5s; --drift: 7px;"></i>
+          <i class="mtrol-particle" style="--x: 21%; --y: 76%; --delay: -.6s; --drift: -6px;"></i>
+          <i class="mtrol-particle" style="--x: 90%; --y: 91%; --delay: -2.2s; --drift: 5px;"></i>
+        </div>
       </div>
 
       <div class="mtrol-hero-identity">
 
-        <input class="mtrol-hero-name"
-               name="name"
-               type="text"
-               value="{{actor.name}}"
-               placeholder="Nombre del personaje" />
+        <div class="mtrol-hero-nameplate">
+          <input class="mtrol-hero-name"
+                 name="name"
+                 type="text"
+                 value="{{actor.name}}"
+                 placeholder="Nombre del personaje" />
+        </div>
 
         <div class="mtrol-hero-subtitle">
           <span>{{system.identidad.titulo}}</span>
           <span>&diams;</span>
           <span>{{system.identidad.raza}}</span>
           <span>&diams;</span>
-          <span>{{system.identidad.clase}}</span>
+          <span>{{selectedClassLabel}}</span>
         </div>
 
         <div class="mtrol-hero-stats">
@@ -44,14 +73,36 @@
             <strong>{{system.recursos.exp}}</strong>
           </div>
 
-          <div class="mtrol-hero-stat karma">
-            <label>Karma</label>
-            <strong>{{system.recursos.karma}}</strong>
+          <div class="mtrol-hero-stat mtrol-destiny-stat mtrol-particle-anchor karma"
+               data-mtrol-particle-target="karma"
+               data-mtrol-particle-trigger="fumble-counter-change"
+               aria-label="Karma: {{mtrolKarmaDisplay.value}} de 5">
+            <div class="mtrol-destiny-heading">
+              <label>Karma</label>
+              <strong>{{mtrolKarmaDisplay.value}} / 5</strong>
+            </div>
+            <div class="mtrol-destiny-segments" aria-hidden="true">
+              {{#each mtrolKarmaDisplay.segments}}
+                <span class="mtrol-destiny-segment {{#if active}}is-active{{/if}} {{#if editable}}is-editable{{/if}}"
+                      data-segment="{{position}}" data-resource="{{resource}}" data-value="{{value}}"></span>
+              {{/each}}
+            </div>
           </div>
 
-          <div class="mtrol-hero-stat dharma">
-            <label>Dharma</label>
-            <strong>{{system.recursos.dharma}}</strong>
+          <div class="mtrol-hero-stat mtrol-destiny-stat mtrol-particle-anchor dharma"
+               data-mtrol-particle-target="dharma"
+               data-mtrol-particle-trigger="critical-counter-change"
+               aria-label="Dharma: {{mtrolDharmaDisplay.value}} de 5">
+            <div class="mtrol-destiny-heading">
+              <label>Dharma</label>
+              <strong>{{mtrolDharmaDisplay.value}} / 5</strong>
+            </div>
+            <div class="mtrol-destiny-segments" aria-hidden="true">
+              {{#each mtrolDharmaDisplay.segments}}
+                <span class="mtrol-destiny-segment {{#if active}}is-active{{/if}} {{#if editable}}is-editable{{/if}}"
+                      data-segment="{{position}}" data-resource="{{resource}}" data-value="{{value}}"></span>
+              {{/each}}
+            </div>
           </div>
 
         </div>
@@ -64,7 +115,11 @@
 
       <div class="mtrol-hero-vital hp">
 
-        <div class="mtrol-vital-icon">&hearts;</div>
+        <div class="mtrol-vital-icon" aria-hidden="true">
+          <img class="mtrol-vital-icon-image"
+               src="systems/mtrol/assets/ui/personaje-premium/resources/hp-icon.png"
+               alt="">
+        </div>
 
         <div class="mtrol-vital-content">
           <div class="mtrol-vital-top">
@@ -86,12 +141,18 @@
                      min="0"
                      data-vital="hp"
                      data-field="max"
-                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+                     {{#unless puedeEditarVitalesMax}}disabled{{/unless}} />
             </span>
           </div>
 
-          <div class="mtrol-vital-bar">
-            <div class="mtrol-vital-fill hp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.hp}}%;"></div>
+          <div class="mtrol-vital-bar resource-bar">
+            <div class="mtrol-vital-track resource-bar__track">
+              <div class="mtrol-vital-fill resource-bar__fill hp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.hp}}%;"></div>
+            </div>
+            <img class="mtrol-vital-frame resource-bar__frame"
+                 src="systems/mtrol/assets/ui/personaje-premium/resources/mp-frame.png"
+                 alt=""
+                 aria-hidden="true">
           </div>
         </div>
 
@@ -99,7 +160,11 @@
 
       <div class="mtrol-hero-vital mp">
 
-        <div class="mtrol-vital-icon">&diams;</div>
+        <div class="mtrol-vital-icon" aria-hidden="true">
+          <img class="mtrol-vital-icon-image"
+               src="systems/mtrol/assets/ui/personaje-premium/resources/mp-icon.png"
+               alt="">
+        </div>
 
         <div class="mtrol-vital-content">
           <div class="mtrol-vital-top">
@@ -121,12 +186,18 @@
                      min="0"
                      data-vital="mp"
                      data-field="max"
-                     {{#unless puedeEditarVitales}}disabled{{/unless}} />
+                     {{#unless puedeEditarVitalesMax}}disabled{{/unless}} />
             </span>
           </div>
 
-          <div class="mtrol-vital-bar">
-            <div class="mtrol-vital-fill mp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.mp}}%;"></div>
+          <div class="mtrol-vital-bar resource-bar">
+            <div class="mtrol-vital-track resource-bar__track">
+              <div class="mtrol-vital-fill resource-bar__fill mp-fill" style="--mtrol-vital-percent: {{vitalesPorcentaje.mp}}%;"></div>
+            </div>
+            <img class="mtrol-vital-frame resource-bar__frame"
+                 src="systems/mtrol/assets/ui/personaje-premium/resources/mp-frame.png"
+                 alt=""
+                 aria-hidden="true">
           </div>
         </div>
 
@@ -141,12 +212,11 @@
   <!-- =============================== -->
 
   <nav class="sheet-tabs tabs mtrol-main-tabs" data-group="primary">
-    <a class="item" data-tab="personaje"><i class="fas fa-user"></i>Personaje</a>
-    <a class="item" data-tab="combate"><i class="fas fa-dice-d20"></i>Combate</a>
-    <a class="item" data-tab="competencias"><i class="fas fa-star"></i>Competencias</a>
-    <a class="item" data-tab="equipamiento"><i class="fas fa-shield-alt"></i>Equipamiento</a>
-    <a class="item" data-tab="inventario"><i class="fas fa-suitcase"></i>Inventario</a>
-    <a class="item" data-tab="progresion"><i class="fas fa-chart-line"></i>Progresi&oacute;n</a>
+    <a class="item" data-tab="personaje">Personaje</a>
+    <a class="item" data-tab="combate">Combate</a>
+    <a class="item" data-tab="competencias">Competencias</a>
+    <a class="item" data-tab="inventario">Inventario</a>
+    <a class="item" data-tab="progresion">Progresi&oacute;n</a>
   </nav>
 
   <section class="sheet-body mtrol-sheet-body-v2">
@@ -158,12 +228,6 @@
     <div class="tab mtrol-tab-personaje" data-group="primary" data-tab="personaje">
 
       <section class="mtrol-panel atributos">
-        <header class="mtrol-tab-header mtrol-atributos-header">
-          <div>
-            <h2>Atributos</h2>
-          </div>
-        </header>
-
         <div class="atributos-grid mtrol-atributos-premium">
 
           <section class="mtrol-attribute-group mtrol-attribute-group-physical" aria-label="Atributos Físicos">
@@ -330,7 +394,21 @@
 
           <div class="mtrol-field">
             <label>Clase</label>
-            <input type="text" name="system.identidad.clase" value="{{system.identidad.clase}}">
+            {{#if canManageClass}}
+              <select id="mtrol-class-select-{{actor.id}}"
+                      class="mtrol-class-select mtrol-class-resource-control"
+                      data-config-key="classId"
+                      aria-label="Clase del personaje">
+                <option value="" disabled {{#unless selectedClassId}}selected{{/unless}}>
+                  {{#if selectedClassInvalid}}Clase inv&aacute;lida — seleccionar clase...{{else}}Seleccionar clase...{{/if}}
+                </option>
+                {{#each classOptions}}
+                  <option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+            {{else}}
+              <output class="mtrol-class-readonly" aria-label="Clase del personaje">{{selectedClassLabel}}</output>
+            {{/if}}
           </div>
 
           <div class="mtrol-field">
@@ -354,6 +432,62 @@
           </div>
 
         </div>
+
+        {{#if canManageResourceModifiers}}
+          <section class="mtrol-resource-admin" aria-labelledby="mtrol-resource-admin-title-{{actor.id}}">
+            <header>
+              <div>
+                <h3 id="mtrol-resource-admin-title-{{actor.id}}">Ajustes de recursos</h3>
+                <p>Modificadores permanentes administrados por GM</p>
+              </div>
+            </header>
+
+            <div class="mtrol-resource-admin-grid">
+              {{#each resourceModifierEntries}}
+                <article class="mtrol-resource-admin-entry" data-entry-id="{{id}}">
+                  <button type="button" class="mtrol-resource-modifier-delete"
+                          data-entry-id="{{id}}" aria-label="Eliminar modificador" title="Eliminar modificador">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                  </button>
+
+                  <div class="mtrol-resource-admin-card mtrol-resource-admin-card--hp">
+                    <label for="mtrol-hp-modifier-{{../actor.id}}-{{id}}">HP adicional</label>
+                    <input id="mtrol-hp-modifier-{{../actor.id}}-{{id}}"
+                           class="mtrol-resource-modifier-input mtrol-resource-modifier-entry-control"
+                           type="number" step="1" value="{{hp.value}}"
+                           data-entry-id="{{id}}" data-resource="hp" data-field="value">
+
+                    <label for="mtrol-hp-modifier-label-{{../actor.id}}-{{id}}">Motivo de HP</label>
+                    <input id="mtrol-hp-modifier-label-{{../actor.id}}-{{id}}"
+                           class="mtrol-resource-modifier-input mtrol-resource-modifier-entry-control"
+                           type="text" value="{{hp.label}}"
+                           data-entry-id="{{id}}" data-resource="hp" data-field="label">
+                  </div>
+
+                  <div class="mtrol-resource-admin-card mtrol-resource-admin-card--mp">
+                    <label for="mtrol-mp-modifier-{{../actor.id}}-{{id}}">MP adicional</label>
+                    <input id="mtrol-mp-modifier-{{../actor.id}}-{{id}}"
+                           class="mtrol-resource-modifier-input mtrol-resource-modifier-entry-control"
+                           type="number" step="1" value="{{mp.value}}"
+                           data-entry-id="{{id}}" data-resource="mp" data-field="value">
+
+                    <label for="mtrol-mp-modifier-label-{{../actor.id}}-{{id}}">Motivo de MP</label>
+                    <input id="mtrol-mp-modifier-label-{{../actor.id}}-{{id}}"
+                           class="mtrol-resource-modifier-input mtrol-resource-modifier-entry-control"
+                           type="text" value="{{mp.label}}"
+                           data-entry-id="{{id}}" data-resource="mp" data-field="label">
+                  </div>
+                </article>
+              {{/each}}
+            </div>
+
+            <footer class="mtrol-resource-admin-footer">
+              <button type="button" class="mtrol-resource-modifier-add" aria-label="Agregar modificador" title="Agregar modificador">
+                <i class="fas fa-plus" aria-hidden="true"></i>
+              </button>
+            </footer>
+          </section>
+        {{/if}}
       </section>
 
     </div>
@@ -363,190 +497,149 @@
     <!-- =============================== -->
 
     <div class="tab mtrol-tab-combate" data-group="primary" data-tab="combate">
-
-      <section class="mtrol-combat-hero">
-
-        <header class="mtrol-combat-title mtrol-tab-header">
-          <div>
-            <h2>Combate</h2>
-          </div>
-        </header>
-
-        <section class="mtrol-combat-grid">
-
-          {{#if habilidadesEquipadasCombate.length}}
-
-            {{#each habilidadesEquipadasCombate}}
-
-              <article class="mtrol-combat-card mtrol-item"
-                       data-item-id="{{this.id}}">
-
-                <div class="mtrol-combat-card-image">
-                  <img src="{{this.mtrolBanner}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
-                  <span class="mtrol-combat-card-level">Nv. {{this.system.nivel}}</span>
-                </div>
-
-                <div class="mtrol-combat-card-body">
-
-                  <div class="mtrol-combat-card-school">
-                    {{#if this.mtrolRoleLabel}}
-                      {{this.mtrolRoleLabel}}
-                    {{else}}
-                      {{this.system.categoria}}
-                    {{/if}}
-                  </div>
-
-                  <h3 class="mtrol-combat-card-title">{{this.name}}</h3>
-
-                  <div class="mtrol-combat-card-meta">
-                    <span><i class="fas fa-tint"></i> MP {{this.mtrolMpCost}}</span>
-                    <span><i class="fas fa-hourglass-half"></i> CD {{this.system.cooldown}}</span>
-                  </div>
-
-                  <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
-
-                  <div class="mtrol-combat-card-actions">
-                    <div class="mtrol-dharma-action"
-                         data-mtrol-section="combate"
-                         data-mtrol-action-key="item:{{this.id}}"
-                         data-mtrol-formula="{{this.mtrolRollFormula}}"
-                         data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
-                      <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
-                      <button type="button" class="mtrol-action-execute mtrol-combat-use competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
-                    </div>
-
-                    <button type="button"
-                            class="mtrol-combat-card-detail"
-                            data-item-id="{{this.id}}">
-                      Ver detalle
-                    </button>
-
-                    {{#if ../esGM}}
-                      <button type="button"
-                              class="mtrol-combat-unequip habilidad-combate-unequip"
-                              data-item-id="{{this.id}}">
-                        Desequipar
-                      </button>
-                    {{/if}}
-                  </div>
-
-                </div>
-
-              </article>
-
-            {{/each}}
-
-          {{else}}
-
-            <div class="mtrol-combat-empty">
-              No hay habilidades equipadas en combate.
+      <section class="mtrol-combat-library" aria-label="Biblioteca de acciones de combate">
+        <div class="mtrol-combat-grid">
+        {{#each combatLibrary.actions}}
+          <article class="mtrol-combat-card mtrol-item"
+                   data-item-id="{{this.id}}"
+                   data-combat-nature="{{this.mtrolCombatNature}}">
+            <div class="mtrol-combat-card-artwork">
+              <img class="mtrol-combat-card-artwork-image"
+                   src="{{this.mtrolBanner}}"
+                   data-fallback="icons/svg/item-bag.svg"
+                   alt="{{this.name}}">
+              <span class="mtrol-combat-card-artwork-gradient" aria-hidden="true"></span>
             </div>
 
-          {{/if}}
+            <div class="mtrol-combat-card-content">
+              <h3 class="mtrol-combat-card-name">{{this.name}}</h3>
 
-        </section>
+              <div class="mtrol-dharma-action mtrol-combat-card-actions"
+                   data-mtrol-section="combate"
+                   data-mtrol-action-key="item:{{this.id}}"
+                   data-mtrol-formula="{{this.mtrolRollFormula}}"
+                   data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}"
+                   data-mtrol-dharma-prepared="false">
+                <button type="button"
+                        class="mtrol-action-execute mtrol-combat-use competencia-roll"
+                        data-item-id="{{this.id}}">Ejecutar</button>
+                <button type="button"
+                        class="mtrol-dharma-prepare"
+                        aria-pressed="false"
+                        title="{{this.mtrolDharmaTitle}}"
+                        {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}>
+                  <span class="mtrol-dharma-label">Quemar Dharma</span>
+                </button>
+              </div>
 
-        {{#if esGM}}
-        <section class="sheet-section combate-section">
+              {{#if this.mtrolShowMeta}}
+                <div class="mtrol-combat-card-meta" aria-label="Datos mecánicos de {{this.name}}">
+                  {{#if this.mtrolShowMp}}<span class="mtrol-combat-card-stat">MP {{this.mtrolMpCost}}</span>{{/if}}
+                  {{#if this.mtrolShowCooldown}}<span class="mtrol-combat-card-stat">CD {{this.mtrolCooldown}}</span>{{/if}}
+                  {{#if this.mtrolShowStack}}<span class="mtrol-combat-card-stat">STACK {{this.mtrolStack}}</span>{{/if}}
+                </div>
+              {{/if}}
+            </div>
 
-          <h2>
+            <img class="mtrol-combat-card-frame"
+                 src="systems/mtrol/assets/ui/combat/combat-card-frame.png"
+                 alt=""
+                 aria-hidden="true">
+          </article>
+        {{/each}}
+        </div>
+
+        {{#if combatLibrary.empty}}
+          <p class="mtrol-combat-empty">No hay acciones equipadas en combate.</p>
+        {{/if}}
+      </section>
+
+      {{#if esGM}}
+        <section class="sheet-section combate-section mtrol-combat-admin" aria-labelledby="mtrol-combat-admin-title-{{actor.id}}">
+          <h2 id="mtrol-combat-admin-title-{{actor.id}}">
             Barra de Combate
-            {{#if esGM}}
-              <a class="add-habilidad-combate" title="Agregar habilidad de combate">
-                <i class="fas fa-plus"></i>
-              </a>
-            {{/if}}
+            <a class="add-habilidad-combate" title="Agregar habilidad de combate" aria-label="Agregar habilidad de combate">
+              <i class="fas fa-plus" aria-hidden="true"></i>
+            </a>
           </h2>
 
           <div class="combat-skills-bar">
-
             {{#if habilidadesCombate.length}}
-
               {{#each habilidadesCombate}}
-
-                <div class="combat-skill-card mtrol-item" data-item-id="{{this.id}}">
-
-                  <div class="combat-skill-header">
+                <article class="combat-skill-card mtrol-item" data-item-id="{{this.id}}">
+                  <header class="combat-skill-header">
                     <div class="combat-skill-title">
                       {{#if this.imgSeguro}}
-                        <img class="combat-skill-icon" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
+                        <img class="combat-skill-icon"
+                             src="{{this.imgSeguro}}"
+                             data-fallback="icons/svg/item-bag.svg"
+                             alt="{{this.name}}">
                       {{else}}
-                        <span class="combat-skill-icon combat-skill-icon-fallback">
+                        <span class="combat-skill-icon combat-skill-icon-fallback" aria-hidden="true">
                           <i class="fas fa-bolt"></i>
                         </span>
                       {{/if}}
-
                       <span class="combat-skill-name">{{this.name}}</span>
                     </div>
 
                     <div class="combat-skill-state">
                       <span class="combat-skill-level">Nv. {{this.system.nivel}}</span>
-
                       {{#if this.system.equipadaCombate}}
                         <span class="combat-skill-status is-equipped">Equipada</span>
                       {{else}}
                         <span class="combat-skill-status is-unequipped">Reserva</span>
                       {{/if}}
                     </div>
-                  </div>
+                  </header>
 
                   <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
 
                   <div class="combat-skill-actions">
-
-                    {{#if ../esGM}}
-                      {{#if this.mtrolIsProgressionCompetence}}
-                        <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
-                        <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
-                      {{/if}}
+                    {{#if this.mtrolIsProgressionCompetence}}
+                      <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
+                      <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
                     {{/if}}
 
                     <div class="mtrol-dharma-action mtrol-dharma-action--compact"
                          data-mtrol-section="combate"
                          data-mtrol-action-key="item:{{this.id}}"
                          data-mtrol-formula="{{this.mtrolRollFormula}}"
-                         data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
-                      <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
-                      <button type="button" class="mtrol-action-execute competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
+                         data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}"
+                         data-mtrol-dharma-prepared="false">
+                      <button type="button"
+                              class="mtrol-action-execute competencia-roll"
+                              data-item-id="{{this.id}}">Ejecutar</button>
+                      <button type="button"
+                              class="mtrol-dharma-prepare"
+                              aria-pressed="false"
+                              title="{{this.mtrolDharmaTitle}}"
+                              {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}>
+                        <i class="fas fa-fire" aria-hidden="true"></i>
+                        <span class="mtrol-dharma-label">Quemar Dharma</span>
+                      </button>
                     </div>
 
                     {{#if this.system.equipadaCombate}}
-                      {{#if ../esGM}}
-                        <a class="habilidad-combate-unequip" data-item-id="{{this.id}}" title="Desequipar de Combate">
-                          <i class="fas fa-times-circle"></i>
-                        </a>
-                      {{/if}}
+                      <a class="habilidad-combate-unequip" data-item-id="{{this.id}}" title="Desequipar de Combate">
+                        <i class="fas fa-times-circle"></i>
+                      </a>
                     {{else}}
-                      {{#if ../esGM}}
-                        <a class="habilidad-combate-equip" data-item-id="{{this.id}}" title="Equipar en Combate">
-                          <i class="fas fa-check-circle"></i>
-                        </a>
-                      {{/if}}
+                      <a class="habilidad-combate-equip" data-item-id="{{this.id}}" title="Equipar en Combate">
+                        <i class="fas fa-check-circle"></i>
+                      </a>
                     {{/if}}
 
-                    {{#if ../esGM}}
-                      <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
-                      <a class="item-delete" data-item-id="{{this.id}}" title="Eliminar"><i class="fas fa-trash"></i></a>
-                    {{/if}}
-
+                    <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
+                    <a class="item-delete" data-item-id="{{this.id}}" title="Eliminar"><i class="fas fa-trash"></i></a>
                   </div>
-
-                </div>
-
+                </article>
               {{/each}}
-
             {{else}}
-
               <p class="hint">No hay habilidades de combate creadas.</p>
-
             {{/if}}
-
           </div>
-
         </section>
-        {{/if}}
-
-      </section>
+      {{/if}}
 
     </div>
 
@@ -556,19 +649,15 @@
 
     <div class="tab mtrol-tab-competencias" data-group="primary" data-tab="competencias">
 
-      <section class="sheet-section">
+      <section class="mtrol-competencias-section" aria-label="Competencias">
 
-        <header class="mtrol-tab-header mtrol-competencias-header">
-          <div>
-            <h2>
-              Competencias
-              {{#if esGM}}
-                <a class="add-competencia" title="Agregar competencia">
-                  <i class="fas fa-plus"></i>
-                </a>
-              {{/if}}
-            </h2>
-          </div>
+        <header class="mtrol-competencias-header">
+          {{#if esGM}}
+            <button type="button" class="add-competencia" title="Crear una competencia nueva">
+              <i class="fas fa-plus" aria-hidden="true"></i>
+              <span>Nueva</span>
+            </button>
+          {{/if}}
         </header>
 
         <div class="competencias-list">
@@ -577,57 +666,82 @@
 
             {{#each competenciasGenerales}}
 
-              <div class="competencia-row mtrol-item" data-item-id="{{this.id}}">
+              <article class="competencia-row mtrol-item" data-item-id="{{this.id}}">
 
-                <div class="competencia-main">
-                  {{#if this.imgSeguro}}
-                    <img class="competencia-icon" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{this.name}}">
-                  {{else}}
-                    <span class="competencia-icon competencia-icon-fallback">
-                      <i class="fas fa-star"></i>
-                    </span>
+                {{#if ../esGM}}
+                  <button type="button"
+                          class="competencia-medallion competencia-image-edit"
+                          title="Cambiar imagen de {{this.name}}"
+                          aria-label="Cambiar imagen de {{this.name}}">
+                    <img class="competencia-medallion-image" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="">
+                    <img class="competencia-medallion-frame" src="systems/mtrol/assets/ui/competencias/competencia-frame.png" alt="" aria-hidden="true">
+                    <span class="competencia-image-edit-indicator" aria-hidden="true"><i class="fas fa-image"></i></span>
+                  </button>
+                {{else}}
+                  <div class="competencia-medallion" aria-hidden="true">
+                    <img class="competencia-medallion-image" src="{{this.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="">
+                    <img class="competencia-medallion-frame" src="systems/mtrol/assets/ui/competencias/competencia-frame.png" alt="">
+                  </div>
+                {{/if}}
+
+                <div class="competencia-info">
+                  <span class="competencia-nombre">{{this.name}}</span>
+                  <span class="competencia-subtitle">
+                    {{#if this.mtrolRoleLabel}}{{this.mtrolRoleLabel}}{{else}}Competencia{{/if}}
+                  </span>
+                  <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
+
+                  {{#if ../esGM}}
+                    <div class="competencia-admin-controls" aria-label="Administrar {{this.name}}">
+                      <button type="button" class="item-edit" data-item-id="{{this.id}}" title="Editar competencia" aria-label="Editar {{this.name}}"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                      <button type="button" class="item-delete" data-item-id="{{this.id}}" title="Eliminar competencia" aria-label="Eliminar {{this.name}}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    </div>
                   {{/if}}
+                </div>
 
-                  <div class="competencia-info">
-                    <span class="competencia-nombre">{{this.name}}</span>
-                    <span class="competencia-subtitle">Competencia</span>
-                    <span class="mtrol-action-formula">{{this.mtrolRollFormula}}</span>
+                <div class="competencia-level" aria-label="{{this.mtrolLevelLabel}}">
+                  <span class="competencia-level-label">Nivel {{this.mtrolLevel}}/5</span>
+                  <div class="competencia-level-controls">
+                    {{#if ../esGM}}
+                      {{#if this.mtrolIsProgressionCompetence}}
+                        <button type="button" class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel" aria-label="Bajar nivel de {{this.name}}"><i class="fas fa-minus" aria-hidden="true"></i></button>
+                      {{/if}}
+                    {{/if}}
+
+                    <span class="competencia-level-markers" aria-hidden="true">
+                      {{#each this.mtrolLevelMarkers}}
+                        <i class="competencia-level-marker {{#if this.active}}is-active{{/if}}" data-level="{{this.position}}"></i>
+                      {{/each}}
+                    </span>
+
+                    {{#if ../esGM}}
+                      {{#if this.mtrolIsProgressionCompetence}}
+                        <button type="button" class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel" aria-label="Subir nivel de {{this.name}}"><i class="fas fa-plus" aria-hidden="true"></i></button>
+                      {{/if}}
+                    {{/if}}
                   </div>
                 </div>
 
-                <div class="mtrol-dharma-action"
+                <div class="mtrol-dharma-action mtrol-competencia-actions"
                      data-mtrol-section="competencias"
                      data-mtrol-action-key="item:{{this.id}}"
                      data-mtrol-formula="{{this.mtrolRollFormula}}"
-                     data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}">
-                  <button type="button" class="mtrol-dharma-prepare" title="{{this.mtrolDharmaTitle}}" {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}><i class="fas fa-fire" aria-hidden="true"></i><span class="mtrol-dharma-label">Gastar Dharma</span></button>
-                  <button type="button" class="mtrol-action-execute competencia-roll" data-item-id="{{this.id}}">Ejecutar</button>
+                     data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}"
+                     data-mtrol-dharma-prepared="false">
+                  <button type="button"
+                          class="mtrol-dharma-prepare"
+                          aria-pressed="false"
+                          title="{{this.mtrolDharmaTitle}}"
+                          {{#unless this.mtrolDharmaEnabled}}disabled{{/unless}}>
+                    <i class="fas fa-fire" aria-hidden="true"></i>
+                    <span class="mtrol-dharma-label">Gastar Dharma</span>
+                  </button>
+                  <button type="button"
+                          class="mtrol-action-execute competencia-roll"
+                          data-item-id="{{this.id}}">Ejecutar</button>
                 </div>
 
-                <span class="competencia-controles">
-
-                  {{#if ../esGM}}
-                    {{#if this.mtrolIsProgressionCompetence}}
-                      <a class="competencia-down" data-item-id="{{this.id}}" title="Bajar nivel"><i class="fas fa-minus"></i></a>
-                    {{/if}}
-                  {{/if}}
-
-                  <span class="competencia-nivel">{{this.system.nivel}}</span>
-
-                  {{#if ../esGM}}
-                    {{#if this.mtrolIsProgressionCompetence}}
-                      <a class="competencia-up" data-item-id="{{this.id}}" title="Subir nivel"><i class="fas fa-plus"></i></a>
-                    {{/if}}
-                  {{/if}}
-
-                  {{#if ../esGM}}
-                    <a class="item-edit" data-item-id="{{this.id}}" title="Editar"><i class="fas fa-edit"></i></a>
-                    <a class="item-delete" data-item-id="{{this.id}}" title="Eliminar"><i class="fas fa-trash"></i></a>
-                  {{/if}}
-
-                </span>
-
-              </div>
+              </article>
 
             {{/each}}
 
@@ -644,349 +758,232 @@
     </div>
 
     <!-- =============================== -->
-    <!-- TAB EQUIPAMIENTO -->
-    <!-- =============================== -->
-
-    <div class="tab mtrol-tab-equipamiento" data-group="primary" data-tab="equipamiento">
-
-      <section class="equipamiento-tab mtrol-equipment-tab">
-
-        <header class="mtrol-equipment-header mtrol-tab-header">
-          <div>
-            <h2>Equipamiento</h2>
-          </div>
-        </header>
-
-        <div class="mtrol-equipment-layout">
-
-          <section class="mtrol-body-build">
-
-            <div class="mtrol-body-silhouette" aria-hidden="true">
-              <div class="mtrol-silhouette-head"></div>
-              <div class="mtrol-silhouette-torso"></div>
-              <div class="mtrol-silhouette-arms"></div>
-              <div class="mtrol-silhouette-legs"></div>
-
-              <div class="mtrol-body-slot-overlay">
-                {{#each slotsEquipamiento as |slot|}}
-                  {{#if (eq slot.key "cabeza")}}
-                    <span class="mtrol-body-slot-marker slot-cabeza {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "cuello")}}
-                    <span class="mtrol-body-slot-marker slot-cuello {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "hombros")}}
-                    <span class="mtrol-body-slot-marker slot-hombros-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                    <span class="mtrol-body-slot-marker slot-hombros-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "brazos")}}
-                    <span class="mtrol-body-slot-marker slot-brazos-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                    <span class="mtrol-body-slot-marker slot-brazos-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "pecho")}}
-                    <span class="mtrol-body-slot-marker slot-pecho {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "piernas")}}
-                    <span class="mtrol-body-slot-marker slot-piernas-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                    <span class="mtrol-body-slot-marker slot-piernas-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "pies")}}
-                    <span class="mtrol-body-slot-marker slot-pies-left {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                    <span class="mtrol-body-slot-marker slot-pies-right {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "manoIzq")}}
-                    <span class="mtrol-body-slot-marker slot-mano-izq {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "manoDer")}}
-                    <span class="mtrol-body-slot-marker slot-mano-der {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                  {{#if (eq slot.key "extra")}}
-                    <span class="mtrol-body-slot-marker slot-extra {{#if slot.ocupado}}is-equipped{{else}}is-empty{{/if}}" data-slot="{{slot.key}}"></span>
-                  {{/if}}
-                {{/each}}
-              </div>
-            </div>
-
-            <div class="mtrol-body-slots">
-
-              {{#each slotsEquipamiento as |slot|}}
-
-                {{#if slot.ocupado}}
-                  <article class="mtrol-equip-slot {{slot.estadoClase}} mtrol-draggable-objeto"
-                           data-slot="{{slot.key}}"
-                           data-item-id="{{slot.item.id}}">
-
-                    <div class="mtrol-slot-label">{{slot.label}}</div>
-
-                    <div class="mtrol-slot-box">
-                      <img class="mtrol-slot-icon"
-                           src="{{slot.itemImg}}"
-                           data-fallback="icons/svg/item-bag.svg"
-                           alt="{{slot.item.name}}">
-
-                      <div class="mtrol-slot-content">
-                        <strong class="mtrol-slot-name">{{slot.item.name}}</strong>
-
-                        <div class="mtrol-slot-stats">
-                          <span>DEF {{slot.defensaActualBase}}</span>
-                          <span>DMG {{#if slot.danio}}{{slot.danio}}{{else}}-{{/if}}</span>
-                          <span>Peso {{slot.peso}}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="mtrol-slot-actions">
-                      <button type="button"
-                              class="item-unequip"
-                              title="Desequipar">
-                        <i class="fas fa-user-minus"></i>
-                      </button>
-                    </div>
-
-                  </article>
-                {{else}}
-                  <article class="mtrol-equip-slot {{slot.estadoClase}}"
-                           data-slot="{{slot.key}}">
-
-                    <div class="mtrol-slot-label">{{slot.label}}</div>
-
-                    <div class="mtrol-slot-box">
-                      <div class="mtrol-slot-icon mtrol-slot-empty-icon">
-                        <i class="fas fa-plus"></i>
-                      </div>
-
-                      <div class="mtrol-slot-content">
-                        <strong class="mtrol-slot-name">Vac&iacute;o</strong>
-
-                        <div class="mtrol-slot-stats">
-                          <span>DEF -</span>
-                          <span>DMG -</span>
-                          <span>Peso -</span>
-                        </div>
-                      </div>
-                    </div>
-
-                  </article>
-                {{/if}}
-
-              {{/each}}
-
-            </div>
-
-          </section>
-
-          <aside class="mtrol-equipment-summary">
-            <h3>Resumen</h3>
-
-            <div class="mtrol-summary-row">
-              <span>Da&ntilde;o de armas</span>
-              <strong>{{equipamientoResumen.danioArmas}}</strong>
-            </div>
-
-            <div class="mtrol-summary-row">
-              <span>Peso actual</span>
-              <strong>{{equipamientoResumen.pesoActual}}</strong>
-            </div>
-
-            <div class="mtrol-summary-row">
-              <span>Umbral de sobrecarga</span>
-              <strong>{{equipamientoResumen.pesoMaximo}}</strong>
-            </div>
-
-            <div class="mtrol-summary-row">
-              <span>Peso libre</span>
-              <strong>{{equipamientoResumen.pesoLibre}}</strong>
-            </div>
-
-            <div class="mtrol-summary-row">
-              <span>Slots ocupados</span>
-              <strong>{{equipamientoResumen.slotsOcupados}} / {{equipamientoResumen.slotsTotales}}</strong>
-            </div>
-          </aside>
-
-        </div>
-
-        <details class="mtrol-equipment-fallback">
-          <summary>Ver tabla cl&aacute;sica</summary>
-
-        <table class="tabla-equipamiento">
-
-          <thead>
-            <tr>
-              <th>Slot</th>
-              <th>Objeto equipado</th>
-              <th>Defensa</th>
-              <th>Da&ntilde;o</th>
-              <th>Defensa actual/base</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-
-          <tbody>
-
-            {{#each slotsEquipamiento as |slot|}}
-
-              <tr>
-
-                <td>{{slot.label}}</td>
-
-                {{#if slot.ocupado}}
-
-                  <td class="item-nombre-col">
-                    <div class="item-miniatura">
-                      <img src="{{slot.itemImg}}" data-fallback="icons/svg/item-bag.svg" alt="{{slot.item.name}}">
-                      <span>{{slot.item.name}}</span>
-                    </div>
-                  </td>
-
-                  <td>{{slot.defensa}}</td>
-
-                  <td>
-                    {{#if slot.danio}}{{slot.danio}}{{else}}-{{/if}}
-                  </td>
-
-                  <td>
-                    {{slot.item.system.defensa}} / {{slot.item.system.defensaBase}}
-                  </td>
-
-                  <td>
-                    <span class="objeto-ok">OK</span>
-                  </td>
-
-                  <td>
-                    <div class="item mtrol-draggable-objeto" data-item-id="{{slot.item.id}}">
-                      <a class="item-edit" title="Editar"><i class="fas fa-edit"></i></a>
-                      <a class="item-unequip" title="Desequipar"><i class="fas fa-user-minus"></i></a>
-                      <a class="item-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
-                    </div>
-                  </td>
-
-                {{else}}
-
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-
-                {{/if}}
-
-              </tr>
-
-            {{/each}}
-
-          </tbody>
-
-        </table>
-
-        </details>
-
-      </section>
-
-    </div>
-
-    <!-- =============================== -->
-    <!-- TAB INVENTARIO -->
+    <!-- TAB INVENTARIO UNIFICADO -->
     <!-- =============================== -->
 
     <div class="tab mtrol-tab-inventario" data-group="primary" data-tab="inventario">
+      <section class="mtrol-inventory-workspace" aria-label="Inventario y equipamiento">
+        <header class="mtrol-inventory-header">
+          <div class="mtrol-inventory-header-actions">
+            {{#if esGM}}
+              <button type="button" class="item-create-objeto" title="Crear objeto">
+                <i class="fas fa-plus"></i> Nuevo objeto
+              </button>
+            {{/if}}
 
-      <section class="inventario-tab">
-
-        <div class="inventario-header mtrol-tab-header">
-
-          <div>
-            <h2>Inventario</h2>
+            <button type="button" class="mtrol-trade-request" title="Solicitud de comercio">
+              <i class="fas fa-handshake"></i> Solicitud de comercio
+            </button>
           </div>
+        </header>
 
-          {{#if esGM}}
-            <a class="item-create-objeto" title="Crear objeto">
-              <i class="fas fa-plus"></i>
-              Nuevo objeto
-            </a>
-          {{/if}}
+        <div class="mtrol-inventory-main">
+          <section class="mtrol-inventory-equipment" aria-label="Equipamiento del personaje">
+            <header class="mtrol-equipment-header">
+              {{#if esGM}}
+                <div class="mtrol-equipment-character-controls" aria-label="Controles de imagen corporal">
+                  <button type="button" class="mtrol-equipment-character-change" title="Cambiar imagen de equipamiento" aria-label="Cambiar imagen de equipamiento">
+                    <i class="fas fa-image" aria-hidden="true"></i>
+                  </button>
+                  {{#if equipmentCharacterImage.custom}}
+                    <button type="button" class="mtrol-equipment-character-remove" title="Quitar imagen corporal" aria-label="Quitar imagen corporal">
+                      <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                  {{/if}}
+                </div>
+              {{/if}}
+            </header>
 
-          <a class="mtrol-trade-request" title="Solicitud de comercio">
-            <i class="fas fa-handshake"></i>
-            Solicitud de comercio
-          </a>
-
-        </div>
-
-        <div class="slots-resumen">
-          <span><strong>Peso actual:</strong> {{inventario.usados}} / {{inventario.maximos}}</span>
-          <span>
-            <strong>Estado:</strong>
-            {{#if inventario.sobrecargado}}Sobrecargado{{else}}Normal{{/if}}
-          </span>
-          <span><strong>Peso libre:</strong> {{inventario.libres}}</span>
-        </div>
-
-        {{#if inventario.sobrecargado}}
-          <div class="mtrol-warning">
-            Al superar el umbral de sobrecarga, el personaje no puede desplazarse.
-          </div>
-        {{/if}}
-
-        {{#if objetosInventario.length}}
-
-          <table class="tabla-inventario">
-
-            <thead>
-              <tr>
-                <th>Objeto</th>
-                <th>Cantidad</th>
-                <th>Peso</th>
-                <th>Tipo</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {{#each objetosInventario as |objeto|}}
-
-                <tr class="item mtrol-draggable-objeto" data-item-id="{{objeto.id}}">
-
-                  <td class="item-nombre-col">
-                    <div class="item-miniatura">
-                      <img src="{{objeto.imgSeguro}}" data-fallback="icons/svg/item-bag.svg" alt="{{objeto.name}}">
-                      <span>{{objeto.name}}</span>
-                    </div>
-                  </td>
-
-                  <td>{{objeto.system.cantidad}}</td>
-                  <td>{{objeto.system.peso}}</td>
-                  <td>{{objeto.system.tipoObjeto}}</td>
-
-                  <td>
-                    <a class="item-edit" title="Editar"><i class="fas fa-edit"></i></a>
-
-                    {{#if objeto.system.equipable}}
-                      <a class="item-equip" title="Equipar"><i class="fas fa-shield-alt"></i></a>
+            <div class="mtrol-equipment-stage">
+              <div class="mtrol-equipment-slots mtrol-equipment-slots-left" aria-label="Slots de equipamiento izquierdos">
+                {{#each inventoryView.slotsLeft as |slot|}}
+                  <article class="mtrol-inventory-equipment-slot mtrol-inventory-selectable mtrol-equipment-slot--{{slot.id}} {{#if slot.item}}is-equipped mtrol-draggable-objeto {{#if (eq slot.item.id @root.selectedInventoryItemId)}}is-selected{{/if}}{{else}}is-empty{{/if}} {{#if slot.broken}}is-broken{{/if}}"
+                           data-slot="{{slot.id}}"
+                           title="{{slot.tooltip}}"
+                           {{#if slot.item}}data-item-id="{{slot.item.id}}"{{/if}}>
+                    {{#if slot.item}}
+                      <img src="{{slot.item.img}}" data-fallback="icons/svg/item-bag.svg" alt="{{slot.item.name}}">
+                      <strong title="{{slot.item.name}}">{{slot.item.name}}</strong>
+                    {{else}}
+                      <span class="mtrol-equipment-slot-placeholder" aria-hidden="true"><i class="fas {{slot.icon}}"></i></span>
+                      {{#if slot.broken}}<strong>Referencia no disponible</strong>{{/if}}
                     {{/if}}
+                    <span class="mtrol-equipment-slot-label">{{slot.label}}</span>
+                    {{#if slot.broken}}<small class="mtrol-equipment-slot-diagnostic">Referencia rota</small>{{/if}}
+                  </article>
+                {{/each}}
+              </div>
 
-                    <a class="item-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
-                  </td>
+              <figure class="mtrol-equipment-character" title="Imagen recomendada: cuerpo completo, vertical, PNG o WebP con fondo transparente.">
+                <div class="mtrol-equipment-character-image-frame">
+                  <img class="mtrol-equipment-character-image"
+                       src="{{equipmentCharacterImage.src}}"
+                       data-fallback="icons/svg/mystery-man.svg"
+                       alt="Imagen corporal de {{actor.name}}">
+                </div>
 
-                </tr>
+              </figure>
 
-              {{/each}}
+              <div class="mtrol-equipment-slots mtrol-equipment-slots-right" aria-label="Slots de equipamiento derechos">
+                {{#each inventoryView.slotsRight as |slot|}}
+                  <article class="mtrol-inventory-equipment-slot mtrol-inventory-selectable mtrol-equipment-slot--{{slot.id}} {{#if slot.item}}is-equipped mtrol-draggable-objeto {{#if (eq slot.item.id @root.selectedInventoryItemId)}}is-selected{{/if}}{{else}}is-empty{{/if}} {{#if slot.broken}}is-broken{{/if}}"
+                           data-slot="{{slot.id}}"
+                           title="{{slot.tooltip}}"
+                           {{#if slot.item}}data-item-id="{{slot.item.id}}"{{/if}}>
+                    {{#if slot.item}}
+                      <img src="{{slot.item.img}}" data-fallback="icons/svg/item-bag.svg" alt="{{slot.item.name}}">
+                      <strong title="{{slot.item.name}}">{{slot.item.name}}</strong>
+                    {{else}}
+                      <span class="mtrol-equipment-slot-placeholder" aria-hidden="true"><i class="fas {{slot.icon}}"></i></span>
+                      {{#if slot.broken}}<strong>Referencia no disponible</strong>{{/if}}
+                    {{/if}}
+                    <span class="mtrol-equipment-slot-label">{{slot.label}}</span>
+                    {{#if slot.broken}}<small class="mtrol-equipment-slot-diagnostic">Referencia rota</small>{{/if}}
+                  </article>
+                {{/each}}
+              </div>
+            </div>
+          </section>
 
-            </tbody>
+          <section class="mtrol-inventory-browser" aria-label="Inventario de objetos">
+            <div class="mtrol-inventory-browser-header">
+              <input type="search"
+                     class="mtrol-inventory-search"
+                     placeholder="Buscar objeto..."
+                     aria-label="Buscar objeto por nombre"
+                     value="{{inventorySearchTerm}}">
+              <select class="mtrol-inventory-filter" aria-label="Filtrar inventario por tipo">
+                {{#each inventoryView.filterDefinitions as |filter|}}
+                  <option value="{{filter.id}}" {{#if (eq filter.id @root.inventoryFilter)}}selected{{/if}}>{{filter.label}}</option>
+                {{/each}}
+              </select>
+            </div>
 
-          </table>
+            <div class="mtrol-inventory-list-region">
+              <span class="mtrol-inventory-drop-hint" aria-hidden="true">
+                <i class="fas fa-box-open"></i> Soltar aqu&iacute; para desequipar
+              </span>
+              {{#if inventoryView.items.length}}
+                <table class="mtrol-inventory-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Cantidad</th>
+                      <th>Peso</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {{#each inventoryView.items as |inventoryItem|}}
+                      {{#with (lookup @root.inventoryView.itemMetrics inventoryItem.id) as |metrics|}}
+                        <tr class="item mtrol-inventory-item-row mtrol-inventory-selectable mtrol-draggable-objeto {{#if (eq inventoryItem.id @root.selectedInventoryItemId)}}is-selected{{/if}}"
+                            data-item-id="{{inventoryItem.id}}">
+                          <td>
+                            <span class="mtrol-inventory-item-name">
+                              <img src="{{inventoryItem.img}}" data-fallback="icons/svg/item-bag.svg" alt="">
+                              <span>{{inventoryItem.name}}</span>
+                            </span>
+                          </td>
+                          <td>{{metrics.quantity}}</td>
+                          <td>{{metrics.unitWeight}}</td>
+                          <td>{{metrics.totalWeight}}</td>
+                        </tr>
+                      {{/with}}
+                    {{/each}}
+                  </tbody>
+                </table>
+                <p class="mtrol-inventory-no-results">No se encontraron objetos.</p>
+              {{else}}
+                <p class="mtrol-inventory-empty">No hay objetos en el inventario.</p>
+              {{/if}}
+            </div>
+            <aside class="mtrol-inventory-detail-panel" data-inspector-state="{{#if inventoryInspector.selected}}open{{else}}empty{{/if}}" aria-label="Detalle del objeto" {{#if inventoryInspector.selected}}data-item-id="{{inventoryInspector.itemId}}"{{/if}}>
+              {{#if inventoryInspector.selected}}
+                <div class="mtrol-inventory-inspector">
+                  <button type="button" class="mtrol-inventory-inspector-close" title="Cerrar inspector" aria-label="Cerrar inspector">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                  </button>
+                  <header class="mtrol-inventory-inspector-header">
+                    <img src="{{inventoryInspector.img}}"
+                         data-fallback="icons/svg/item-bag.svg"
+                         alt="{{inventoryInspector.name}}">
+                    <div>
+                      <h4>{{inventoryInspector.name}}</h4>
+                      <span>{{inventoryInspector.tipoLabel}}</span>
+                    </div>
+                  </header>
 
-        {{else}}
+                  <dl class="mtrol-inventory-inspector-stats">
+                    {{#each inventoryInspector.stats as |stat|}}
+                      <div>
+                        <dt>{{stat.label}}</dt>
+                        <dd>{{stat.value}}</dd>
+                      </div>
+                    {{/each}}
+                    {{#each inventoryInspector.typeStats as |stat|}}
+                      <div>
+                        <dt>{{stat.label}}</dt>
+                        <dd>{{stat.value}}</dd>
+                      </div>
+                    {{/each}}
+                    {{#if inventoryInspector.declaredSlotLabel}}
+                      <div>
+                        <dt>Slot declarado</dt>
+                        <dd>{{inventoryInspector.declaredSlotLabel}}</dd>
+                      </div>
+                    {{/if}}
+                    {{#if inventoryInspector.effectiveSlotLabel}}
+                      <div>
+                        <dt>Slot equipado</dt>
+                        <dd>{{inventoryInspector.effectiveSlotLabel}}</dd>
+                      </div>
+                    {{/if}}
+                  </dl>
 
-          <p class="hint">No tienes objetos a&uacute;n.</p>
+                  <section class="mtrol-inventory-inspector-description" aria-label="Descripci&oacute;n">
+                    <h5>Descripci&oacute;n</h5>
+                    {{#if inventoryInspector.description}}
+                      <p>{{inventoryInspector.description}}</p>
+                    {{else}}
+                      <p class="mtrol-inventory-inspector-empty-description">Sin descripci&oacute;n.</p>
+                    {{/if}}
+                  </section>
 
-        {{/if}}
+                  {{#if @root.esGM}}
+                    <div class="mtrol-inventory-inspector-admin" aria-label="Acciones administrativas del objeto">
+                      <button type="button" class="item-edit mtrol-inventory-asset-button" title="Editar objeto">
+                        <i class="fas fa-edit" aria-hidden="true"></i> Editar
+                      </button>
+                      <button type="button" class="item-delete mtrol-inventory-asset-button" data-confirm-delete="true" title="Eliminar objeto">
+                        <i class="fas fa-trash" aria-hidden="true"></i> Eliminar
+                      </button>
+                    </div>
+                  {{/if}}
+                </div>
+              {{else}}
+                <p class="mtrol-inventory-inspector-empty">Seleccion&aacute; un objeto para ver sus detalles.</p>
+              {{/if}}
+            </aside>
+          </section>
+        </div>
 
+        <footer class="mtrol-inventory-weight mtrol-inventory-weight--{{inventoryView.weight.state}}">
+          <div class="mtrol-inventory-weight-summary">
+            <span><strong>Carga</strong> {{inventoryView.weight.current}} / {{inventoryView.weight.capacity}}</span>
+            <span><strong>Disponible</strong> {{inventoryView.weight.remaining}}</span>
+            <span><strong>Estado</strong>
+              {{#if (eq inventoryView.weight.state 'overloaded')}}Sobrecargado{{/if}}
+              {{#if (eq inventoryView.weight.state 'heavy')}}Pesado{{/if}}
+              {{#if (eq inventoryView.weight.state 'normal')}}Normal{{/if}}
+            </span>
+          </div>
+          <div class="mtrol-carry-segments" aria-label="Carga: {{inventoryCarry.filled}} de 10 segmentos">
+            {{#each inventoryCarry.segments as |segment|}}
+              <span class="mtrol-carry-segment {{#if segment.filled}}is-filled{{/if}}" aria-hidden="true"></span>
+            {{/each}}
+          </div>
+        </footer>
       </section>
-
     </div>
 
     <!-- =============================== -->
@@ -1018,43 +1015,38 @@
 
         <div class="progresion-panel">
 
-          <section class="progresion-section progresion-section--resources">
-            <div class="progresion-section-header">
-              <h3>Recursos principales</h3>
+          <section class="progresion-summary" aria-label="Resumen de progresión">
+            <div class="progresion-summary-stat">
+              <span>Nivel actual</span>
+              <strong>{{progressionEvaluation.level}}</strong>
             </div>
-
-            <div class="progresion-grid">
-              <div class="progresion-card progresion-card--resource">
-                <label>Nivel</label>
-                <input type="number" name="system.recursos.nivel" value="{{system.recursos.nivel}}" {{#unless esGM}}disabled{{/unless}}>
+            <div class="progresion-summary-stat">
+              <span>Objetivo</span>
+              <strong>{{#if progressionEvaluation.maximumLevel}}M&aacute;ximo{{else}}{{progressionEvaluation.nextLevel}}{{/if}}</strong>
+            </div>
+            <div class="progresion-summary-progress">
+              <span>Progreso global</span>
+              <div class="progresion-global-progress-row">
+                <div class="progresion-global-progress" role="progressbar" aria-label="Progreso global" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{progressionEvaluation.globalProgress.percent}}">
+                  <span style="--progresion-global-progress: {{progressionEvaluation.globalProgress.percent}}%;"></span>
+                </div>
+                <strong>{{progressionEvaluation.globalProgress.percent}}%</strong>
               </div>
-
-              <div class="progresion-card progresion-card--resource progresion-card--exp">
-                <label>EXP</label>
-                <input type="number" name="system.recursos.exp" value="{{system.recursos.exp}}" {{#unless esGM}}disabled{{/unless}}>
-                {{#unless progressionEvaluation.maximumLevel}}
-                  <span class="progresion-exp-value">{{progressionEvaluation.expProgress.text}}</span>
-                  <div class="progresion-exp-bar" role="progressbar" aria-label="Progreso de experiencia" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{progressionEvaluation.expProgress.percent}}">
-                    <span style="--progresion-exp: {{progressionEvaluation.expProgress.percent}}%;"></span>
-                  </div>
-                {{else}}
-                  <span class="progresion-exp-value">Nivel m&aacute;ximo</span>
-                {{/unless}}
-              </div>
-
-              <div class="progresion-card progresion-card--resource">
-                <label>Doblones</label>
-                <input type="number" name="system.recursos.doblones" value="{{system.recursos.doblones}}" {{#unless esGM}}disabled{{/unless}}>
-              </div>
-
-              <div class="progresion-card progresion-card--resource">
-                <label>MVP</label>
-                <input type="number" name="system.recursos.mvp" value="{{system.recursos.mvp}}" {{#unless esGM}}disabled{{/unless}}>
-              </div>
+              <small>{{progressionEvaluation.globalProgress.text}} requisitos</small>
             </div>
           </section>
 
-          <section class="progresion-section progresion-section--requirements">
+          {{#if esGM}}
+            <section class="progresion-admin-resources" aria-label="Administración de recursos de progresión">
+              <label>Nivel <input type="number" name="system.recursos.nivel" value="{{system.recursos.nivel}}"></label>
+              <label>EXP <input type="number" name="system.recursos.exp" value="{{system.recursos.exp}}"></label>
+              <label>MVP <input type="number" name="system.recursos.mvp" value="{{system.recursos.mvp}}"></label>
+              <label>Doblones <input type="number" name="system.recursos.doblones" value="{{system.recursos.doblones}}"></label>
+            </section>
+          {{/if}}
+
+          <section class="progresion-ascension-workspace">
+          <div class="progresion-section progresion-section--requirements">
             <div class="progresion-section-header progresion-section-header--status">
               <div class="progresion-requirements-title-wrap">
                 {{#if progressionEvaluation.maximumLevel}}
@@ -1069,23 +1061,15 @@
                     <h3>REQUISITOS PARA SUBIR DE NIVEL</h3>
                     <span aria-hidden="true"></span>
                   </div>
-                  <span class="progresion-current-level">Objetivo actual: Nivel {{progressionEvaluation.level}} &rarr; {{progressionEvaluation.nextLevel}}</span>
                 {{/if}}
               </div>
-              {{#if esGM}}
-                {{#if progressionEvaluation.eligible}}
-                  <div class="progresion-level-up-wrap">
-                    <span class="progresion-eligible">Elegible para subir</span>
-                    <button type="button" class="mtrol-level-up">Subir de nivel</button>
-                  </div>
-                {{/if}}
-              {{/if}}
             </div>
 
             {{#unless progressionEvaluation.maximumLevel}}
               <ul class="progresion-requirements">
                 {{#each progressionEvaluation.requirements}}
-                  <li class="{{#if met}}is-complete{{else}}is-pending{{/if}}">
+                  <li class="{{#if met}}is-complete{{else}}is-pending{{/if}} {{#if selected}}is-selected{{/if}}"
+                      data-requirement-key="{{key}}" tabindex="0">
                     <span class="progresion-requirement-identity">
                       <span class="progresion-requirement-icon" aria-hidden="true"><i class="fas {{icon}}"></i></span>
                       <span class="progresion-requirement-label">{{label}}</span>
@@ -1131,8 +1115,8 @@
 
                 {{#if mtrolPendingAdvancement.attributePoints}}
                   <div class="progresion-pending-row">
-                    <label for="mtrol-pending-attribute">Atributo +1 ({{mtrolPendingAdvancement.attributePoints}})</label>
-                    <select id="mtrol-pending-attribute" class="mtrol-pending-attribute-select" {{#unless mtrolPendingAdvancement.attributeOptions.length}}disabled{{/unless}}>
+                    <label for="mtrol-pending-attribute-{{actor.id}}">Atributo +1 ({{mtrolPendingAdvancement.attributePoints}})</label>
+                    <select id="mtrol-pending-attribute-{{actor.id}}" class="mtrol-pending-attribute-select" {{#unless mtrolPendingAdvancement.attributeOptions.length}}disabled{{/unless}}>
                       {{#each mtrolPendingAdvancement.attributeOptions}}
                         <option value="{{key}}">{{label}} ({{value}})</option>
                       {{else}}
@@ -1145,8 +1129,8 @@
 
                 {{#if mtrolPendingAdvancement.competencePoints}}
                   <div class="progresion-pending-row">
-                    <label for="mtrol-pending-competence">Competencia +1 ({{mtrolPendingAdvancement.competencePoints}})</label>
-                    <select id="mtrol-pending-competence" class="mtrol-pending-competence-select" {{#unless mtrolPendingAdvancement.competenceOptions.length}}disabled{{/unless}}>
+                    <label for="mtrol-pending-competence-{{actor.id}}">Competencia +1 ({{mtrolPendingAdvancement.competencePoints}})</label>
+                    <select id="mtrol-pending-competence-{{actor.id}}" class="mtrol-pending-competence-select" {{#unless mtrolPendingAdvancement.competenceOptions.length}}disabled{{/unless}}>
                       {{#each mtrolPendingAdvancement.competenceOptions}}
                         <option value="{{id}}">{{name}} (nivel {{value}})</option>
                       {{else}}
@@ -1158,8 +1142,55 @@
                 {{/if}}
               </div>
             {{/if}}
+          </div>
+
+          <aside class="progresion-section progresion-requirement-detail" aria-label="Detalle del requisito seleccionado">
+            {{#if progressionEvaluation.selectedRequirement}}
+              <h3>{{progressionEvaluation.selectedRequirement.label}}</h3>
+              <p>{{progressionEvaluation.selectedRequirement.description}}</p>
+              <div class="progresion-detail-metrics">
+                <div class="progresion-detail-progress">
+                  <span>Progreso</span>
+                  <strong>{{progressionEvaluation.selectedRequirement.valueText}}</strong>
+                </div>
+                <div class="progresion-detail-state {{#if progressionEvaluation.selectedRequirement.met}}is-complete{{else}}is-pending{{/if}}">
+                  <span>Estado</span>
+                  <strong>{{progressionEvaluation.selectedRequirement.stateLabel}}</strong>
+                </div>
+              </div>
+            {{else}}
+              <h3>Nivel m&aacute;ximo alcanzado</h3>
+              <p>Este personaje complet&oacute; su recorrido de progresi&oacute;n.</p>
+            {{/if}}
+
+            {{#unless progressionEvaluation.maximumLevel}}
+              {{#if esGM}}
+                <button type="button" class="mtrol-level-up progresion-ascension-orb {{#if progressionEvaluation.eligible}}is-ready{{else}}is-locked{{/if}}"
+                        title="{{#if progressionEvaluation.eligible}}Ascender a Nivel {{progressionEvaluation.nextLevel}}{{else}}Completa todos los requisitos para subir de nivel{{/if}}"
+                        {{#unless progressionEvaluation.eligible}}disabled{{/unless}}>
+                  <img src="systems/mtrol/assets/ui/progression/orb-arcane/mtrol-orb-arcane-256.png" alt="Ascender a Nivel {{progressionEvaluation.nextLevel}}">
+                </button>
+              {{else}}
+                <button type="button" class="progresion-ascension-orb {{#if progressionEvaluation.eligible}}is-ready is-owner-ready{{else}}is-locked{{/if}}"
+                        title="{{#if progressionEvaluation.eligible}}Personaje preparado; sólo el GM puede ejecutar el ascenso{{else}}Completa todos los requisitos para subir de nivel{{/if}}" disabled>
+                  <img src="systems/mtrol/assets/ui/progression/orb-arcane/mtrol-orb-arcane-256.png" alt="Estado de ascenso a Nivel {{progressionEvaluation.nextLevel}}">
+                </button>
+              {{/if}}
+            {{/unless}}
+          </aside>
           </section>
 
+          <section class="progresion-section progresion-benefits">
+            <div class="progresion-section-header"><h3>Beneficios del siguiente nivel</h3></div>
+            <div class="progresion-benefits-grid">
+              <span class="progresion-benefit progresion-benefit--attribute"><i class="fas fa-fist-raised" aria-hidden="true"></i><strong>+1</strong><small>Atributo</small></span>
+              <span class="progresion-benefit progresion-benefit--competence"><i class="fas fa-book-open" aria-hidden="true"></i><strong>+1</strong><small>Competencia</small></span>
+              <span class="progresion-benefit progresion-benefit--hp"><i class="fas fa-heart" aria-hidden="true"></i><strong>+10</strong><small>HP m&aacute;x.</small></span>
+              <span class="progresion-benefit progresion-benefit--mp"><i class="fas fa-tint" aria-hidden="true"></i><strong>+10</strong><small>MP m&aacute;x.</small></span>
+            </div>
+          </section>
+
+          <div class="progresion-lower-grid">
           <section class="progresion-section progresion-orbs">
             <div class="progresion-section-header">
               <h3>Orbes otorgados</h3>
@@ -1168,6 +1199,7 @@
             <div class="progresion-orb-list">
               {{#each mtrolOrbs}}
                 <article class="progresion-orb-row" data-orb-id="{{id}}">
+                  <span class="progresion-orb-row-icon" aria-hidden="true"><i class="fas fa-gem"></i></span>
                   <div class="progresion-orb-main">
                     {{#if ../esGM}}
                       <select class="mtrol-orb-type" aria-label="Tipo de Orbe">
@@ -1182,14 +1214,20 @@
                       </select>
                       <button type="button" class="mtrol-orb-delete" aria-label="Eliminar Orbe">Eliminar</button>
                     {{else}}
-                      <strong>{{name}}</strong>
-                      <span>Nivel {{level}} — {{levelName}}</span>
+                      <strong class="progresion-orb-name">{{name}}</strong>
+                      <span class="progresion-orb-level-copy">Nivel {{level}} — {{levelName}}</span>
                     {{/if}}
                   </div>
                   <div class="progresion-orb-detail">
-                    <span>Pasiva: {{passiveName}}</span>
-                    <small>{{passiveDescription}}</small>
-                    <span>Bonus de tirada: +{{rollBonus}}</span>
+                    <div class="progresion-orb-passive">
+                      <span class="progresion-orb-detail-label">Pasiva:</span>
+                      <strong class="progresion-orb-passive-name">{{passiveName}}</strong>
+                      <small class="progresion-orb-description">{{passiveDescription}}</small>
+                    </div>
+                    <div class="progresion-orb-bonus">
+                      <span class="progresion-orb-detail-label">Bonus de tirada:</span>
+                      <strong class="progresion-orb-bonus-value">+{{rollBonus}}</strong>
+                    </div>
                   </div>
                 </article>
               {{else}}
@@ -1216,42 +1254,6 @@
             {{/if}}
           </section>
 
-          <section class="progresion-section progresion-section--spiritual">
-            <div class="progresion-section-header">
-              <h3>Estado espiritual</h3>
-            </div>
-
-            <div class="progresion-grid">
-              <div class="progresion-card progresion-card--spiritual progresion-card--dharma">
-                <label>Dharma</label>
-                <div class="progresion-score-wrap">
-                  <div class="progresion-score" style="--progresion-score: {{system.recursos.dharma}};" aria-hidden="true"></div>
-                  <span class="progresion-score-count">{{system.recursos.dharma}}/5</span>
-                </div>
-                <input type="number" name="system.recursos.dharma" value="{{system.recursos.dharma}}" min="0" max="5" {{#unless esGM}}disabled{{/unless}}>
-              </div>
-
-              <div class="progresion-card progresion-card--spiritual progresion-card--karma">
-                <label>Karma</label>
-                <div class="progresion-score-wrap">
-                  <div class="progresion-score" style="--progresion-score: {{system.recursos.karma}};" aria-hidden="true"></div>
-                  <span class="progresion-score-count">{{system.recursos.karma}}/5</span>
-                </div>
-                <input type="number" name="system.recursos.karma" value="{{system.recursos.karma}}" min="0" max="5" {{#unless esGM}}disabled{{/unless}}>
-              </div>
-
-              <div class="progresion-card progresion-card--spiritual progresion-card--estres">
-                <label>Estr&eacute;s</label>
-                <input type="number" name="system.recursos.estres" value="{{system.recursos.estres}}" {{#unless esGM}}disabled{{/unless}}>
-              </div>
-
-              <div class="progresion-card progresion-card--spiritual progresion-card--corrupcion">
-                <label>Corrupci&oacute;n</label>
-                <input type="number" name="system.recursos.corrupcion" value="{{system.recursos.corrupcion}}" {{#unless esGM}}disabled{{/unless}}>
-              </div>
-            </div>
-          </section>
-
           <section class="progresion-section progresion-section--talents">
             <div class="progresion-section-header">
               <h3>Desarrollo del personaje</h3>
@@ -1260,25 +1262,27 @@
             <div class="progresion-grid">
               <div class="progresion-card progresion-card--talent">
                 <label>Pasiva</label>
-                <input type="text" name="system.recursos.pasiva" value="{{system.recursos.pasiva}}" {{#unless esGM}}disabled{{/unless}}>
+                <input type="text" name="system.recursos.pasiva" value="{{system.recursos.pasiva}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
               </div>
 
               <div class="progresion-card progresion-card--talent">
                 <label>Despertar</label>
-                <input type="text" name="system.recursos.despertar" value="{{system.recursos.despertar}}" {{#unless esGM}}disabled{{/unless}}>
+                <input type="text" name="system.recursos.despertar" value="{{system.recursos.despertar}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
               </div>
 
               <div class="progresion-card progresion-card--talent">
                 <label>Habilidad Especial I</label>
-                <input type="text" name="system.recursos.habilidadEspecial1" value="{{system.recursos.habilidadEspecial1}}" {{#unless esGM}}disabled{{/unless}}>
+                <input type="text" name="system.recursos.habilidadEspecial1" value="{{system.recursos.habilidadEspecial1}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
               </div>
 
               <div class="progresion-card progresion-card--talent">
                 <label>Habilidad Especial II</label>
-                <input type="text" name="system.recursos.habilidadEspecial2" value="{{system.recursos.habilidadEspecial2}}" {{#unless esGM}}disabled{{/unless}}>
+                <input type="text" name="system.recursos.habilidadEspecial2" value="{{system.recursos.habilidadEspecial2}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
               </div>
             </div>
           </section>
+
+          </div>
 
         </div>
 

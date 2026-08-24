@@ -1,263 +1,441 @@
 /* =========================================================
-   MTROL - COMPETENCIAS
-   Libro de competencias generales
+   MTROL - COMPETENCIAS PREMIUM
 ========================================================= */
 
-.mtrol-personaje-sheet .mtrol-competencias-header h2 {
-  text-decoration: none;
-
-  border: 0 !important;
-  border-bottom: 0 !important;
-  box-shadow: none;
+.mtrol-personaje-sheet .mtrol-tab-competencias {
+  container: mtrol-competencias / inline-size;
+  min-width: 0;
+  padding: clamp(8px, 1.4cqi, 16px);
+  overflow-x: hidden;
 }
 
-.mtrol-personaje-sheet .mtrol-competencias-header h2::before,
-.mtrol-personaje-sheet .mtrol-competencias-header h2::after {
-  display: none !important;
-  content: none !important;
+.mtrol-personaje-sheet .mtrol-competencias-section,
+.mtrol-personaje-sheet .competencias-list {
+  min-width: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-competencias-section {
+  display: grid;
+  gap: 10px;
+}
+
+.mtrol-personaje-sheet .mtrol-competencias-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 2px 4px;
+  border: 0;
+  background: transparent;
 }
 
 .mtrol-personaje-sheet .mtrol-competencias-header .add-competencia {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 8px;
-
-  color: #f2d27a;
-  font-size: .72em;
+  gap: 6px;
+  width: auto;
+  min-width: 84px;
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
+  color: #dcc37f;
+  background: linear-gradient(180deg, rgba(54, 16, 22, .96), rgba(16, 5, 8, .98));
+  border: 1px solid rgba(193, 145, 71, .34);
+  border-radius: 5px;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 12px;
+  letter-spacing: .045em;
+  line-height: 1;
   text-decoration: none;
-  vertical-align: middle;
 }
 
-.competencias-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.mtrol-personaje-sheet .mtrol-competencias-header .add-competencia:hover {
+  color: #f5dda0;
+  border-color: rgba(225, 187, 105, .58);
+  background: linear-gradient(180deg, rgba(80, 22, 31, .98), rgba(24, 7, 11, .98));
 }
 
-.competencia-row {
+.mtrol-personaje-sheet .competencias-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mtrol-personaje-sheet .competencia-row {
   position: relative;
-  min-height: 66px;
-  padding: 10px 12px;
-  overflow: hidden;
-
-  display: flex;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 126px minmax(126px, 1fr) minmax(126px, 154px) minmax(142px, 172px);
+  grid-template-areas: "media info level actions";
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
+  gap: clamp(8px, 1.15cqi, 14px);
+  min-width: 0;
+  min-height: 140px;
+  padding: 7px 10px;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 0% 0%, rgba(216, 194, 122, .10), transparent 32%),
-    linear-gradient(180deg, rgba(14, 12, 8, .92), rgba(2, 2, 3, .97));
-
-  border: 1px solid rgba(216, 194, 122, .34);
-  border-radius: 11px;
-
-  box-shadow:
-    inset 0 0 16px rgba(0, 0, 0, .76),
-    0 7px 15px rgba(0, 0, 0, .38);
-
-  transition:
-    transform .16s ease,
-    border-color .16s ease,
-    box-shadow .16s ease;
+    radial-gradient(circle at 2% 20%, rgba(84, 22, 35, .16), transparent 31%),
+    linear-gradient(115deg, rgba(15, 12, 17, .95), rgba(5, 4, 7, .98));
+  border: 1px solid rgba(178, 157, 112, .2);
+  border-radius: 8px;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, .62), 0 5px 12px rgba(0, 0, 0, .3);
+  transition: transform .16s ease, filter .16s ease;
 }
 
-.competencia-row::before {
-  content: "";
+.mtrol-personaje-sheet .competencia-row:hover {
+  z-index: 2;
+  filter: brightness(1.035);
+  transform: translateY(-1px);
+}
+
+.mtrol-personaje-sheet .competencia-medallion {
+  grid-area: media;
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 126px;
+  height: 126px;
+  min-width: 126px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet button.competencia-medallion {
+  cursor: pointer;
+}
+
+.mtrol-personaje-sheet .competencia-medallion-image {
   position: absolute;
+  z-index: 0;
+  inset: 12%;
+  display: block;
+  width: 76%;
+  height: 76%;
+  margin: 0;
+  object-fit: cover;
+  object-position: center;
+  background: #0b0a0d;
+  border: 0;
+  border-radius: 50%;
+}
+
+.mtrol-personaje-sheet .competencia-medallion-frame {
+  position: absolute;
+  z-index: 2;
   inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: contain;
+  border: 0;
+  pointer-events: none;
+  user-select: none;
+}
 
-  background:
-    linear-gradient(115deg, rgba(255, 226, 140, .075), transparent 26%, transparent 72%, rgba(120, 24, 12, .08));
-
-  opacity: .72;
+.mtrol-personaje-sheet .competencia-image-edit-indicator {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 1px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #d8c183;
+  background: #120d12;
+  border: 1px solid rgba(211, 187, 128, .55);
+  border-radius: 50%;
+  font-size: 11px;
   pointer-events: none;
 }
 
-.competencia-row > * {
+.mtrol-personaje-sheet .competencia-image-edit:hover .competencia-medallion-image {
+  filter: brightness(1.12);
+}
+
+.mtrol-personaje-sheet .competencia-image-edit:focus-visible {
+  outline: 2px solid #e1c77e;
+  outline-offset: 2px;
+}
+
+.mtrol-personaje-sheet .competencia-info {
+  grid-area: info;
   position: relative;
-  z-index: 1;
-}
-
-.competencia-row:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 226, 140, .62);
-
-  box-shadow:
-    inset 0 0 16px rgba(0, 0, 0, .78),
-    0 10px 19px rgba(0, 0, 0, .48),
-    0 0 15px rgba(216, 194, 122, .18);
-}
-
-.competencia-main {
-  min-width: 0;
-
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.competencia-icon {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  object-fit: cover;
-
-  color: rgba(242, 210, 122, .82);
-  background:
-    radial-gradient(circle at top, rgba(255, 226, 140, .14), transparent 58%),
-    linear-gradient(180deg, rgba(21, 17, 10, .98), rgba(1, 1, 2, .98));
-
-  border: 1px solid rgba(216, 194, 122, .52);
-  border-radius: 10px;
-
-  box-shadow:
-    inset 0 0 9px rgba(0, 0, 0, .74),
-    0 0 10px rgba(216, 194, 122, .14);
-}
-
-.competencia-icon-fallback {
-  font-size: 14px;
-}
-
-.competencia-info {
-  min-width: 0;
-
+  z-index: 2;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 3px;
+  min-width: 0;
+  text-align: center;
 }
 
-.competencia-nombre {
+.mtrol-personaje-sheet .competencia-nombre {
   overflow: hidden;
-
-  color: #fff0ba;
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: .2px;
-  line-height: 1.1;
+  color: #ebd28f;
+  background: linear-gradient(180deg, #fff0b2 0%, #dfb955 48%, #9d671c 100%);
+  background-clip: text;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.08;
+  text-decoration: none;
   text-overflow: ellipsis;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .92);
   white-space: nowrap;
-
-  text-shadow:
-    0 0 8px rgba(212, 175, 55, .18),
-    0 2px 3px rgba(0, 0, 0, .92);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.competencia-subtitle {
+.mtrol-personaje-sheet .competencia-subtitle {
   overflow: hidden;
-
-  color: rgba(230, 200, 120, .62);
+  color: #bda879;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
   font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .10em;
+  font-weight: 600;
+  letter-spacing: .08em;
   line-height: 1;
+  text-decoration: none;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.competencia-controles {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 7px;
-  flex: 0 0 auto;
+.mtrol-personaje-sheet .competencia-info .mtrol-action-formula {
+  overflow: hidden;
+  color: #d7d0c3;
+  font-family: var(--mtrol-font-body, Georgia), serif;
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.competencia-nivel {
-  min-width: 42px;
-  height: 30px;
-
+.mtrol-personaje-sheet .mtrol-competencia-actions {
+  grid-area: actions;
+  position: relative;
+  z-index: 2;
   display: flex;
-  align-items: center;
-  justify-content: center;
-
-  color: #ffe28c;
-  font-size: 15px;
-  font-weight: 900;
-
-  background:
-    radial-gradient(circle at top, rgba(255, 226, 140, .10), transparent 58%),
-    linear-gradient(180deg, rgba(13, 11, 8, .94), rgba(0, 0, 0, .96));
-
-  border: 1px solid rgba(216, 194, 122, .38);
-  border-radius: 999px;
-
-  box-shadow:
-    inset 0 0 8px rgba(0, 0, 0, .70),
-    0 0 8px rgba(216, 194, 122, .08);
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
-.competencia-controles a {
-  width: 30px;
-  height: 30px;
-
-  display: flex;
+.mtrol-personaje-sheet .mtrol-competencia-actions button {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  color: rgba(242, 210, 122, .82);
-  background:
-    radial-gradient(circle at top, rgba(255, 226, 140, .08), transparent 60%),
-    linear-gradient(180deg, rgba(16, 15, 13, .94), rgba(3, 3, 4, .96));
-
-  border: 1px solid rgba(216, 194, 122, .28);
-  border-radius: 7px;
-
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 900 / 226;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 12%;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(9px, 1.05cqi, 12px);
+  font-weight: 700;
+  letter-spacing: .045em;
+  line-height: 1;
   text-decoration: none;
-
-  transition:
-    color .16s ease,
-    border-color .16s ease,
-    box-shadow .16s ease,
-    transform .16s ease;
+  text-shadow: 0 2px 3px #000;
+  box-shadow: none;
 }
 
-.competencia-controles a:hover {
-  color: #fff0c2;
-  transform: translateY(-1px);
-  border-color: rgba(242, 210, 122, .62);
-  box-shadow:
-    inset 0 0 8px rgba(216, 194, 122, .06),
-    0 0 10px rgba(216, 194, 122, .18);
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-dharma-prepare {
+  color: #bbb6aa;
+  background: transparent url("../../assets/ui/combat/combat-dharma-inactive.png") center / 100% 100% no-repeat;
 }
 
-.competencias-list .hint {
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-dharma-prepare:hover:not(:disabled) {
+  color: #e9e0ca;
+  filter: brightness(1.14);
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions[data-mtrol-dharma-prepared="true"] .mtrol-dharma-prepare {
+  color: #291706;
+  filter: sepia(1) saturate(3.1) hue-rotate(355deg) brightness(1.45) contrast(1.04);
+  text-shadow: 0 1px 1px rgba(255, 239, 176, .46);
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-dharma-prepare:disabled {
+  opacity: .46;
+  filter: grayscale(.72) brightness(.72);
+  cursor: not-allowed;
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-action-execute {
+  color: #edcf7b;
+  background: transparent url("../../assets/ui/combat/combat-execute-normal.png") center / 100% 100% no-repeat;
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-action-execute:hover {
+  color: #ffe7a3;
+  background-image: url("../../assets/ui/combat/combat-execute-hover.png");
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions .mtrol-action-execute:active {
+  color: #ffe9ad;
+  background-image: url("../../assets/ui/combat/combat-execute-active.png");
+  transform: translateY(1px);
+}
+
+.mtrol-personaje-sheet .mtrol-competencia-actions button:focus-visible {
+  outline: 2px solid #f1d486;
+  outline-offset: -4px;
+}
+
+.mtrol-personaje-sheet .competencia-level {
+  grid-area: level;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mtrol-personaje-sheet .competencia-level-label {
+  color: #d6bd7d;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .055em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mtrol-personaje-sheet .competencia-level-controls,
+.mtrol-personaje-sheet .competencia-level-markers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mtrol-personaje-sheet .competencia-level-controls {
+  gap: 5px;
+}
+
+.mtrol-personaje-sheet .competencia-level-markers {
+  gap: 4px;
+}
+
+.mtrol-personaje-sheet .competencia-level-marker {
+  display: block;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(145deg, #151217, #060507);
+  border: 1px solid rgba(169, 155, 128, .38);
+  transform: rotate(45deg);
+}
+
+.mtrol-personaje-sheet .competencia-level-marker.is-active {
+  background: linear-gradient(145deg, #fff0a7 0%, #d4a846 48%, #76501b 100%);
+  border-color: #e6ca7e;
+  box-shadow: 0 0 5px rgba(224, 184, 91, .52);
+}
+
+.mtrol-personaje-sheet .competencia-level-controls > button,
+.mtrol-personaje-sheet .competencia-admin-controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+  margin: 0;
+  padding: 0;
+  color: #b8aa8a;
+  background: linear-gradient(180deg, rgba(25, 21, 25, .96), rgba(5, 4, 6, .98));
+  border: 1px solid rgba(176, 157, 116, .25);
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: 10px;
+}
+
+.mtrol-personaje-sheet .competencia-level-controls > button:hover,
+.mtrol-personaje-sheet .competencia-admin-controls > button:hover {
+  color: #e6d099;
+  border-color: rgba(213, 184, 121, .48);
+}
+
+.mtrol-personaje-sheet .competencia-admin-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.mtrol-personaje-sheet .competencia-admin-controls .item-delete:hover {
+  color: #df9a9f;
+  border-color: rgba(165, 62, 73, .58);
+}
+
+.mtrol-personaje-sheet .competencias-list .hint {
   margin: 0;
   padding: 20px 14px;
-
-  color: rgba(244, 234, 210, .60);
+  color: rgba(244, 234, 210, .6);
   text-align: center;
   font-style: italic;
-
-  background:
-    linear-gradient(180deg, rgba(14, 13, 11, .60), rgba(0, 0, 0, .72));
-
+  background: linear-gradient(180deg, rgba(14, 13, 11, .6), rgba(0, 0, 0, .72));
   border: 1px dashed rgba(216, 194, 122, .24);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
-@media (max-width: 700px) {
-  .competencia-row {
-    flex-direction: column;
-    align-items: flex-start;
+@container mtrol-competencias (max-width: 820px) {
+  .mtrol-personaje-sheet .competencia-row {
+    grid-template-columns: 126px minmax(0, 1fr) minmax(142px, 172px);
+    grid-template-areas:
+      "media info actions"
+      "media level actions";
+  }
+}
+
+@container mtrol-competencias (max-width: 540px) {
+  .mtrol-personaje-sheet .competencia-row {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-areas:
+      "media info"
+      "level level"
+      "actions actions";
+    gap: 7px 10px;
+    padding: 14px 24px 18px;
   }
 
-  .competencia-controles {
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+  .mtrol-personaje-sheet .competencia-medallion {
+    width: 112px;
+    height: 112px;
+    min-width: 112px;
   }
 
-  .competencia-controles a {
-    width: 28px;
-    height: 28px;
+  .mtrol-personaje-sheet .mtrol-competencia-actions {
+    width: min(100%, 240px);
+    justify-self: center;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtrol-personaje-sheet .competencia-row {
+    transition: none;
   }
 }

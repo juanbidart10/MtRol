@@ -88,6 +88,10 @@ import {
   installMtrolOrbAuthorityHooks
 } from "../progression/orb-authority.js";
 
+import {
+  installMtrolClassResourceAuthorityHooks
+} from "../actors/class-resource-service.js";
+
 // =========================
 // INIT MTROL
 // =========================
@@ -200,6 +204,7 @@ export async function initMtrol() {
   installMtrolStatesApi();
   installMtrolDeathApi();
   installMtrolOrbAuthorityHooks();
+  installMtrolClassResourceAuthorityHooks();
   installMtrolActionsApi();
   registerResolvedDamageChatHandler();
   registerMtrolPremiumRollCards();

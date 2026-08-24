@@ -68,6 +68,10 @@
 @import url("./combat/premium-roll-cards.css");
 @import url("./combat/destiny-cards.css");
 
+/* Scoped Actor Sheet MVP overrides load last. */
+@import url("./sheets/personaje-premium.css");
+@import url("./sheets/inventory-workspace.css");
+
 #hotbar {
   display: none !important;
 }

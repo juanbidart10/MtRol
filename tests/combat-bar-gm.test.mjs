@@ -5,6 +5,8 @@ import { readFile } from "node:fs/promises";
 const warnings = [];
 const metrics = {
   actorUpdates: 0,
+  actorUpdatePayloads: [],
+  actorUpdateOptions: [],
   creates: 0,
   createdDocuments: [],
   embeddedUpdates: 0,
@@ -19,6 +21,8 @@ const metrics = {
 function resetMetrics() {
   warnings.length = 0;
   metrics.actorUpdates = 0;
+  metrics.actorUpdatePayloads = [];
+  metrics.actorUpdateOptions = [];
   metrics.creates = 0;
   metrics.createdDocuments = [];
   metrics.embeddedUpdates = 0;
@@ -56,7 +60,37 @@ class MockActorSheet {
   }
 }
 
+let randomIdSequence = 0;
+let dialogDecision = "cancel";
+
+globalThis.Dialog = class MockDialog {
+  constructor(options) { this.options = options; }
+  render() {
+    this.options.buttons[dialogDecision]?.callback?.();
+    return this;
+  }
+};
+
 globalThis.foundry = {
+  applications: {
+    apps: {
+      FilePicker: {
+        implementation: class MockFilePicker {
+          static selectedPath = "";
+
+          constructor(options) {
+            this.options = options;
+          }
+
+          async browse() {
+            if (this.constructor.selectedPath) {
+              await this.options.callback(this.constructor.selectedPath);
+            }
+          }
+        }
+      }
+    }
+  },
   appv1: {
     sheets: {
       ActorSheet: MockActorSheet
@@ -67,7 +101,7 @@ globalThis.foundry = {
     duplicate: value => structuredClone(value),
     escapeHTML: value => String(value ?? ""),
     mergeObject: (target, source) => Object.assign(target, source),
-    randomID: () => "request-id"
+    randomID: () => `request-id-${++randomIdSequence}`
   }
 };
 
@@ -117,9 +151,14 @@ const progressionStyleSource = await readFile(
   new URL("../styles/sheets/progresion.css", import.meta.url),
   "utf8"
 );
+const personajeStyleSource = await readFile(
+  new URL("../styles/sheets/personaje.css", import.meta.url),
+  "utf8"
+);
 
 function applyItemUpdate(item, changes) {
   for (const [path, value] of Object.entries(changes)) {
+    if (path === "img") item.img = value;
     if (path === "system.nivel") item.system.nivel = value;
     if (path === "system.equipadaCombate") {
       item.system.equipadaCombate = value;
@@ -167,6 +206,18 @@ function createCompetencia({
   return item;
 }
 
+function applyActorUpdate(actor, changes) {
+  for (const [path, value] of Object.entries(changes)) {
+    const parts = path.split(".");
+    let target = actor;
+    for (const part of parts.slice(0, -1)) {
+      target[part] ??= {};
+      target = target[part];
+    }
+    target[parts.at(-1)] = value;
+  }
+}
+
 function createActor() {
   const combat = createCompetencia({
     id: "combat",
@@ -191,7 +242,8 @@ function createActor() {
     isOwner: true,
     items,
     system: {
-      atributos: { fuerza: 1 },
+      identidad: { clase: "", classId: "" },
+      atributos: { fuerza: 1, resistencia: 2, inteligencia: 4 },
       recursos: { nivel: 1, exp: 0, mvp: 0, dharma: 2, karma: 0 },
       progression: {
         missionsCompleted: 0,
@@ -209,10 +261,17 @@ function createActor() {
         hp: { value: 10, max: 10 },
         mp: { value: 10, max: 10 }
       },
+      resourceModifiers: {
+        hp: { value: 0, label: "" },
+        mp: { value: 0, label: "" }
+      },
       equipamiento: {}
     },
-    async update() {
+    async update(changes, options = {}) {
       metrics.actorUpdates++;
+      metrics.actorUpdatePayloads.push(structuredClone(changes));
+      metrics.actorUpdateOptions.push(structuredClone(options));
+      applyActorUpdate(this, changes);
     },
     async createEmbeddedDocuments(documentName, documents) {
       metrics.creates++;
@@ -230,6 +289,26 @@ function createActor() {
     async unsetFlag() {},
     getActiveTokens() {
       return [];
+    }
+  };
+}
+
+function createResourceConfigEvent(configKey, value) {
+  const eventMetrics = { prevented: 0, stopped: 0, immediate: 0 };
+  return {
+    eventMetrics,
+    preventDefault() {
+      eventMetrics.prevented++;
+    },
+    stopPropagation() {
+      eventMetrics.stopped++;
+    },
+    stopImmediatePropagation() {
+      eventMetrics.immediate++;
+    },
+    currentTarget: {
+      value,
+      dataset: { configKey }
     }
   };
 }
@@ -274,15 +353,6 @@ function registeredSelectors(registrations) {
   return new Set(registrations.map(entry => entry.selector));
 }
 
-function getAdminTemplateBlock() {
-  const match = templateSource.match(
-    /{{#if esGM}}\s*(<section class="sheet-section combate-section">[\s\S]*?<\/section>)\s*{{\/if}}/
-  );
-
-  assert.ok(match, "La sección completa debe estar dentro de {{#if esGM}}.");
-  return match[1];
-}
-
 test("el contexto GM recibe la barra y el jugador solo conserva acciones equipadas", () => {
   const actor = createActor();
   const sheet = new PersonajeSheet(actor);
@@ -305,6 +375,8 @@ test("el contexto GM recibe la barra y el jugador solo conserva acciones equipad
   assert.equal(playerContext.habilidadesEquipadasCombate[0].id, "combat");
   assert.equal(playerContext.habilidadesEquipadasCombate[0].mtrolDharmaEnabled, true);
   assert.equal(playerContext.habilidadesEquipadasCombate[0].mtrolRollFormula, "1d10 + 1");
+  assert.equal(playerContext.combatLibrary.groups.length, 1);
+  assert.equal(playerContext.combatLibrary.physicalActions[0].id, "combat");
   assert.equal(playerContext.competenciasGenerales[0].mtrolDharmaEligible, false);
 });
 
@@ -320,6 +392,164 @@ test("solo el GM puede editar HP/MP aunque el jugador sea Owner", () => {
   assert.equal(sheet.getData().puedeEditarVitales, false);
   actor.isOwner = false;
   assert.equal(sheet.getData().puedeEditarVitales, false);
+});
+
+test("Fase 5 prepara las 25 Clases canónicas y nunca infiere desde el label legacy", () => {
+  const actor = createActor();
+  actor.system.identidad.clase = "Mago";
+  actor.system.identidad.classId = "";
+
+  game.user.isGM = true;
+  const legacyContext = new PersonajeSheet(actor).getData();
+
+  assert.equal(legacyContext.classOptions.length, 25);
+  assert.equal(legacyContext.selectedClassId, "");
+  assert.equal(legacyContext.selectedClassLabel, "Sin clase seleccionada");
+  assert.equal(legacyContext.canManageClass, true);
+  assert.equal(legacyContext.canManageResourceModifiers, true);
+  assert.deepEqual(
+    legacyContext.classOptions.slice(0, 3).map(option => option.id),
+    ["asesino", "bandido", "caballero"]
+  );
+  assert.equal(
+    legacyContext.classOptions.find(option => option.id === "mago")?.label,
+    "Mago"
+  );
+  assert.equal(
+    legacyContext.classOptions.find(option => option.id === "espadachin")?.label,
+    "Espadachín"
+  );
+  assert.equal(legacyContext.classOptions.some(option => option.selected), false);
+
+  actor.system.identidad.classId = "mago";
+  actor.system.identidad.clase = "Texto legacy incorrecto";
+  const activeContext = new PersonajeSheet(actor).getData();
+  assert.equal(activeContext.selectedClassId, "mago");
+  assert.equal(activeContext.selectedClassLabel, "Mago");
+  assert.equal(
+    activeContext.classOptions.find(option => option.id === "mago")?.selected,
+    true
+  );
+
+  game.user.isGM = false;
+  const playerContext = new PersonajeSheet(actor).getData();
+  assert.equal(playerContext.selectedClassLabel, "Mago");
+  assert.equal(playerContext.canManageClass, false);
+  assert.equal(playerContext.canManageResourceModifiers, false);
+});
+
+test("Fase 5 usa controles semánticos sin names persistentes y mantiene permisos visuales", () => {
+  assert.match(templateSource, /{{#if canManageClass}}[\s\S]*?<select[^>]*class="[^"]*mtrol-class-select[^"]*"/);
+  assert.match(templateSource, /{{#each classOptions}}[\s\S]*?value="{{id}}"/);
+  assert.match(templateSource, /{{#if selected}}selected{{\/if}}/);
+  assert.match(templateSource, /{{else}}[\s\S]*?class="mtrol-class-readonly"[\s\S]*?{{selectedClassLabel}}/);
+  assert.match(templateSource, /{{#if canManageResourceModifiers}}[\s\S]*?class="mtrol-resource-admin"/);
+  assert.match(templateSource, /{{#each resourceModifierEntries}}/);
+  assert.match(templateSource, /class="mtrol-resource-modifier-add"/);
+  assert.match(templateSource, /class="mtrol-resource-modifier-delete"/);
+  assert.match(templateSource, /class="mtrol-resource-admin-footer"[\s\S]*?class="mtrol-resource-modifier-add"/);
+  assert.match(templateSource, /data-resource="hp" data-field="value"/);
+  assert.match(templateSource, /data-resource="hp" data-field="label"/);
+  assert.match(templateSource, /data-resource="mp" data-field="value"/);
+  assert.match(templateSource, /data-resource="mp" data-field="label"/);
+  assert.doesNotMatch(templateSource, /name="system\.identidad\.classId"/);
+  assert.doesNotMatch(templateSource, /name="system\.resourceModifiers\./);
+  assert.match(templateSource, /name="system\.vitales\.hp\.max"[\s\S]*?{{#unless puedeEditarVitalesMax}}disabled/);
+  assert.match(templateSource, /name="system\.vitales\.mp\.max"[\s\S]*?{{#unless puedeEditarVitalesMax}}disabled/);
+  assert.match(personajeStyleSource, /\.mtrol-resource-admin-entry\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,/);
+  assert.match(personajeStyleSource, /\.mtrol-resource-admin-entry\s*{[\s\S]*?grid-template-areas:\s*"hp mp"/);
+  assert.match(personajeStyleSource, /\.mtrol-resource-modifier-delete\s*{[\s\S]*?right:\s*7px\s*!important[\s\S]*?left:\s*auto\s*!important/);
+  assert.match(personajeStyleSource, /@container mtrol-sheet \(max-width: 520px\)[\s\S]*?\.mtrol-resource-admin-entry\s*{[\s\S]*?grid-template-columns:\s*1fr/);
+});
+
+test("handler GM de Clase usa una única escritura autoritativa y detiene el submit genérico", async () => {
+  resetMetrics();
+  const actor = createActor();
+  actor.system.recursos.nivel = 3;
+  actor.system.vitales.hp = { value: 27, max: 30 };
+  actor.system.vitales.mp = { value: 19, max: 25 };
+  const sheet = new PersonajeSheet(actor);
+
+  game.user = { id: "gm", isGM: true, targets: new Set() };
+  game.users = [game.user];
+  const event = createResourceConfigEvent("classId", "mago");
+
+  await sheet._onClassResourceConfigurationChange(event);
+
+  assert.equal(metrics.actorUpdates, 1);
+  assert.equal(metrics.actorUpdateOptions[0].mtrolClassResourceTransition, true);
+  assert.equal(actor.system.identidad.classId, "mago");
+  assert.equal(actor.system.identidad.clase, "Mago");
+  assert.deepEqual(actor.system.vitales.hp, { value: 37, max: 40 });
+  assert.deepEqual(actor.system.vitales.mp, { value: 64, max: 70 });
+  assert.deepEqual(event.eventMetrics, { prevented: 1, stopped: 1, immediate: 1 });
+  assert.equal(sheet.getData().selectedClassLabel, "Mago");
+  assert.equal(sheet.getData().puedeEditarVitalesMax, false);
+  assert.equal(metrics.sheetRenders, 0);
+});
+
+test("handlers GM de modifier y label realizan una escritura por intención sin calcular en Sheet", async () => {
+  resetMetrics();
+  const actor = createActor();
+  actor.system.identidad = { classId: "mago", clase: "Mago" };
+  actor.system.recursos.nivel = 3;
+  actor.system.vitales.hp = { value: 37, max: 40 };
+  actor.system.vitales.mp = { value: 64, max: 70 };
+  const sheet = new PersonajeSheet(actor);
+
+  game.user = { id: "gm", isGM: true, targets: new Set() };
+  game.users = [game.user];
+
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("hpModifier", "10")
+  );
+  assert.equal(metrics.actorUpdates, 1);
+  assert.equal(actor.system.resourceModifiers.hp.value, 10);
+  assert.deepEqual(actor.system.vitales.hp, { value: 47, max: 50 });
+
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("mpModifier", "10")
+  );
+  assert.equal(metrics.actorUpdates, 2);
+  assert.equal(actor.system.resourceModifiers.mp.value, 10);
+  assert.deepEqual(actor.system.vitales.mp, { value: 74, max: 80 });
+
+  const vitalsBeforeLabel = structuredClone(actor.system.vitales);
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("hpModifierLabel", "Bendición de Dios")
+  );
+  assert.equal(metrics.actorUpdates, 3);
+  assert.equal(actor.system.resourceModifiers.hp.label, "Bendición de Dios");
+  assert.deepEqual(actor.system.vitales, vitalsBeforeLabel);
+  assert.equal(
+    Object.keys(metrics.actorUpdatePayloads[2]).some(path => path.startsWith("system.vitales.")),
+    false
+  );
+
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("hpModifier", "0")
+  );
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("mpModifier", "0")
+  );
+  assert.equal(metrics.actorUpdates, 5);
+  assert.deepEqual(actor.system.vitales.hp, { value: 37, max: 40 });
+  assert.deepEqual(actor.system.vitales.mp, { value: 64, max: 70 });
+});
+
+test("handler administrativo invocado por Player no escribe", async () => {
+  resetMetrics();
+  const actor = createActor();
+  const sheet = new PersonajeSheet(actor);
+  game.user = { id: "player", isGM: false, targets: new Set() };
+  game.users = [game.user];
+
+  await sheet._onClassResourceConfigurationChange(
+    createResourceConfigEvent("classId", "mago")
+  );
+
+  assert.equal(metrics.actorUpdates, 0);
+  assert.match(warnings.at(-1), /Solo un GM/);
 });
 
 test("el submit de jugador elimina HP/MP value y max sin perder otros campos permitidos", async () => {
@@ -338,6 +568,8 @@ test("el submit de jugador elimina HP/MP value y max sin perder otros campos per
     "system.progression.dmApproval": true,
     "system.pendingAdvancement.attributePoints": 99,
     "system.pendingAdvancement.competencePoints": 99,
+    "system.identidad.classId": "mago",
+    "system.resourceModifiers.hp.value": 100,
     "system.nombrePublico": "Permitido"
   });
 
@@ -359,7 +591,10 @@ test("el submit GM conserva HP/MP y campos administrativos de progresión", asyn
     "system.progression.dungeonsCompleted": 1,
     "system.progression.meritCredits": 8,
     "system.progression.defeatedLevel5Enemy": true,
-    "system.progression.dmApproval": true
+    "system.progression.dmApproval": true,
+    "system.identidad.classId": "mago",
+    "system.resourceModifiers.hp.value": 100,
+    "system.resourceModifiers.mp.label": "forjado"
   });
 
   assert.equal(Object.keys(submitted).length, 10);
@@ -368,16 +603,18 @@ test("el submit GM conserva HP/MP y campos administrativos de progresión", asyn
   assert.equal(submitted["system.recursos.mvp"], 27);
   assert.equal(submitted["system.progression.missionsCompleted"], 5);
   assert.equal(submitted["system.progression.dmApproval"], true);
+  assert.equal(Object.hasOwn(submitted, "system.identidad.classId"), false);
+  assert.equal(Object.keys(submitted).some(key => key.startsWith("system.resourceModifiers")), false);
 });
 
 test("la UI de Fase 3 usa evaluación dinámica, checklist y controles protegidos", () => {
-  assert.match(templateSource, /progressionEvaluation\.expProgress\.text/);
-  assert.match(templateSource, /progressionEvaluation\.expProgress\.percent/);
+  assert.match(templateSource, /progressionEvaluation\.globalProgress\.text/);
+  assert.match(templateSource, /progressionEvaluation\.globalProgress\.percent/);
   assert.match(templateSource, /progressionEvaluation\.requirements/);
   assert.match(templateSource, /{{#if esGM}}\s*<div class="progresion-admin-grid">[\s\S]*?system\.progression\.missionsCompleted/);
   assert.match(templateSource, /{{#if esGM}}\s*<div class="progresion-admin-grid">[\s\S]*?system\.progression\.dmApproval/);
-  assert.match(progressionStyleSource, /width:\s*var\(--progresion-exp, 0%\)/);
-  assert.doesNotMatch(progressionStyleSource, /\.progresion-exp-bar span\s*{[^}]*width:\s*42%/s);
+  assert.match(progressionStyleSource, /width:\s*var\(--progresion-global-progress, 0%\)/);
+  assert.doesNotMatch(progressionStyleSource, /\.progresion-global-progress[^}]*width:\s*42%/s);
   assert.doesNotMatch(templateSource, /subir(?:-|\s+)?de(?:-|\s+)?nivel[^<]*<button/i);
 });
 
@@ -409,11 +646,39 @@ test("el contexto visual conserva valores reales y sólo transforma presentació
 });
 
 test("Fase 4 expone level-up sólo en bloque GM y mejoras pending sin edición directa", () => {
-  assert.match(templateSource, /{{#if esGM}}[\s\S]*?{{#if progressionEvaluation\.eligible}}[\s\S]*?class="mtrol-level-up"/);
+  assert.match(templateSource, /{{#if esGM}}[\s\S]*?class="mtrol-level-up progresion-ascension-orb/);
   assert.match(templateSource, /{{#if mtrolPendingAdvancement\.hasAny}}/);
   assert.match(templateSource, /class="mtrol-pending-attribute-select"/);
   assert.match(templateSource, /class="mtrol-pending-competence-select"/);
   assert.doesNotMatch(templateSource, /name="system\.pendingAdvancement\./);
+});
+
+test("el Orbe cancela con cero escrituras y confirma mediante el servicio autoritativo", async () => {
+  const actor = createActor();
+  actor.system.recursos.exp = 1000;
+  actor.system.recursos.mvp = 1;
+  actor.system.progression.missionsCompleted = 1;
+  actor.items.get("general").system.nivel = 3;
+  game.user = { id: "gm", isGM: true, targets: new Set() };
+  game.users = [game.user];
+  const sheet = new PersonajeSheet(actor);
+  const button = { disabled: false, isConnected: true };
+  const event = { preventDefault() {}, currentTarget: button };
+
+  resetMetrics();
+  dialogDecision = "cancel";
+  assert.equal(await sheet._onLevelUp(event), false);
+  assert.equal(metrics.actorUpdates, 0);
+  assert.equal(actor.system.recursos.nivel, 1);
+
+  dialogDecision = "confirm";
+  assert.equal(await sheet._onLevelUp(event), true);
+  assert.equal(metrics.actorUpdates, 1);
+  assert.equal(actor.system.recursos.nivel, 2);
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 1);
+  assert.equal(actor.system.pendingAdvancement.competencePoints, 1);
+  assert.equal(actor.system.vitales.hp.max, 20);
+  assert.equal(actor.system.vitales.mp.max, 20);
 });
 
 test("contexto pending ofrece sólo competencias estrictas bajo cap", () => {
@@ -469,8 +734,8 @@ test("Fase 5 expone administración de Orbes sólo dentro del bloque GM", () => 
   assert.match(templateSource, /{{#if \.\.\/esGM}}[\s\S]*?class="mtrol-orb-type"[\s\S]*?class="mtrol-orb-delete"/);
   assert.match(templateSource, /{{#if esGM}}[\s\S]*?class="mtrol-orb-add"/);
   assert.doesNotMatch(templateSource, /name="system\.orbs/);
-  assert.match(templateSource, /Pasiva: {{passiveName}}/);
-  assert.match(templateSource, /Bonus de tirada: \+{{rollBonus}}/);
+  assert.match(templateSource, /class="progresion-orb-detail-label">Pasiva:<\/span>[\s\S]*?class="progresion-orb-passive-name">{{passiveName}}/);
+  assert.match(templateSource, /class="progresion-orb-detail-label">Bonus de tirada:<\/span>[\s\S]*?class="progresion-orb-bonus-value">\+{{rollBonus}}/);
 });
 
 test("Dharma cero deshabilita Atributos, Competencias y Combate en el contexto", () => {
@@ -484,48 +749,38 @@ test("Dharma cero deshabilita Atributos, Competencias y Combate en el contexto",
   assert.match(context.mtrolDharmaTitle, /No tienes Dharma/);
 });
 
-test("el template entrega al GM el bloque completo y al jugador ningún contenedor residual", () => {
-  const adminBlock = getAdminTemplateBlock();
-  const gmRenderedBlock = adminBlock;
-  const playerRenderedBlock = "";
+test("PersonajeSheet conserva la biblioteca ejecutable y restaura la Barra de Combate solo para GM", () => {
+  const combatTab = templateSource.match(
+    /<div class="tab mtrol-tab-combate"[\s\S]*?<!-- TAB COMPETENCIAS -->/
+  )?.[0] ?? "";
 
-  for (const requiredControl of [
-    "Barra de Combate",
-    "add-habilidad-combate",
-    "competencia-down",
-    "competencia-up",
-    "habilidad-combate-equip",
-    "habilidad-combate-unequip",
-    "item-edit",
-    "item-delete"
-  ]) {
-    assert.match(gmRenderedBlock, new RegExp(requiredControl));
-  }
-
-  assert.equal(playerRenderedBlock, "");
-  assert.doesNotMatch(playerRenderedBlock, /combate-section|combat-skills-bar/);
-
-  const equippedActionsEnd = templateSource.indexOf("{{#if esGM}}", templateSource.indexOf("combate-section") - 20);
-  const equippedActionsStart = templateSource.indexOf("<section class=\"mtrol-combat-grid\">");
-  const equippedActions = templateSource.slice(equippedActionsStart, equippedActionsEnd);
-
-  assert.match(equippedActions, /competencia-roll/);
-  assert.match(equippedActions, /mtrol-combat-card-detail/);
+  assert.match(combatTab, /{{#each combatLibrary\.actions}}/);
+  assert.match(combatTab, /competencia-roll/);
+  assert.match(combatTab, /{{#if esGM}}[\s\S]*?Barra de Combate/);
+  assert.match(combatTab, /add-habilidad-combate/);
+  assert.match(combatTab, /habilidad-combate-equip/);
+  assert.match(combatTab, /habilidad-combate-unequip/);
+  assert.match(combatTab, /combat-skills-bar/);
+  assert.doesNotMatch(combatTab, /mtrol-combat-card-detail/);
 });
 
 test("los listeners administrativos solo se registran para el GM", () => {
   const actor = createActor();
   const sheet = new PersonajeSheet(actor);
   const adminSelectors = [
+    ".mtrol-class-resource-control",
+    ".mtrol-resource-modifier-entry-control",
+    ".mtrol-resource-modifier-add",
+    ".mtrol-resource-modifier-delete",
     ".mtrol-level-up",
-    ".add-habilidad-combate",
-    ".habilidad-combate-equip",
-    ".habilidad-combate-unequip",
+    ".mtrol-destiny-segment.is-editable[data-resource][data-value]",
     ".competencia-up",
     ".competencia-down",
     ".mtrol-orb-add",
     ".mtrol-orb-type, .mtrol-orb-level",
-    ".mtrol-orb-delete"
+    ".mtrol-orb-delete",
+    ".add-competencia",
+    ".competencia-image-edit"
   ];
 
   game.user.isGM = false;
@@ -538,8 +793,11 @@ test("los listeners administrativos solo se registran para el GM", () => {
   }
   assert.equal(playerSelectors.has(".competencia-roll"), true);
   assert.equal(playerSelectors.has(".mtrol-dharma-prepare"), true);
-  assert.equal(playerSelectors.has(".mtrol-combat-card"), true);
-  assert.equal(playerSelectors.has(".mtrol-combat-card-detail"), true);
+  assert.equal(playerSelectors.has(".mtrol-combat-card"), false);
+  assert.equal(playerSelectors.has(".mtrol-combat-card-detail"), false);
+  assert.equal(playerSelectors.has(".add-habilidad-combate"), false);
+  assert.equal(playerSelectors.has(".habilidad-combate-equip"), false);
+  assert.equal(playerSelectors.has(".habilidad-combate-unequip"), false);
   assert.equal(playerSelectors.has(".mtrol-spend-pending-attribute"), true);
   assert.equal(playerSelectors.has(".mtrol-spend-pending-competence"), true);
 
@@ -552,6 +810,28 @@ test("los listeners administrativos solo se registran para el GM", () => {
     assert.equal(gmSelectors.has(selector), true, selector);
   }
   assert.equal(gmSelectors.has(".mtrol-dharma-prepare"), true);
+  assert.equal(gmSelectors.has(".add-habilidad-combate"), true);
+  assert.equal(gmSelectors.has(".habilidad-combate-equip"), true);
+  assert.equal(gmSelectors.has(".habilidad-combate-unequip"), true);
+});
+
+test("solo GM cambia y persiste la imagen propia de una competencia", async () => {
+  resetMetrics();
+  const actor = createActor();
+  const sheet = new PersonajeSheet(actor);
+  const FilePicker = foundry.applications.apps.FilePicker.implementation;
+  FilePicker.selectedPath = "icons/skills/athletics.webp";
+
+  game.user.isGM = false;
+  assert.equal(await sheet._onChangeCompetenciaImage(createEvent("general")), false);
+  assert.equal(metrics.itemUpdates.length, 0);
+  assert.match(warnings.at(-1), /Solo el Game Master/);
+
+  game.user.isGM = true;
+  assert.equal(await sheet._onChangeCompetenciaImage(createEvent("general")), true);
+  assert.deepEqual(metrics.itemUpdates, [{ img: "icons/skills/athletics.webp" }]);
+  assert.equal(actor.items.get("general").img, "icons/skills/athletics.webp");
+  FilePicker.selectedPath = "";
 });
 
 test("las llamadas directas de un jugador a todos los handlers administrativos realizan cero escrituras", async () => {

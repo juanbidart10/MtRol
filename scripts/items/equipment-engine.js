@@ -24,7 +24,21 @@ function notifyError(message) {
   globalThis.ui?.notifications?.error?.(message);
 }
 
-function buildFlagUpdates(actor, equipmentState, affectedItemIds) {
+export function canUserManageEquipment(
+  actor,
+  user = globalThis.game?.user
+) {
+  if (!actor || !user) return false;
+  if (user.isGM === true) return true;
+
+  if (typeof actor.testUserPermission === "function") {
+    return actor.testUserPermission(user, "OWNER") === true;
+  }
+
+  return actor.isOwner === true;
+}
+
+function buildFlagUpdates(actor, equipmentState) {
   const referencedIds = new Set(
     equipmentState.entries
       .map(entry => entry.resolvedItemId)
@@ -33,7 +47,6 @@ function buildFlagUpdates(actor, equipmentState, affectedItemIds) {
 
   return toDocumentArray(actor.items)
     .filter(isMtrolObject)
-    .filter(item => affectedItemIds.has(item.id))
     .map(item => ({
       item,
       desired: referencedIds.has(item.id),
@@ -66,7 +79,6 @@ async function updateItemFlags(actor, entries, valueSelector) {
 async function applyEquipmentTransition(
   actor,
   slotOverrides,
-  affectedItemIds,
   operation
 ) {
   const priorState = getEquipmentState(actor);
@@ -81,7 +93,7 @@ async function applyEquipmentTransition(
     actorRollback[`system.equipamiento.${slot}`] = priorReference;
   }
 
-  const flagUpdates = buildFlagUpdates(actor, nextState, affectedItemIds);
+  const flagUpdates = buildFlagUpdates(actor, nextState);
   let actorWasUpdated = false;
 
   try {
@@ -152,6 +164,11 @@ export function getEquippedShields(actor) {
 export async function equiparObjeto(actor, item) {
   if (!actor || !item || !isMtrolObject(item)) return false;
 
+  if (!canUserManageEquipment(actor)) {
+    notifyWarning("No tienes permiso para modificar el equipamiento de este Actor.");
+    return false;
+  }
+
   const actorItem = getDocumentById(actor.items, item.id);
   if (actorItem !== item) {
     notifyWarning("El objeto no pertenece al actor seleccionado.");
@@ -175,22 +192,29 @@ export async function equiparObjeto(actor, item) {
     return false;
   }
 
-  const previousItem = getEquipmentItemForSlot(actor, slot);
-  const affectedItemIds = new Set([
-    item.id,
-    previousItem?.id
-  ].filter(Boolean));
+  const existingReferences = getReferencedSlotsForItem(actor, item);
+  const slotOverrides = Object.fromEntries(
+    existingReferences
+      .filter(referencedSlot => referencedSlot !== slot)
+      .map(referencedSlot => [referencedSlot, ""])
+  );
+
+  slotOverrides[slot] = item.id;
 
   return applyEquipmentTransition(
     actor,
-    { [slot]: item.id },
-    affectedItemIds,
+    slotOverrides,
     `equipar ${item.name ?? "el objeto"}`
   );
 }
 
 export async function desequiparObjeto(actor, item) {
   if (!actor || !item || !isMtrolObject(item)) return false;
+
+  if (!canUserManageEquipment(actor)) {
+    notifyWarning("No tienes permiso para modificar el equipamiento de este Actor.");
+    return false;
+  }
 
   const actorItem = getDocumentById(actor.items, item.id);
   if (actorItem !== item) return false;
@@ -203,7 +227,6 @@ export async function desequiparObjeto(actor, item) {
   return applyEquipmentTransition(
     actor,
     slotOverrides,
-    new Set([item.id]),
     `desequipar ${item.name ?? "el objeto"}`
   );
 }

@@ -15,9 +15,6 @@
   display: flex;
   flex-direction: column;
 
-  container-name: mtrol-sheet;
-  container-type: inline-size;
-
   color: #e8e1cf;
 
   background:
@@ -65,6 +62,9 @@
 
   display: flex;
   flex-direction: column;
+
+  container-name: mtrol-sheet;
+  container-type: size;
 }
 
 .mtrol-master-header,
@@ -281,9 +281,7 @@
   gap: 12px;
 
   margin-bottom: 14px;
-  padding-bottom: 10px;
-
-  border-bottom: 1px solid rgba(212, 175, 55, .20);
+  padding-bottom: 0;
 }
 
 .mtrol-section-title h2 {
@@ -357,12 +355,180 @@
   text-transform: uppercase;
 }
 
-.mtrol-field input {
+.mtrol-field input,
+.mtrol-field select,
+.mtrol-class-readonly {
   height: 32px;
   font-size: 14px;
 }
 
-@container mtrol-sheet (max-width: 620px) {
+.mtrol-field select,
+.mtrol-resource-admin input {
+  width: 100%;
+  color: #f4ead2;
+  background: rgba(0, 0, 0, .48);
+  border: 1px solid rgba(212, 175, 55, .3);
+  border-radius: 6px;
+}
+
+.mtrol-field select:focus,
+.mtrol-resource-admin input:focus {
+  border-color: rgba(242, 210, 122, .72);
+  outline: 1px solid rgba(242, 210, 122, .38);
+}
+
+.mtrol-field select option {
+  color: #f4ead2;
+  background: #17130f;
+}
+
+.mtrol-class-readonly {
+  display: flex;
+  align-items: center;
+  color: #f4ead2;
+  font-weight: 800;
+}
+
+.mtrol-resource-admin {
+  position: relative;
+  margin-top: 12px;
+  padding: 11px;
+  background: linear-gradient(180deg, rgba(14, 13, 11, .86), rgba(2, 2, 3, .92));
+  border: 1px solid rgba(212, 175, 55, .2);
+  border-radius: 10px;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, .62);
+}
+
+.mtrol-resource-admin > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.mtrol-resource-admin h3,
+.mtrol-resource-admin p {
+  margin: 0;
+}
+
+.mtrol-resource-admin h3 {
+  color: #f2d27a;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-decoration: none !important;
+  text-transform: uppercase;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.mtrol-resource-admin p {
+  margin-top: 3px;
+  color: rgba(232, 225, 207, .58);
+  font-size: 10px;
+}
+
+.mtrol-resource-admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas: "hp mp";
+  align-items: start;
+  gap: 10px;
+  padding: 10px 34px 10px 10px;
+  direction: ltr;
+  background: rgba(0, 0, 0, .2);
+  border: 1px solid rgba(212, 175, 55, .13);
+  border-radius: 6px;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-modifier-add,
+.mtrol-personaje-sheet .mtrol-resource-modifier-delete {
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  color: #f2d27a;
+  background: rgba(22, 17, 8, .7);
+  border: 1px solid rgba(212, 175, 55, .35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-modifier-add {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-modifier-delete {
+  position: absolute;
+  top: 8px;
+  right: 7px !important;
+  left: auto !important;
+  width: 22px;
+  height: 22px;
+  color: rgba(238, 151, 139, .85);
+  border-color: rgba(180, 64, 55, .3);
+}
+
+.mtrol-personaje-sheet .mtrol-resource-modifier-add:hover,
+.mtrol-personaje-sheet .mtrol-resource-modifier-delete:hover {
+  color: #fff1b8;
+  border-color: rgba(242, 210, 122, .72);
+  box-shadow: 0 0 8px rgba(212, 175, 55, .2);
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-card {
+  display: grid;
+  grid-template-columns: minmax(86px, .42fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, 30px);
+  gap: 7px 9px;
+  align-items: center;
+  align-self: start;
+  min-width: 0;
+  direction: ltr;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-card--hp {
+  grid-area: hp;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-card--mp {
+  grid-area: mp;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-card label {
+  color: rgba(232, 225, 207, .7);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin-card input {
+  height: 30px;
+  padding: 0 8px;
+}
+
+.mtrol-resource-admin-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+}
+
+.mtrol-resource-admin-footer .mtrol-resource-modifier-add {
+  position: static;
+}
+
+@container mtrol-sheet (max-width: 520px) {
   .mtrol-personaje-sheet {
     padding: 10px;
   }
@@ -384,5 +550,16 @@
 
   .mtrol-field.wide {
     grid-column: auto;
+  }
+
+  .mtrol-resource-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mtrol-personaje-sheet .mtrol-resource-admin-entry {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hp"
+      "mp";
   }
 }

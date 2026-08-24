@@ -109,6 +109,37 @@ test("migración parcial no materializa defaults que puedan borrar progreso pers
   assert.equal(Object.hasOwn(migrated, "alignment"), false);
 });
 
+test("schema contractual agrega classId y modificadores GM con defaults seguros", () => {
+  const schema = PersonajeDataModel.defineSchema();
+
+  assert.ok(schema.identidad.fields.classId, "falta system.identidad.classId");
+  assert.ok(schema.identidad.fields.fullBodyImage, "falta system.identidad.fullBodyImage");
+  assert.ok(schema.resourceModifiers, "falta system.resourceModifiers");
+  assert.equal(schema.identidad.fields.classId.options.initial, "");
+  assert.equal(schema.identidad.fields.fullBodyImage.options.initial, "");
+  assert.equal(schema.resourceModifiers.fields.hp.fields.value.options.initial, 0);
+  assert.equal(schema.resourceModifiers.fields.hp.fields.label.options.initial, "");
+  assert.equal(schema.resourceModifiers.fields.mp.fields.value.options.initial, 0);
+  assert.equal(schema.resourceModifiers.fields.mp.fields.label.options.initial, "");
+});
+
+test("migrateData parcial no materializa classId ni resourceModifiers fuera del payload", () => {
+  const partial = { identidad: { titulo: "Cambio parcial" } };
+  const migrated = PersonajeDataModel.migrateData(structuredClone(partial));
+
+  assert.deepEqual(migrated, partial);
+  assert.equal(Object.hasOwn(migrated.identidad, "classId"), false);
+  assert.equal(Object.hasOwn(migrated, "resourceModifiers"), false);
+});
+
+test("migrateData no convierte texto legacy inequívoco en classId durante una carga normal", () => {
+  const legacy = { identidad: { clase: "Mago" } };
+  const migrated = PersonajeDataModel.migrateData(structuredClone(legacy));
+
+  assert.deepEqual(migrated, legacy);
+  assert.equal(Object.hasOwn(migrated.identidad, "classId"), false);
+});
+
 test("migración Actor es idempotente y preserva progreso, Orbes, IDs y puntos", () => {
   const configured = {
     progression: {

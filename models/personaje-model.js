@@ -66,11 +66,47 @@ export class PersonajeDataModel extends foundry.abstract.TypeDataModel {
       identidad: new fields.SchemaField({
         titulo: new fields.StringField({ initial: "" }),
         clase: new fields.StringField({ initial: "" }),
+        classId: new fields.StringField({ initial: "" }),
         raza: new fields.StringField({ initial: "" }),
         profesion: new fields.StringField({ initial: "" }),
         maestria: new fields.StringField({ initial: "" }),
+        fullBodyImage: new fields.StringField({ initial: "" }),
         edad: new fields.NumberField({ initial: 0, integer: true, min: 0 })
       }),
+
+      resourceModifiers: new fields.SchemaField({
+        hp: new fields.SchemaField({
+          value: new fields.NumberField({ initial: 0 }),
+          label: new fields.StringField({ initial: "" })
+        }),
+        mp: new fields.SchemaField({
+          value: new fields.NumberField({ initial: 0 }),
+          label: new fields.StringField({ initial: "" })
+        })
+      }),
+
+      resourceModifierEntries: new fields.ArrayField(
+        new fields.SchemaField({
+          id: new fields.StringField({
+            required: true,
+            nullable: false,
+            blank: false
+          }),
+          hp: new fields.SchemaField({
+            value: new fields.NumberField({ initial: 0 }),
+            label: new fields.StringField({ initial: "" })
+          }),
+          mp: new fields.SchemaField({
+            value: new fields.NumberField({ initial: 0 }),
+            label: new fields.StringField({ initial: "" })
+          })
+        }),
+        {
+          required: false,
+          nullable: false,
+          initial: []
+        }
+      ),
 
       recursos: new fields.SchemaField({
         nivel: new fields.NumberField({ initial: 1 }),

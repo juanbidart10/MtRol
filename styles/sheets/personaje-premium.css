@@ -1,0 +1,1173 @@
+/* =========================================================
+   MTROL — PERSONAJE PREMIUM MVP
+   Scoped to the character Actor Sheet.
+========================================================= */
+
+.mtrol-personaje-sheet {
+  --mtrol-gold: #c9a85f;
+  --mtrol-gold-muted: #806b42;
+  --mtrol-crimson: #711d22;
+  --mtrol-bg: #090a0c;
+  --mtrol-panel: rgba(10, 10, 12, .48);
+  --mtrol-border: rgba(201, 168, 95, .34);
+  --mtrol-text: #eee5d2;
+  --mtrol-muted: #a79d8d;
+
+  color: var(--mtrol-text);
+  background:
+    linear-gradient(180deg, rgba(3, 4, 6, .2), rgba(3, 4, 6, .72)),
+    url("../../assets/ui/personaje-premium/backgrounds/bg-personaje-dim.webp") center / cover no-repeat;
+  border-color: var(--mtrol-border);
+  border-radius: 6px;
+  box-shadow: inset 0 0 42px rgba(0, 0, 0, .72);
+}
+
+.mtrol-personaje-sheet::before {
+  background:
+    radial-gradient(circle at 50% 10%, rgba(201, 168, 95, .09), transparent 38%),
+    linear-gradient(90deg, rgba(0, 0, 0, .42), transparent 18% 82%, rgba(0, 0, 0, .42));
+  opacity: 1;
+}
+
+/* Header */
+
+.mtrol-personaje-sheet .mtrol-master-header {
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 290px);
+  gap: 20px;
+  padding: 12px 16px;
+  overflow: visible;
+  background:
+    linear-gradient(90deg, rgba(5, 6, 8, .82), rgba(5, 6, 8, .52) 62%, rgba(5, 6, 8, .76)),
+    url("../../assets/ui/personaje-premium/backgrounds/bg-personaje-dim.webp") center 38% / cover no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .32);
+}
+
+.mtrol-personaje-sheet .mtrol-master-header::before {
+  display: none;
+  content: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-left {
+  grid-template-columns: 165px minmax(0, 1fr);
+  gap: 22px;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-portrait {
+  position: relative;
+  width: 165px;
+  height: 165px;
+  padding: 17px;
+  overflow: visible;
+  background: radial-gradient(circle, rgba(201, 168, 95, .2), rgba(0, 0, 0, .72) 66%);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .58);
+}
+
+.mtrol-personaje-sheet .mtrol-hero-portrait::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: 2;
+  background: url("../../assets/ui/personaje-premium/portrait/portrait-frame-runtime.webp") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-portrait .profile-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--mtrol-portrait-position, 50% 30%);
+  border: 1px solid rgba(230, 204, 142, .42);
+  border-radius: 50%;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, .82);
+}
+
+/* Reusable particle field. Portrait is active; destiny anchors remain dormant
+   until the confirmed critical/fumble counter-change flow is wired later. */
+
+.mtrol-personaje-sheet .mtrol-particle-field {
+  --mtrol-particle-core: rgba(255, 239, 176, .94);
+  --mtrol-particle-edge: rgba(190, 129, 35, .12);
+  position: absolute;
+  inset: -14px;
+  z-index: 3;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--gold,
+.mtrol-personaje-sheet [data-mtrol-particle-target="dharma"] {
+  --mtrol-particle-core: rgba(255, 232, 151, .94);
+  --mtrol-particle-edge: rgba(181, 116, 25, .12);
+}
+
+.mtrol-personaje-sheet [data-mtrol-particle-target="karma"] {
+  --mtrol-particle-core: rgba(232, 91, 55, .94);
+  --mtrol-particle-edge: rgba(105, 20, 15, .12);
+}
+
+.mtrol-personaje-sheet .mtrol-particle {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  width: 3px;
+  height: 3px;
+  opacity: 0;
+  background: radial-gradient(circle, var(--mtrol-particle-core) 0 24%, var(--mtrol-particle-edge) 72%, transparent 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 4px color-mix(in srgb, var(--mtrol-particle-core) 55%, transparent);
+  animation: mtrolPortraitParticleFloat var(--duration, 5.5s) ease-in-out var(--delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+.mtrol-personaje-sheet .mtrol-particle:nth-child(3n) {
+  width: 2px;
+  height: 2px;
+}
+
+.mtrol-personaje-sheet .mtrol-particle:nth-child(4n) {
+  width: 4px;
+  height: 4px;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--portrait {
+  inset: -22px;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--portrait .mtrol-particle {
+  width: 4px;
+  height: 4px;
+  box-shadow:
+    0 0 5px color-mix(in srgb, var(--mtrol-particle-core) 78%, transparent),
+    0 0 10px color-mix(in srgb, var(--mtrol-particle-core) 35%, transparent);
+  animation-name: mtrolPortraitParticleRush;
+  animation-duration: 2.05s;
+  animation-timing-function: linear;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--portrait .mtrol-particle:nth-child(3n) {
+  width: 2px;
+  height: 2px;
+  animation-duration: 1.65s;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--portrait .mtrol-particle:nth-child(4n) {
+  width: 5px;
+  height: 5px;
+  animation-duration: 2.4s;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-anchor {
+  position: relative;
+  isolation: isolate;
+}
+
+.mtrol-personaje-sheet .mtrol-particle-field--event:not(.is-active) .mtrol-particle {
+  opacity: 0;
+  animation-play-state: paused;
+}
+
+@keyframes mtrolPortraitParticleFloat {
+  0%, 100% {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0) scale(.55);
+  }
+
+  18% {
+    opacity: .3;
+  }
+
+  52% {
+    opacity: .72;
+    transform: translate3d(var(--drift, 3px), -5px, 0) scale(1);
+  }
+
+  82% {
+    opacity: .18;
+  }
+
+  100% {
+    transform: translate3d(var(--drift, 3px), -15px, 0) scale(.7);
+  }
+}
+
+@keyframes mtrolPortraitParticleRush {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(.45);
+  }
+
+  10% {
+    opacity: .78;
+  }
+
+  38% {
+    opacity: 1;
+    transform: translate3d(var(--drift, 5px), -3px, 0) scale(1.15);
+  }
+
+  72% {
+    opacity: .7;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 5px), -30px, 0) scale(.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtrol-personaje-sheet .mtrol-particle {
+    animation: none;
+    opacity: .28;
+  }
+}
+
+.mtrol-personaje-sheet .mtrol-hero-identity {
+  min-width: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-nameplate {
+  position: relative;
+  width: min(100%, 470px);
+  padding: 8px 24px 7px;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-nameplate::before,
+.mtrol-personaje-sheet .mtrol-hero-nameplate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  pointer-events: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-nameplate::before {
+  top: 0;
+  background-image: url("../../assets/ui/personaje-premium/header/name-divider-top.png");
+}
+
+.mtrol-personaje-sheet .mtrol-hero-nameplate::after {
+  display: none;
+  content: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-name {
+  max-width: none;
+  height: 36px;
+  padding: 0 8px;
+  color: #f4dfaa !important;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: clamp(28px, 4.8cqi, 38px);
+  font-weight: 500;
+  letter-spacing: .02em;
+  text-align: center;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-name:hover,
+.mtrol-personaje-sheet .mtrol-hero-name:focus {
+  background: rgba(0, 0, 0, .28) !important;
+  outline: 1px solid rgba(201, 168, 95, .22) !important;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-subtitle {
+  justify-content: center;
+  max-width: 470px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--mtrol-muted);
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-subtitle span {
+  color: inherit;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-subtitle span:nth-child(2),
+.mtrol-personaje-sheet .mtrol-hero-subtitle span:nth-child(4) {
+  color: var(--mtrol-gold-muted);
+}
+
+.mtrol-personaje-sheet .mtrol-hero-stats {
+  grid-template-columns: 54px 78px repeat(2, minmax(98px, 1fr));
+  gap: 8px;
+  max-width: 470px;
+  margin-top: 9px;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-stat {
+  min-height: 39px;
+  padding: 4px 7px;
+  background: rgba(5, 6, 8, .36);
+  border: 0;
+  border-left: 1px solid rgba(201, 168, 95, .28);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-stat label {
+  color: var(--mtrol-muted);
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-stat strong {
+  color: #e6c978;
+  font-size: 16px;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-stat {
+  align-items: stretch;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-heading label {
+  margin: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-heading strong,
+.mtrol-personaje-sheet .mtrol-hero-stat.karma strong,
+.mtrol-personaje-sheet .mtrol-hero-stat.dharma strong {
+  color: #d8be7c;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-segments {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-segment {
+  height: 5px;
+  background: rgba(100, 91, 73, .24);
+  border: 1px solid rgba(201, 168, 95, .24);
+  transform: skewX(-14deg);
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-segment.is-editable {
+  cursor: pointer;
+}
+
+.mtrol-personaje-sheet .mtrol-destiny-segment.is-editable:hover {
+  border-color: rgba(255, 231, 163, .82);
+  filter: brightness(1.18);
+}
+
+.mtrol-personaje-sheet .karma .mtrol-destiny-segment.is-active {
+  background: linear-gradient(90deg, #70313c, #b96a72);
+  border-color: rgba(220, 139, 147, .72);
+  box-shadow: 0 0 5px rgba(155, 55, 68, .38);
+}
+
+.mtrol-personaje-sheet .dharma .mtrol-destiny-segment.is-active {
+  background: linear-gradient(90deg, #9a742d, #e1c269);
+  border-color: rgba(232, 205, 127, .76);
+  box-shadow: 0 0 5px rgba(201, 168, 95, .36);
+}
+
+.mtrol-personaje-sheet .mtrol-hero-vitals {
+  gap: 12px;
+  max-width: 330px;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-vital {
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0;
+  row-gap: 2px;
+  align-items: center;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-content {
+  display: contents;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-icon {
+  grid-column: 1;
+  grid-row: 2;
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  transform: translateX(18px);
+  background: transparent !important;
+  border-color: transparent;
+  box-shadow: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-icon-image {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-top {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: center;
+  gap: 7px;
+  margin: 0 0 2px;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-top label,
+.mtrol-personaje-sheet .mtrol-vital-current,
+.mtrol-personaje-sheet .mtrol-vital-current input.mtrol-vital-field {
+  color: #cfb46f;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mtrol-personaje-sheet .mtrol-vital-current input.mtrol-vital-field {
+  width: 32px;
+  height: 18px;
+  color: #cfb46f !important;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-vital .resource-bar {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 512 / 128;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-hero-vital .resource-bar::before,
+.mtrol-personaje-sheet .mtrol-hero-vital .resource-bar::after {
+  content: none;
+  display: none;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .resource-bar__track {
+  position: absolute;
+  inset: 19.5% 18% 34%;
+  z-index: 1;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .resource-bar__fill {
+  display: block;
+  position: absolute;
+  inset: 0 auto 0 0;
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  height: 100%;
+  width: clamp(0%, var(--mtrol-vital-percent, 0%), 100%);
+  border: 0;
+  border-radius: 0;
+  line-height: 0;
+}
+
+.mtrol-personaje-sheet .resource-bar__fill.hp-fill {
+  background:
+    linear-gradient(90deg, rgba(24, 6, 10, .2) 0%, transparent 19%, rgba(28, 7, 11, .16) 53%, transparent 76%, rgba(19, 5, 8, .22) 100%),
+    linear-gradient(180deg, #4b2025 0%, #713039 25%, #60242c 58%, #351217 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(203, 128, 125, .14),
+    inset 0 -4px 7px rgba(18, 4, 7, .38);
+}
+
+.mtrol-personaje-sheet .resource-bar__fill.mp-fill {
+  background:
+    linear-gradient(90deg, rgba(5, 13, 25, .2) 0%, transparent 20%, rgba(4, 14, 29, .17) 55%, transparent 78%, rgba(3, 10, 21, .23) 100%),
+    linear-gradient(180deg, #172d45 0%, #274c6b 25%, #1e3e5b 58%, #0d2033 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(127, 171, 197, .14),
+    inset 0 -4px 7px rgba(3, 10, 19, .4);
+}
+
+.mtrol-personaje-sheet .resource-bar__frame {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  pointer-events: none;
+}
+
+/* Shared navigation */
+
+.mtrol-personaje-sheet .mtrol-main-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 8px;
+  padding: 3px;
+  overflow: visible;
+  background: rgba(3, 4, 6, .64);
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .3);
+}
+
+.mtrol-personaje-sheet .mtrol-main-tabs .item {
+  min-height: 60px;
+  padding: 8px 10px;
+  gap: 0;
+  justify-content: center;
+  color: #aa9972 !important;
+  background: rgba(0, 0, 0, .12);
+  border: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 16px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mtrol-personaje-sheet .mtrol-main-tabs .item:first-child,
+.mtrol-personaje-sheet .mtrol-main-tabs .item:last-child {
+  border-radius: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-main-tabs .item:hover {
+  color: #d7c28e !important;
+  background: rgba(201, 168, 95, .07);
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-main-tabs .item.active {
+  color: #f0d897 !important;
+  background: linear-gradient(180deg, rgba(113, 29, 34, .74), rgba(58, 12, 16, .64));
+  box-shadow: inset 0 1px 0 rgba(232, 205, 127, .13);
+}
+
+/* Shared premium sheet background */
+
+.mtrol-personaje-sheet .mtrol-sheet-body-v2 {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-master-header,
+.mtrol-personaje-sheet .mtrol-main-tabs {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
+}
+
+.mtrol-personaje-sheet .mtrol-sheet-body-v2 > .tab.active {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mtrol-personaje-sheet .mtrol-sheet-body-v2 > :is(
+  .mtrol-tab-personaje,
+  .mtrol-tab-combate,
+  .mtrol-tab-competencias,
+  .mtrol-tab-equipamiento,
+  .mtrol-tab-inventario,
+  .mtrol-tab-progresion
+) {
+  background:
+    linear-gradient(180deg, rgba(4, 5, 7, .18), rgba(4, 5, 7, .52)),
+    url("../../assets/ui/personaje-premium/backgrounds/bg-personaje-main.webp") center / cover fixed no-repeat !important;
+}
+
+.mtrol-personaje-sheet .mtrol-sheet-body-v2 > :is(
+  .mtrol-tab-personaje,
+  .mtrol-tab-combate,
+  .mtrol-tab-competencias,
+  .mtrol-tab-equipamiento,
+  .mtrol-tab-inventario,
+  .mtrol-tab-progresion
+)::before {
+  background: linear-gradient(90deg, rgba(0, 0, 0, .34), transparent 25% 75%, rgba(0, 0, 0, .34));
+}
+
+/* Personaje-only content treatment */
+
+.mtrol-personaje-sheet .mtrol-tab-personaje {
+  padding: 18px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset 0 18px 32px rgba(0, 0, 0, .22);
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje > .mtrol-panel {
+  margin-bottom: 22px;
+  padding: 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje > .mtrol-panel:hover {
+  box-shadow: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-tab-header {
+  margin-bottom: 12px;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-tab-header::before {
+  opacity: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-tab-header h2 {
+  color: #d8bd78 !important;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: .05em;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-tab-header p {
+  color: var(--mtrol-muted);
+}
+
+/* Attributes: color is an accent, never a surface. */
+
+.mtrol-personaje-sheet .mtrol-atributos-premium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-group {
+  display: contents;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-group::before {
+  display: none;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-group-header {
+  display: none;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-group-grid {
+  display: contents;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card {
+  min-height: 132px;
+  padding: 11px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 9px;
+  background: rgba(7, 8, 10, .3);
+  border: 0;
+  border-top: 1px solid rgba(var(--attribute-rgb), .35);
+  border-radius: 2px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .2);
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card::before {
+  inset: 0;
+  background: linear-gradient(90deg, rgba(var(--attribute-rgb), .07), transparent 42%);
+  border-radius: 0;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card::after {
+  display: none;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card:hover {
+  transform: translateY(-1px);
+  background: rgba(10, 11, 13, .48);
+  border-color: rgba(var(--attribute-rgb), .62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .28);
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-icon {
+  width: 34px;
+  height: 34px;
+  color: rgb(var(--attribute-rgb));
+  background: rgba(0, 0, 0, .28);
+  border-color: rgba(var(--attribute-rgb), .42);
+  font-size: 14px;
+  box-shadow: none;
+  text-shadow: 0 0 8px rgba(var(--attribute-rgb), .3);
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card:hover .mtrol-attribute-icon {
+  color: rgb(var(--attribute-rgb));
+  box-shadow: 0 0 8px rgba(var(--attribute-rgb), .18);
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-main {
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 3px 7px;
+  align-items: center;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card label {
+  color: #c9c0ae;
+  font-size: 10px;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card input {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 42px;
+  height: 34px;
+  color: #ead28e !important;
+  background: rgba(0, 0, 0, .42) !important;
+  border: 1px solid rgba(var(--attribute-rgb), .34) !important;
+  border-radius: 3px !important;
+  font-size: 19px;
+  box-shadow: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-main .mtrol-action-formula {
+  grid-column: 1;
+  color: #8f897e;
+  font-size: 8px;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card > .mtrol-dharma-action {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(var(--attribute-rgb), .2);
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card .mtrol-dharma-action button {
+  height: 29px;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 9px;
+  line-height: 27px;
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-attribute-card .mtrol-dharma-prepare {
+  color: #211507;
+  background: linear-gradient(180deg, #c9a65f 0%, #9a712f 100%);
+  border-color: #dfc17b;
+  box-shadow: inset 0 1px 0 rgba(255, 239, 183, .36), 0 1px 2px rgba(0, 0, 0, .36);
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-attribute-card .mtrol-dharma-prepare:hover:not(:disabled),
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-attribute-card .mtrol-dharma-prepare:focus-visible:not(:disabled) {
+  color: #160e04;
+  background: linear-gradient(180deg, #d8b872 0%, #ae8139 100%);
+  border-color: #efd38c;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 205, .46), 0 1px 3px rgba(0, 0, 0, .4);
+}
+
+.mtrol-personaje-sheet .mtrol-tab-personaje .mtrol-attribute-card .mtrol-dharma-prepare:disabled {
+  color: rgba(39, 29, 14, .78);
+  background: linear-gradient(180deg, #9d8552 0%, #72592d 100%);
+  border-color: rgba(190, 160, 96, .72);
+  box-shadow: inset 0 1px 0 rgba(235, 211, 151, .18);
+  opacity: .55;
+}
+
+.mtrol-personaje-sheet .mtrol-attribute-card .mtrol-action-execute {
+  color: #f0ddae;
+  background: linear-gradient(180deg, rgba(113, 29, 34, .86), rgba(55, 12, 16, .9));
+  border-color: rgba(201, 168, 95, .5);
+  font-size: 10px;
+}
+
+/* Identity: one quiet dossier rather than six nested cards. */
+
+.mtrol-personaje-sheet .mtrol-identidad-premium {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 18px;
+  padding: 4px 14px 12px;
+  background: rgba(5, 6, 8, .3);
+  border-left: 1px solid rgba(201, 168, 95, .24);
+}
+
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field {
+  gap: 4px;
+  padding: 10px 0 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Final hierarchy: typography and spacing replace ornamental underlines. */
+.mtrol-personaje-sheet :is(h1, h2, h3, h4, h5, h6, label, a) {
+  text-decoration: none !important;
+}
+
+.mtrol-personaje-sheet :is(h1, h2, h3, h4, h5, h6)::before,
+.mtrol-personaje-sheet :is(h1, h2, h3, h4, h5, h6)::after {
+  display: none !important;
+  content: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field.wide {
+  grid-column: 1 / -1;
+}
+
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field label {
+  color: #9d9381;
+  font-size: 9px;
+}
+
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field input,
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field select,
+.mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-class-readonly {
+  height: 28px;
+  padding: 2px 6px;
+  color: #e6ddca !important;
+  background: rgba(0, 0, 0, .22) !important;
+  border: 0 !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+
+.mtrol-personaje-sheet .mtrol-resource-admin {
+  background: rgba(5, 6, 8, .36);
+  border-color: rgba(201, 168, 95, .2);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+/* Four coordinated width states: XL > 1100, L <= 1100, M <= 760, S <= 520. */
+
+@container mtrol-sheet (max-width: 1100px) {
+  .mtrol-personaje-sheet {
+    padding: 8px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-master-header {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 260px);
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-left {
+    grid-template-columns: clamp(112px, 14cqi, 140px) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-portrait {
+    width: clamp(112px, 14cqi, 140px);
+    height: clamp(112px, 14cqi, 140px);
+    padding: 13px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-nameplate {
+    width: 100%;
+    padding-inline: 12px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-name {
+    font-size: clamp(24px, 3.8cqi, 34px);
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-subtitle {
+    flex-wrap: wrap;
+    max-width: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stats {
+    grid-template-columns: minmax(46px, .6fr) minmax(64px, .8fr) repeat(2, minmax(78px, 1fr));
+    max-width: 100%;
+    gap: 6px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs .item {
+    min-height: 48px;
+    padding: 6px 8px;
+    gap: 6px;
+    font-size: 14px;
+  }
+
+}
+
+@container mtrol-sheet (max-width: 760px) {
+  .mtrol-personaje-sheet .mtrol-master-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-left {
+    grid-template-columns: clamp(92px, 17cqi, 112px) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-portrait {
+    width: clamp(92px, 17cqi, 112px);
+    height: clamp(92px, 17cqi, 112px);
+    padding: 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-vitals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    max-width: none;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs .item {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .mtrol-personaje-sheet .mtrol-attribute-group-grid,
+  .mtrol-personaje-sheet .mtrol-identidad-premium {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field.wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@container mtrol-sheet (max-width: 520px) {
+  .mtrol-personaje-sheet {
+    padding: 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-master-header {
+    gap: 7px;
+    padding: 6px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-left {
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: start;
+    gap: 7px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-portrait {
+    width: 76px;
+    height: 76px;
+    padding: 7px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-nameplate {
+    padding-inline: 4px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-name {
+    height: 32px;
+    padding-inline: 3px;
+    font-size: clamp(20px, 6cqi, 27px);
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-subtitle {
+    gap: 3px 5px;
+    font-size: 10px;
+    letter-spacing: .04em;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stat {
+    min-height: 32px;
+    padding: 3px 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-vitals {
+    gap: 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-vital {
+    grid-template-columns: 14px minmax(0, 1fr);
+    column-gap: 0;
+    row-gap: 1px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-vital-icon {
+    width: 30px;
+    height: 30px;
+    transform: translateX(12px);
+  }
+
+  .mtrol-personaje-sheet .mtrol-vital-icon-image {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mtrol-personaje-sheet .mtrol-vital-top {
+    gap: 5px;
+    margin-inline: 0;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs .item {
+    min-height: 38px;
+    padding: 4px 6px;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-tab-personaje {
+    padding: 9px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-attribute-group-grid,
+  .mtrol-personaje-sheet .mtrol-identidad-premium,
+  .mtrol-personaje-sheet .mtrol-resource-admin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mtrol-personaje-sheet .mtrol-identidad-premium .mtrol-field.wide {
+    grid-column: auto;
+  }
+}
+
+@container mtrol-sheet (max-height: 780px) {
+  .mtrol-personaje-sheet .mtrol-master-header {
+    gap: 10px;
+    padding: 5px 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-portrait {
+    width: clamp(86px, 10cqi, 104px);
+    height: clamp(86px, 10cqi, 104px);
+    padding: 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-left {
+    grid-template-columns: clamp(86px, 10cqi, 104px) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-nameplate {
+    padding-block: 4px 2px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-name {
+    height: 31px;
+    font-size: clamp(24px, 3.2cqi, 30px);
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-subtitle {
+    margin-top: 1px;
+    font-size: 10px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stats {
+    margin-top: 5px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stat {
+    min-height: 34px;
+    padding-block: 3px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-vitals {
+    gap: 6px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs .item {
+    min-height: 36px;
+    padding-block: 3px;
+    font-size: 13px;
+  }
+}
+
+@container mtrol-sheet (max-height: 620px) {
+  .mtrol-personaje-sheet .mtrol-master-header {
+    padding-block: 3px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-portrait {
+    width: 76px;
+    height: 76px;
+    padding: 7px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-left {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-name {
+    height: 27px;
+    font-size: 23px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-hero-stat {
+    min-height: 30px;
+  }
+
+  .mtrol-personaje-sheet .mtrol-main-tabs .item {
+    min-height: 32px;
+    font-size: 11px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtrol-personaje-sheet .mtrol-attribute-card,
+  .mtrol-personaje-sheet .mtrol-vital-fill {
+    transition: none;
+  }
+}
