@@ -8,6 +8,10 @@ import {
   installMtrolDebugApi
 } from "./debug.js";
 
+import {
+  initializeTradeAuthority
+} from "../trade/trade-authority.js";
+
 // =========================
 // MTROL - READY
 // =========================
@@ -51,4 +55,5 @@ export function readyMtrol() {
   };
 
   installMtrolDebugApi();
+  initializeTradeAuthority();
 }

@@ -248,6 +248,7 @@ function createItem({
   id,
   name = id,
   type = "competencia",
+  categoria,
   tipoObjeto = "general",
   actionType = null,
   defenseType = null,
@@ -270,6 +271,7 @@ function createItem({
     type,
     system: {
       tipoObjeto,
+      ...(categoria ? { categoria } : {}),
       actionType,
       defenseType,
       effect,
@@ -349,6 +351,11 @@ function createActor({
         ...equipment
       }
     },
+    flags: {
+      mtrol: {
+        mpStacks: {}
+      }
+    },
     items: new MockItems(items),
     get isOwner() {
       return game.user?.isGM || actor.ownerIds.has(game.user?.id);
@@ -361,10 +368,13 @@ function createActor({
     getRollData() {
       return deepClone(actor.system);
     },
-    getFlag() {
-      return {};
+    getFlag(scope, key) {
+      return actor.flags?.[scope]?.[key];
     },
-    async setFlag() {},
+    async setFlag(scope, key, value) {
+      actor.flags[scope] ??= {};
+      actor.flags[scope][key] = deepClone(value);
+    },
     getActiveTokens() {
       return [];
     },
@@ -391,6 +401,7 @@ function createActor({
 }
 
 function createAttackSkill(id, {
+  categoria,
   ejecutaDanio = true,
   danio = "1d6",
   damageResolution,
@@ -400,6 +411,7 @@ function createAttackSkill(id, {
   return createItem({
     id,
     name: `Ataque ${id}`,
+    categoria,
     actionType: "attack",
     effect: "damage",
     requiresOpposition: true,
@@ -462,6 +474,7 @@ game.mtrol.actions = {
 async function createPending({
   suffix,
   attackerTotal,
+  categoria,
   ejecutaDanio = true,
   danio = "1d6",
   damageResolution,
@@ -472,6 +485,7 @@ async function createPending({
   const attackSkill = createAttackSkill(
     `attack-${suffix}`,
     {
+      categoria,
       ejecutaDanio,
       danio,
       damageResolution,
@@ -798,6 +812,47 @@ test("Explosión declarativa cobra el Básico adicional sólo al ejecutar daño 
 
   assert.equal(context.attacker.system.vitales.mp.value, 8, "doble click no vuelve a cobrar");
   assert.equal(context.defender.system.vitales.hp.value, 14, "doble click no vuelve a dañar");
+});
+
+test("Competencia con Básico cobra al activar y la resolución no duplica el +1", async () => {
+  const context = await createPending({
+    suffix: "competence-basic-on-activation",
+    attackerTotal: 9,
+    categoria: "competencia",
+    damageResolution: "onOppositionWin",
+    damageMode: "enabled",
+    damageCostType: "basic"
+  });
+
+  context.attacker.system.vitales.mp.value = 10;
+  context.attacker.system.vitales.mp.max = 10;
+
+  const activation = await mpModule.procesarConsumoMP(
+    context.attacker,
+    context.attackSkill
+  );
+  assert.equal(activation.costoStack, 1);
+  assert.equal(activation.costoBasico, 1);
+  assert.equal(activation.costoTotal, 2);
+  assert.equal(context.attacker.system.vitales.mp.value, 8);
+  assert.equal(context.pending.damage.basicCostIncludedInActivation, true);
+  assert.equal(context.pending.damage.additionalMpCost, 0);
+
+  await defend({
+    pending: context.pending,
+    defender: context.defender,
+    total: 4
+  });
+
+  queueRoll("1d6", 6);
+  queueRoll("1d10", 5);
+  await damageModule.executeResolvedDamageAuthoritative(
+    context.pending.id,
+    { requestingUserId: attackerOwner.id }
+  );
+
+  assert.equal(context.attacker.system.vitales.mp.value, 8);
+  assert.equal(context.pending.damage.additionalCostApplied, false);
 });
 
 test("perder oposición no cobra el costo adicional configurado", async () => {

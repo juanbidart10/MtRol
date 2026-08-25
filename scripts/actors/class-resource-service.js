@@ -371,16 +371,6 @@ function deletePathAndChildren(changes, path) {
   }
 }
 
-function pruneEmptyObjects(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return;
-  for (const [key, child] of Object.entries(value)) {
-    pruneEmptyObjects(child);
-    if (child && typeof child === "object" && !Array.isArray(child) && Object.keys(child).length === 0) {
-      delete value[key];
-    }
-  }
-}
-
 export function guardActorClassResourceUpdate(actor, changes, options = {}, userId) {
   if (options[INTERNAL_UPDATE_OPTION] === true) return true;
 
@@ -394,7 +384,6 @@ export function guardActorClassResourceUpdate(actor, changes, options = {}, user
     for (const path of ACTIVE_PERMANENT_PATHS) deletePath(changes, path);
   }
 
-  pruneEmptyObjects(changes);
   return Object.keys(changes).length > 0;
 }
 

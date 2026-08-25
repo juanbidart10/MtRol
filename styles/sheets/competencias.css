@@ -221,6 +221,18 @@
   white-space: nowrap;
 }
 
+.mtrol-personaje-sheet .competencia-mp-cost {
+  color: #d8bd73;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-decoration: none;
+  text-shadow: 0 1px 3px #000;
+  white-space: nowrap;
+}
+
 .mtrol-personaje-sheet .mtrol-competencia-actions {
   grid-area: actions;
   position: relative;

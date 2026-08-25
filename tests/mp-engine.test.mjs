@@ -24,6 +24,8 @@ const {
   aplicarConsumoMP,
   calcularConsumoMP,
   procesarConsumoMP,
+  restaurarAcumuladoresDia,
+  validarCostoResolucionMP,
   validarConsumoMP
 } = await import("../scripts/combat/mp-engine.js");
 
@@ -35,6 +37,7 @@ function createActor(mp = 30, initialStacks = {}) {
     system: { vitales: { mp: { value: mp, max: mp } } },
     getFlagCalls: 0,
     setFlagCalls: 0,
+    unsetFlagCalls: 0,
     updateCalls: 0,
     getFlag(_scope, key) {
       this.getFlagCalls += 1;
@@ -47,10 +50,21 @@ function createActor(mp = 30, initialStacks = {}) {
         Object.assign(flags, structuredClone(value));
       }
     },
+    async unsetFlag(_scope, key) {
+      this.unsetFlagCalls += 1;
+      if (key === "mpStacks") {
+        for (const existing of Object.keys(flags)) delete flags[existing];
+      }
+    },
     async update(changes) {
       this.updateCalls += 1;
       if ("system.vitales.mp.value" in changes) {
         this.system.vitales.mp.value = changes["system.vitales.mp.value"];
+      }
+      const stackPath = "flags.mtrol.mpStacks";
+      if (stackPath in changes) {
+        for (const existing of Object.keys(flags)) delete flags[existing];
+        Object.assign(flags, structuredClone(changes[stackPath]));
       }
     },
     stacks: flags
@@ -62,7 +76,8 @@ function createItem(categoria, {
   name = categoria,
   costeMP = 99,
   nivel = 5,
-  competenciaAsociada = "magia"
+  competenciaAsociada = "magia",
+  damageCostType = "none"
 } = {}) {
   return {
     id,
@@ -73,7 +88,8 @@ function createItem(categoria, {
       costeMP,
       nivel,
       nivelHechizo: nivel,
-      competenciaAsociada
+      competenciaAsociada,
+      damageCostType
     }
   };
 }
@@ -155,7 +171,181 @@ test("Competencia conserva el stacking vigente 1, 2 y 3", async () => {
   assert.equal(actor.system.vitales.mp.value, 34);
   assert.equal(actor.stacks.atletismo, 3);
   assert.equal(actor.getFlagCalls, 6, "validación cliente + recálculo canónico GM por uso");
-  assert.equal(actor.setFlagCalls, 3);
+  assert.equal(actor.setFlagCalls, 0);
+  assert.equal(actor.updateCalls, 3, "MP y stack se persisten juntos por uso");
+});
+
+test("Restaurar día devuelve las Competencias a su costo inicial", async () => {
+  const actor = createActor(40);
+  const competencia = createItem("competencia", { id: "atletismo" });
+
+  assert.equal((await procesarConsumoMP(actor, competencia)).costoTotal, 1);
+  assert.equal((await procesarConsumoMP(actor, competencia)).costoTotal, 2);
+  assert.equal(actor.stacks.atletismo, 2);
+
+  const restauracion = await restaurarAcumuladoresDia(actor);
+
+  assert.equal(restauracion.competenciasRestauradas, 1);
+  assert.deepEqual(actor.stacks, {});
+  assert.equal((await procesarConsumoMP(actor, competencia)).costoTotal, 1);
+});
+
+test("Competencia + Básico stackea sólo la Competencia y vuelve a 2 MP tras restaurar", async () => {
+  const actor = createActor(40);
+  const competencia = createItem("competencia", {
+    id: "embestida",
+    damageCostType: "basic"
+  });
+
+  const ejecutarCombinada = async () => {
+    const consumo = await procesarConsumoMP(actor, competencia);
+    return {
+      competencia: consumo.costoStack,
+      basico: consumo.costoBasico,
+      total: consumo.costoTotal
+    };
+  };
+
+  assert.deepEqual(await ejecutarCombinada(), { competencia: 1, basico: 1, total: 2 });
+  assert.deepEqual(await ejecutarCombinada(), { competencia: 2, basico: 1, total: 3 });
+
+  await restaurarAcumuladoresDia(actor);
+
+  assert.deepEqual(await ejecutarCombinada(), { competencia: 1, basico: 1, total: 2 });
+  const siguiente = calcularConsumoMP(actor, competencia);
+  assert.equal(siguiente.costoStack, 2);
+  assert.equal(siguiente.costoBasico, 1);
+  assert.equal(siguiente.costoTotal, 3);
+});
+
+test("Competencia limpia expone componentes autoritativos sin Básico", () => {
+  const actor = createActor(10);
+  const consumo = calcularConsumoMP(actor, createItem("competencia", { id: "limpia" }));
+
+  assert.equal(consumo.costoStack, 1);
+  assert.equal(consumo.costoBasico, 0);
+  assert.equal(consumo.costoTotal, 1);
+});
+
+test("Competencia limpia con Básico muestra y valida 2 MP", () => {
+  const actor = createActor(10);
+  const consumo = calcularConsumoMP(actor, createItem("competencia", {
+    id: "limpia-basico",
+    damageCostType: "basic"
+  }));
+
+  assert.equal(consumo.costoStack, 1);
+  assert.equal(consumo.costoBasico, 1);
+  assert.equal(consumo.costoTotal, 2);
+  assert.equal(consumo.mpNuevo, 8);
+});
+
+test("Competencia con Básico progresa 2, 3, 4 y 5 sin contaminar el stack", async () => {
+  const actor = createActor(30);
+  const item = createItem("competencia", {
+    id: "secuencia-basico",
+    damageCostType: "basic"
+  });
+  const receipts = [];
+
+  for (let use = 0; use < 4; use += 1) {
+    receipts.push(await procesarConsumoMP(actor, item));
+  }
+
+  assert.deepEqual(receipts.map(receipt => receipt.costoTotal), [2, 3, 4, 5]);
+  assert.deepEqual(receipts.map(receipt => receipt.costoBasico), [1, 1, 1, 1]);
+  assert.deepEqual(receipts.map(receipt => receipt.costoStack), [1, 2, 3, 4]);
+  assert.equal(actor.stacks[item.id], 4, "se persiste el uso, no el total previo");
+});
+
+test("Restaurar día con Básico conserva el vínculo y deja total 2; el uso siguiente deja 3", async () => {
+  const actor = createActor(30, { ritual: 5 });
+  const item = createItem("competencia", {
+    id: "ritual",
+    damageCostType: "basic"
+  });
+
+  assert.equal(calcularConsumoMP(actor, item).costoTotal, 7);
+  await restaurarAcumuladoresDia(actor);
+  assert.equal(item.system.damageCostType, "basic");
+  assert.equal(calcularConsumoMP(actor, item).costoTotal, 2);
+
+  const receipt = await procesarConsumoMP(actor, item);
+  assert.equal(receipt.costoTotal, 2);
+  assert.equal(calcularConsumoMP(actor, item).costoTotal, 3);
+});
+
+test("éxito y fallo cobran el mismo Básico fijo porque el resultado no interviene", async () => {
+  for (const rollResult of [{ success: true }, { success: false }]) {
+    const actor = createActor(20, { prueba: 2 });
+    const item = createItem("competencia", {
+      id: "prueba",
+      damageCostType: "basic"
+    });
+    const receipt = await procesarConsumoMP(actor, item);
+
+    assert.equal(typeof rollResult.success, "boolean");
+    assert.equal(receipt.costoStack, 3);
+    assert.equal(receipt.costoBasico, 1);
+    assert.equal(receipt.costoTotal, 4);
+    assert.equal(actor.system.vitales.mp.value, 16);
+    assert.equal(calcularConsumoMP(actor, item).costoTotal, 5);
+  }
+});
+
+test("cada Competencia conserva un stack independiente, también con Básico", async () => {
+  const actor = createActor(50);
+  const meditacion = createItem("competencia", {
+    id: "meditacion",
+    damageCostType: "basic"
+  });
+  const simbologia = createItem("competencia", {
+    id: "simbologia",
+    damageCostType: "basic"
+  });
+
+  await procesarConsumoMP(actor, meditacion);
+  await procesarConsumoMP(actor, meditacion);
+  await procesarConsumoMP(actor, meditacion);
+
+  assert.deepEqual(actor.stacks, { meditacion: 3 });
+  assert.equal(calcularConsumoMP(actor, meditacion).costoTotal, 5);
+  assert.equal(calcularConsumoMP(actor, simbologia).costoTotal, 2);
+});
+
+test("Restaurar día es persistente e idempotente", async () => {
+  const actor = createActor(20, { a: 5, b: 3 });
+
+  await restaurarAcumuladoresDia(actor);
+  assert.deepEqual(actor.getFlag("mtrol", "mpStacks"), {});
+  await restaurarAcumuladoresDia(actor);
+
+  assert.deepEqual(actor.getFlag("mtrol", "mpStacks"), {});
+  assert.equal(actor.setFlagCalls, 0);
+  assert.equal(actor.unsetFlagCalls, 2);
+});
+
+test("Restaurar día no declara éxito si la persistencia conserva stacks", async () => {
+  const actor = createActor(20, { competencia: 4 });
+  actor.unsetFlag = async () => {
+    actor.unsetFlagCalls += 1;
+  };
+
+  await assert.rejects(
+    restaurarAcumuladoresDia(actor),
+    /No se pudieron reiniciar los acumuladores diarios/
+  );
+  assert.deepEqual(actor.stacks, { competencia: 4 });
+});
+
+test("stacks legacy ausentes, numéricos string o inválidos se leen de forma segura", () => {
+  const item = createItem("competencia", { id: "legacy" });
+
+  assert.equal(calcularConsumoMP(createActor(20), item).costoTotal, 1);
+  assert.equal(calcularConsumoMP(createActor(20, { legacy: "4" }), item).costoTotal, 5);
+  assert.equal(calcularConsumoMP(createActor(20, { legacy: null }), item).costoTotal, 1);
+  assert.equal(calcularConsumoMP(createActor(20, { legacy: "invalido" }), item).costoTotal, 1);
+  assert.equal(calcularConsumoMP(createActor(20, { legacy: -8 }), item).costoTotal, 1);
 });
 
 test("Contraataque cuesta 5 MP en cada uso y no crea stacks", async () => {
@@ -260,4 +450,15 @@ test("Meditar continúa calculando la restauración como dos veces el costo real
   );
 
   assert.match(source, /restauracion\s*=\s*exito\s*\?\s*costeAplicado\s*\*\s*2\s*:\s*0/s);
+});
+
+test("la Sheet delega Restaurar día al engine y no escribe el campo legacy", async () => {
+  const source = await readFile(
+    new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /await restaurarAcumuladoresDia\(this\.actor\)/);
+  assert.doesNotMatch(source, /system\.mpStack/);
+  assert.doesNotMatch(source, /unsetFlag\([^)]*mpStacks/);
 });

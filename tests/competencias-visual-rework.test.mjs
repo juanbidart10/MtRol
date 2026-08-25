@@ -70,6 +70,12 @@ test("template conserva cards y respeta la jerarquía visual acordada", () => {
   assert.doesNotMatch(competenceTab, /cooldown|STACK|CD 0/i);
 });
 
+test("la fila muestra el próximo costo calculado por el mismo view-model del engine", () => {
+  assert.match(competenceTab, /class="competencia-mp-cost"[\s\S]*?MP \{\{this\.mtrolMpCost\}\}/);
+  assert.match(sheet, /mtrolMpCost:\s*mpCost\.costoTotal/);
+  assert.match(style, /\.competencia-mp-cost\s*\{/);
+});
+
 test("marco e imagen usan capas independientes sin persistir el overlay", () => {
   assert.match(competenceTab, /src="{{this\.imgSeguro}}"/);
   assert.match(competenceTab, /assets\/ui\/competencias\/competencia-frame\.png/);

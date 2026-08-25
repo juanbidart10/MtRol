@@ -53,10 +53,6 @@ import {
 } from "../combat/damage-authorized.js";
 
 import {
-  ejecutarComercioMtrolDesdeSocket
-} from "../items/trade-engine.js";
-
-import {
   registerMtrolDebugSetting
 } from "./debug.js";
 
@@ -91,6 +87,10 @@ import {
 import {
   installMtrolClassResourceAuthorityHooks
 } from "../actors/class-resource-service.js";
+
+import {
+  installTradeApi
+} from "../trade/trade-api.js";
 
 // =========================
 // INIT MTROL
@@ -196,8 +196,7 @@ export async function initMtrol() {
   game.mtrol.aplicarDanioLocalizadoAutorizado =
     aplicarDanioLocalizadoAutorizado;
 
-  game.mtrol.ejecutarComercioMtrolDesdeSocket =
-    ejecutarComercioMtrolDesdeSocket;
+  installTradeApi();
 
   registerMtrolDebugSetting();
   installMtrolAmbientFxApi();

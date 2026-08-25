@@ -9,6 +9,7 @@ const RESOURCE_ORIGINS = new Set([
   "damage",
   "mp-cost",
   "mp-refund",
+  "daily-reset",
   "meditate",
   "level-up",
   "pending-attribute",

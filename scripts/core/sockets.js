@@ -26,6 +26,23 @@ import {
 } from "../actors/progression-advancement-service.js";
 
 import {
+  acceptTradeSessionAuthoritative,
+  cancelTradeSessionAuthoritative,
+  confirmTradeSessionAuthoritative,
+  createTradeSessionAuthoritative,
+  setTradeOfferAuthoritative
+} from "../trade/trade-authority.js";
+
+import {
+  receiveTradeAuthorityReset,
+  receiveTradeSessionSync
+} from "../trade/trade-api.js";
+
+import {
+  buildPublicTradeSessionView
+} from "../trade/trade-view-model.js";
+
+import {
   handleSocketResponse,
   isPrimaryActiveGM,
   respondToSocketRequest
@@ -56,6 +73,16 @@ export function registerMtrolSockets() {
     if (!data) return;
 
     if (handleSocketResponse(data)) return;
+
+    if (data.action === "mtrolTradeSessionSync") {
+      receiveTradeSessionSync(data);
+      return;
+    }
+
+    if (data.action === "mtrolTradeAuthorityReset") {
+      receiveTradeAuthorityReset(data);
+      return;
+    }
 
     if (data.action === "mtrolPendingActionSync") {
       game.mtrol?.actions?.receivePendingActionSync?.(
@@ -115,6 +142,61 @@ export function registerMtrolSockets() {
             receipt: await restaurarMPMeditacionAuthoritative(data.payload ?? {}, {
               requestingUserId: data.requestingUserId
             })
+          }));
+          break;
+        }
+
+        case "mtrolTradeCreateSession": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await createTradeSessionAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
+          }));
+          break;
+        }
+
+        case "mtrolTradeAcceptSession": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await acceptTradeSessionAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
+          }));
+          break;
+        }
+
+        case "mtrolTradeSetOffer": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await setTradeOfferAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
+          }));
+          break;
+        }
+
+        case "mtrolTradeConfirm": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await confirmTradeSessionAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
+          }));
+          break;
+        }
+
+        case "mtrolTradeCancel": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await cancelTradeSessionAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
           }));
           break;
         }
@@ -411,21 +493,6 @@ export function registerMtrolSockets() {
 
           if (!resultadoDanio) break;
 
-          break;
-        }
-
-        // =========================
-        // MTROL - COMERCIO AUTORITATIVO
-        // =========================
-        case "mtrolEjecutarComercio": {
-          if (typeof game.mtrol?.ejecutarComercioMtrolDesdeSocket !== "function") {
-            console.warn(
-              "MTROL | ejecutarComercioMtrolDesdeSocket no esta registrado en game.mtrol."
-            );
-            return;
-          }
-
-          await game.mtrol.ejecutarComercioMtrolDesdeSocket(data);
           break;
         }
 

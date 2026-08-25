@@ -226,6 +226,27 @@ test("Actor legacy sin classId conserva edición manual de máximos", async () =
   assert.equal(changes["system.vitales.mp.max"], 55);
 });
 
+test("guard preserva mapas vacíos ajenos a recursos de clase", async () => {
+  const { guardActorClassResourceUpdate } = await loadService();
+  const actor = createActor();
+  const changes = {
+    flags: {
+      mtrol: {
+        mpStacks: {}
+      }
+    }
+  };
+
+  assert.equal(guardActorClassResourceUpdate(actor, changes, {}, "gm"), true);
+  assert.deepEqual(changes, {
+    flags: {
+      mtrol: {
+        mpStacks: {}
+      }
+    }
+  });
+});
+
 test("backend de Sheet conserva edición GM de current pero reemplaza máximos manuales por la fórmula", async () => {
   const { updateActorFromSheetAuthoritative } = await loadService();
   const actor = createActor();

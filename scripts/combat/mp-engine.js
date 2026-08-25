@@ -45,6 +45,22 @@ function debeStackear(categoria) {
   return categoria === MTROL_CATEGORIES.COMPETENCIA;
 }
 
+function normalizarStackPersistido(value) {
+  const stack = Number(value ?? 0);
+  return Number.isFinite(stack) && stack >= 0
+    ? Math.trunc(stack)
+    : 0;
+}
+
+function obtenerCostoBasicoAdjunto(item, categoria) {
+  return (
+    categoria === MTROL_CATEGORIES.COMPETENCIA &&
+    item?.system?.damageCostType === "basic"
+  )
+    ? 1
+    : 0;
+}
+
 function normalizarNivel(item) {
   const nivel = Number(item?.system?.nivel ?? 1);
   return Number.isFinite(nivel) ? Math.max(1, Math.trunc(nivel)) : 1;
@@ -123,7 +139,10 @@ export function calcularConsumoMP(actor, item) {
     ? foundry.utils.duplicate(actor.getFlag?.(mtrolFlagScope(), "mpStacks") ?? {})
     : {};
   const stackKey = stackea ? obtenerClaveStack(item) : null;
-  const stackActual = stackea ? Number(stacks[stackKey] ?? 0) : 0;
+  const stackActual = stackea
+    ? normalizarStackPersistido(stacks[stackKey])
+    : 0;
+  const costoBasico = obtenerCostoBasicoAdjunto(item, categoria);
 
   let costoBase = 0;
   let costoStack = 0;
@@ -136,6 +155,7 @@ export function calcularConsumoMP(actor, item) {
       costoBase = 1;
       break;
     case MTROL_CATEGORIES.COMPETENCIA:
+      costoBase = costoBasico;
       costoStack = 1 + stackActual;
       break;
     case MTROL_CATEGORIES.HECHIZO:
@@ -157,6 +177,7 @@ export function calcularConsumoMP(actor, item) {
     motivo: mpActual >= costoTotal ? null : "mp_insuficiente",
     costoTotal,
     costoBase,
+    costoBasico,
     costoStack,
     categoria,
     mpActual,
@@ -253,15 +274,16 @@ export async function aplicarConsumoMPAuthoritative(payload = {}, {
       );
     }
 
-    await canonicalActor.update({
+    const changes = {
       "system.vitales.mp.value": canonicalConsumption.mpNuevo
-    });
-
+    };
     if (canonicalConsumption.stackea) {
       const stacks = foundry.utils.duplicate(canonicalConsumption.stacks ?? {});
       stacks[canonicalConsumption.stackKey] = canonicalConsumption.stackNuevo;
-      await canonicalActor.setFlag(mtrolFlagScope(), "mpStacks", stacks);
+      changes[`flags.${mtrolFlagScope()}.mpStacks`] = stacks;
     }
+
+    await canonicalActor.update(changes);
 
     return {
       authorized: true,
@@ -270,6 +292,8 @@ export async function aplicarConsumoMPAuthoritative(payload = {}, {
       itemId: item.id ?? null,
       meditateEligible: isMeditateItem(item),
       costoTotal: canonicalConsumption.costoTotal,
+      costoBasico: canonicalConsumption.costoBasico,
+      costoStack: canonicalConsumption.costoStack,
       categoria: canonicalConsumption.categoria,
       mpAnterior: canonicalConsumption.mpAnterior,
       mpNuevo: canonicalConsumption.mpNuevo,
@@ -314,6 +338,43 @@ export async function procesarConsumoMP(actor, item) {
   if (!consumoMP?.exito) return consumoMP;
 
   return aplicarConsumoMP(actor, consumoMP, { item });
+}
+
+export async function restaurarAcumuladoresDia(actor) {
+  if (!game.user?.isGM) {
+    throw new Error("Solo un GM puede restaurar los acumuladores diarios.");
+  }
+  if (!actor) throw new Error("No se encontró el Actor para restaurar el día.");
+
+  return runActorResourceTransaction(actor, {
+    transactionId: `daily-reset:${createTransactionId()}`,
+    origin: "daily-reset"
+  }, async canonicalActor => {
+    const stacksAnteriores = foundry.utils.duplicate(
+      canonicalActor.getFlag?.(mtrolFlagScope(), "mpStacks") ?? {}
+    );
+
+    // Se serializa con los consumos para que ninguno pueda regrabar un stack
+    // anterior mientras se está restaurando el día.
+    // Eliminar la clave completa evita el merge recursivo de Foundry: escribir
+    // un objeto vacío conserva las entradas anteriores del flag.
+    await canonicalActor.unsetFlag(mtrolFlagScope(), "mpStacks");
+    const stacksDespues = foundry.utils.duplicate(
+      canonicalActor.getFlag?.(mtrolFlagScope(), "mpStacks") ?? {}
+    );
+
+    if (Object.keys(stacksDespues).length > 0) {
+      throw new Error("No se pudieron reiniciar los acumuladores diarios de MP.");
+    }
+
+    return {
+      authorized: true,
+      restored: true,
+      competenciasRestauradas: Object.keys(stacksAnteriores).length,
+      stacksAnteriores,
+      stacks: stacksDespues
+    };
+  });
 }
 
 export function validarCostoResolucionMP(actor, costType = "none") {

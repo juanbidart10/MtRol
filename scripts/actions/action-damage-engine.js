@@ -47,6 +47,11 @@ import {
   validarCostoResolucionMP
 } from "../combat/mp-engine.js";
 
+import {
+  MTROL_CATEGORIES,
+  normalizarCategoria
+} from "../core/categories.js";
+
 const RESOLVED_DAMAGE_ACTION =
   "mtrol-resolved-damage";
 
@@ -384,10 +389,17 @@ export async function executeConfiguredCompetenciaDamage({
   actor,
   damageCostType = "none",
   costoTotal = 0,
+  damageContext = {},
   ...damageArgs
 } = {}) {
+  const basicCostIncludedInActivation =
+    normalizarCategoria(damageContext?.item?.system?.categoria) === MTROL_CATEGORIES.COMPETENCIA &&
+    damageCostType === "basic";
   let additionalCostReceipt =
-    validarCostoResolucionMP(actor, damageCostType);
+    validarCostoResolucionMP(
+      actor,
+      basicCostIncludedInActivation ? "none" : damageCostType
+    );
 
   if (!additionalCostReceipt?.exito) {
     throw new Error("No hay MP suficiente para ejecutar la resolución de daño.");
@@ -404,6 +416,7 @@ export async function executeConfiguredCompetenciaDamage({
     return await executeCompetenciaDamage({
       actor,
       ...damageArgs,
+      damageContext,
       costoTotal: Number(costoTotal ?? 0) + additionalCostReceipt.costoTotal
     });
   } catch (error) {
@@ -469,7 +482,12 @@ export async function executeResolvedDamageAuthoritative(
     );
 
     const additionalCostReceipt =
-      validarCostoResolucionMP(actor, damage.costType ?? "none");
+      validarCostoResolucionMP(
+        actor,
+        damage.basicCostIncludedInActivation === true
+          ? "none"
+          : damage.costType ?? "none"
+      );
 
     if (!additionalCostReceipt?.exito) {
       throw new Error("No hay MP suficiente para ejecutar la resolución de daño.");

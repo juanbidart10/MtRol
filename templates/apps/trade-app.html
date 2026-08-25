@@ -1,0 +1,90 @@
+{{#if unavailable}}
+  <p class="hint">La sesión de comercio ya no está disponible.</p>
+{{else}}
+  <form class="mtrol-trade-runtime" autocomplete="off" aria-busy="{{uiState.busy}}">
+    <header class="mtrol-trade-runtime__header">
+      <div class="mtrol-trade-runtime__participant is-own">
+        <img src="{{uiState.ownImg}}" alt="Retrato de {{uiState.ownName}}">
+        <div><small>Tu personaje</small><strong>{{uiState.ownName}}</strong></div>
+      </div>
+      <div class="mtrol-trade-runtime__exchange" aria-label="Intercambio entre personajes">
+        <span>COMERCIO</span><b aria-hidden="true">↔</b><small>{{session.state}} · revisión {{session.revision}}</small>
+      </div>
+      <div class="mtrol-trade-runtime__participant is-rival">
+        <div><small>Otro personaje</small><strong>{{uiState.otherName}}</strong></div>
+        <img src="{{uiState.otherImg}}" alt="Retrato de {{uiState.otherName}}">
+      </div>
+    </header>
+
+    {{#if uiState.invalid}}<div class="mtrol-trade-runtime__notice is-warning" role="alert">La oferta cambió o contiene un objeto inválido. Corregila y confirmá nuevamente.</div>{{/if}}
+    {{#if uiState.executing}}<div class="mtrol-trade-runtime__notice is-processing" role="status">Ambos confirmaron. Procesando intercambio…</div>{{/if}}
+
+    <div class="mtrol-trade-runtime__layout">
+      <section class="mtrol-trade-runtime__panel mtrol-trade-runtime__inventory" aria-label="Mi inventario privado">
+        <div class="mtrol-trade-runtime__section-title"><div><h3>Mi inventario</h3><p class="hint">Privado; el rival no recibe esta lista.</p></div></div>
+        <div class="mtrol-trade-runtime__list">
+          {{#each myInventory.items}}
+            <article class="mtrol-trade-runtime__item {{#if equipped}}is-equipped{{/if}}" data-item-uuid="{{itemUuid}}" data-item-id="{{itemId}}" data-maximum="{{availableIncludingSession}}">
+              <img src="{{img}}" alt="{{name}}">
+              <div class="mtrol-trade-runtime__item-copy"><strong>{{name}}</strong><small>{{tipoObjeto}} · disponible {{availableIncludingSession}}</small>{{#if equipped}}<small class="mtrol-trade-runtime__warning">Equipado — no comerciable</small>{{/if}}</div>
+              <input type="number" aria-label="Cantidad de {{name}}" data-role="quantity" min="1" max="{{availableIncludingSession}}" value="1" {{#unless tradeable}}disabled{{/unless}} {{#unless ../uiState.canEdit}}disabled{{/unless}}>
+              <button type="button" data-action="add" title="Añadir {{name}} a mi oferta" {{#unless tradeable}}disabled{{/unless}} {{#unless ../uiState.canEdit}}disabled{{/unless}}>Añadir</button>
+            </article>
+          {{else}}<p class="hint">No hay objetos disponibles.</p>{{/each}}
+        </div>
+      </section>
+
+      <div class="mtrol-trade-runtime__offers">
+        <section class="mtrol-trade-runtime__panel {{#if uiState.ownConfirmed}}is-confirmed{{/if}}" aria-label="Mi oferta">
+          <div class="mtrol-trade-runtime__section-title">
+            <div><h3>Mi oferta</h3><small>{{#if uiState.ownConfirmed}}Confirmada{{else}}Pendiente{{/if}}</small></div>
+            <div class="mtrol-trade-runtime__section-actions">{{#if uiState.canUnlockConfirmedOffer}}<button type="button" data-action="unlock-offer" title="Modificar e invalidar mi confirmación">Modificar oferta</button>{{/if}}{{#if uiState.canEdit}}<button type="button" data-action="clear" title="Retirar todos los objetos">Limpiar</button>{{/if}}</div>
+          </div>
+          <div class="mtrol-trade-runtime__list">
+            {{#each myOffer}}
+              <article class="mtrol-trade-runtime__item {{#if invalid}}is-invalid{{/if}}" data-item-uuid="{{itemUuid}}" data-item-id="{{itemId}}" data-maximum="{{maximum}}">
+                <img src="{{img}}" alt="{{name}}">
+                <div class="mtrol-trade-runtime__item-copy"><strong>{{name}} ×{{quantity}}</strong><small>{{tipoObjeto}}</small>{{#if invalid}}<small class="mtrol-trade-runtime__error">{{invalidReason}}</small>{{/if}}</div>
+                <input type="number" aria-label="Cantidad ofrecida de {{name}}" data-role="quantity" min="1" max="{{maximum}}" value="{{quantity}}" {{#unless ../uiState.canEdit}}disabled{{/unless}}>
+                <button type="button" data-action="update" title="Actualizar cantidad" {{#unless ../uiState.canEdit}}disabled{{/unless}}>Actualizar</button>
+                <button type="button" data-action="remove" data-item-uuid="{{itemUuid}}" title="Retirar {{name}}" {{#unless ../uiState.canEdit}}disabled{{/unless}}>Retirar</button>
+                <button type="button" data-action="inspect" data-item-uuid="{{itemUuid}}" title="Inspeccionar {{name}}">Ver</button>
+              </article>
+            {{else}}<p class="hint">Sin objetos ofrecidos. El comercio unilateral es válido.</p>{{/each}}
+          </div>
+        </section>
+
+        <section class="mtrol-trade-runtime__panel {{#if uiState.otherConfirmed}}is-confirmed{{/if}}" aria-label="Oferta de {{uiState.otherName}}">
+          <div class="mtrol-trade-runtime__section-title"><div><h3>Oferta de {{uiState.otherName}}</h3><small>{{#if uiState.otherConfirmed}}Confirmada{{else}}Pendiente{{/if}}</small></div></div>
+          <div class="mtrol-trade-runtime__list">
+            {{#each otherOffer}}
+              <article class="mtrol-trade-runtime__item is-readonly {{#if invalid}}is-invalid{{/if}}">
+                <img src="{{img}}" alt="{{name}}">
+                <div class="mtrol-trade-runtime__item-copy"><strong>{{name}} ×{{quantity}}</strong><small>{{tipoObjeto}} · solo lectura</small>{{#if invalid}}<small class="mtrol-trade-runtime__error">{{invalidReason}}</small>{{/if}}</div>
+                <button type="button" data-action="inspect" data-item-uuid="{{itemUuid}}" title="Inspeccionar oferta pública de {{name}}">Inspeccionar</button>
+              </article>
+            {{else}}<p class="hint">Sin objetos ofrecidos.</p>{{/each}}
+          </div>
+        </section>
+      </div>
+    </div>
+
+    {{#if inspector.selected}}
+      <aside class="mtrol-trade-runtime__inspector" aria-label="Inspector de objeto en modo solo lectura">
+        <img src="{{inspector.img}}" alt="{{inspector.name}}"><div><strong>{{inspector.name}}</strong><p>{{inspector.description}}</p>{{#each inspector.stats}}<small>{{label}}: {{value}}</small>{{/each}}</div>
+        <div class="mtrol-trade-runtime__inspector-actions"><span>Solo lectura</span><button type="button" data-action="close-inspector" title="Cerrar inspector">×</button></div>
+      </aside>
+    {{/if}}
+
+    <footer class="mtrol-trade-runtime__footer">
+      <div class="mtrol-trade-runtime__confirmations"><span>Tu estado: <strong>{{#if uiState.ownConfirmed}}CONFIRMADO{{else}}PENDIENTE{{/if}}</strong></span><span>{{uiState.otherName}}: <strong>{{#if uiState.otherConfirmed}}CONFIRMADO{{else}}PENDIENTE{{/if}}</strong></span></div>
+      <div class="mtrol-trade-runtime__actions">
+        {{#if uiState.waitingAcceptance}}<span>Esperando aceptación explícita…</span>{{/if}}
+        {{#if uiState.canAccept}}<button type="button" data-action="accept" title="Aceptar esta solicitud">Aceptar solicitud</button>{{/if}}
+        {{#if uiState.canConfirm}}<button type="button" class="is-primary" data-action="confirm" title="Confirmar la revisión actual">Confirmar revisión {{session.revision}}</button>{{/if}}
+        {{#if uiState.ready}}<span class="mtrol-trade-runtime__ready">Ambos confirmaron</span>{{/if}}
+        <button type="button" class="is-cancel" data-action="cancel" title="Cancelar comercio" {{#if uiState.interactionDisabled}}disabled{{/if}}>Cancelar</button>
+      </div>
+    </footer>
+  </form>
+{{/if}}

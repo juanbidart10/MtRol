@@ -24,6 +24,7 @@ import {
 import {
   aplicarConsumoMP,
   calcularConsumoMP,
+  restaurarAcumuladoresDia,
   restaurarMPMeditacion
 } from "../../combat/mp-engine.js";
 
@@ -61,12 +62,8 @@ import {
 } from "../../items/competencia-presentation.js";
 
 import {
-  abrirDialogoComercioMtrol
-} from "../../ui/trade-dialog.js";
-
-import {
-  mtrolFlagScope
-} from "../../core/system.js";
+  requestTradeFromTarget
+} from "../../trade/trade-runtime.js";
 
 import {
   attachDefenseRollForActor,
@@ -1915,20 +1912,29 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    await this.actor.update({
-      "system.mpStack": 0
-    });
+    const button = event.currentTarget;
+    button.disabled = true;
 
-    await this.actor.unsetFlag(mtrolFlagScope(), "mpStacks");
+    try {
+      await restaurarAcumuladoresDia(this.actor);
+    } catch (error) {
+      console.error("MTROL | No se pudo restaurar el día.", error);
+      ui.notifications.error(error.message ?? "No se pudo restaurar el día.");
+      return;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
 
     ui.notifications.info(`Día restaurado para ${this.actor.name}.`);
 
-    await ChatMessage.create({
-      speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-      content: `<strong>🌙 ${this.actor.name}</strong> ha restaurado el día. Los costes acumulados de MP fueron reiniciados.`
-    });
-
-    this.render(true);
+    try {
+      await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        content: `<strong>🌙 ${this.actor.name}</strong> ha restaurado el día. Los costes acumulados de MP fueron reiniciados.`
+      });
+    } catch (error) {
+      console.warn("MTROL | El día fue restaurado, pero no se pudo crear el mensaje de chat.", error);
+    }
   }
 
   async _onRollAtributo(event) {
@@ -2614,18 +2620,15 @@ export class PersonajeSheet extends ActorSheet {
     const target =
       Array.from(game.user.targets ?? [])[0];
 
-    const targetActor =
-      target?.actor ?? null;
-
-    if (!targetActor) {
+    if (!target?.actor) {
       ui.notifications.warn("Selecciona un token objetivo para solicitar comercio.");
       return;
     }
 
-    abrirDialogoComercioMtrol(
-      this.actor,
-      targetActor
-    );
+    await requestTradeFromTarget({
+      sourceActor: this.actor,
+      targetToken: target
+    });
   }
 
   async _onEditItem(event) {

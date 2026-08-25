@@ -30,6 +30,11 @@ import {
   getItemAbilityDamageConfig
 } from "./ability-config.js";
 
+import {
+  MTROL_CATEGORIES,
+  normalizarCategoria
+} from "../core/categories.js";
+
 const pendingActions =
   new Map();
 
@@ -289,7 +294,13 @@ function normalizeDamageContext(data = {}) {
     resolution: data.resolution ?? "onOppositionWin",
     mode: data.mode ?? "enabled",
     costType: data.costType ?? "none",
-    additionalMpCost: data.costType === "basic" ? 1 : 0,
+    basicCostIncludedInActivation:
+      data.basicCostIncludedInActivation === true,
+    additionalMpCost:
+      data.costType === "basic" &&
+      data.basicCostIncludedInActivation !== true
+        ? 1
+        : 0,
     additionalCostApplied: false,
     rollData: foundry.utils.deepClone(data.rollData ?? {}),
     total: null,
@@ -410,6 +421,9 @@ function getCanonicalDamageContext({
     getItemAbilityDamageConfig(sourceItem, {
       requiresOpposition
     });
+  const basicCostIncludedInActivation =
+    normalizarCategoria(sourceItem?.system?.categoria) === MTROL_CATEGORIES.COMPETENCIA &&
+    config.costType === "basic";
   const available =
     executesDamage &&
     formula.length > 0 &&
@@ -436,6 +450,7 @@ function getCanonicalDamageContext({
     resolution: config.resolution,
     mode: config.mode,
     costType: config.costType,
+    basicCostIncludedInActivation,
     rollData: {}
   };
 }

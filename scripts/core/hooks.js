@@ -18,11 +18,16 @@ import {
   registerMtrolAmbientFxHooks
 } from "../scene-fx/ambient-fx-manager.js";
 
+import {
+  registerTradeLifecycleHooks
+} from "../trade/trade-hooks.js";
+
 export function registerHooks() {
 
   registrarHooksPesoMtrol();
   registerMtrolSequencerHooks();
   registerMtrolAmbientFxHooks();
+  registerTradeLifecycleHooks();
 
   // =========================
   // MTROL - OVERRIDE INICIATIVA
