@@ -13,6 +13,21 @@ export class ObjetoDataModel extends foundry.abstract.TypeDataModel {
         min: 0
       }),
 
+      consumible: new fields.SchemaField({
+        operacion: new fields.StringField({
+          initial: ""
+        }),
+
+        recurso: new fields.StringField({
+          initial: ""
+        }),
+
+        valor: new fields.NumberField({
+          initial: 0,
+          min: 0
+        })
+      }),
+
       material: new fields.StringField({
         initial: ""
       }),

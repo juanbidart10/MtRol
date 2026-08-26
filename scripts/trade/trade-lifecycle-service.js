@@ -17,6 +17,8 @@ import {
   tradeMovementLocks
 } from "./trade-proximity-service.js";
 
+import { tradeAuditService } from "./trade-audit-service.js";
+
 function isOwnTradeMutation(options) {
   return Boolean(options?.mtrolTradeExecutionId || options?.mtrolTradeRollback);
 }
@@ -49,6 +51,12 @@ async function invalidateOfferedItem(session, participantKey, offer, reason) {
     operationId: `external-${session.id}-${session.revision}-${offer.itemId}-${reason}`
   });
   publishTradeSession(updated, { reason: "offer-entry-invalidated" });
+  tradeAuditService.recordEvent(updated, "externalMutation", {
+    participantKey,
+    itemUuid: offer.itemUuid,
+    quantity: offer.quantity,
+    message: reason
+  });
   return updated;
 }
 
@@ -86,6 +94,15 @@ async function finishLifecycleSession(session, state, reason, operationId) {
   });
   tradeMovementLocks.releaseSession(terminal.id);
   publishTradeSession(terminal, { reason });
+  tradeAuditService.recordEvent(terminal,
+    reason === "participant-disconnected" ? "disconnect" : "invalidation",
+    { message: reason }
+  );
+  try {
+    await tradeAuditService.persistTerminal(terminal);
+  } catch (error) {
+    console.error("MTROL | No se pudo persistir auditoría lifecycle:", error);
+  }
   return terminal;
 }
 

@@ -172,6 +172,9 @@ export class TradeSession {
     this.updatedAt = createdAt;
     this.completedAt = null;
     this.cancelledAt = null;
+    this.cancelledByUserId = null;
+    this.cancelledByRole = null;
+    this.cancelReason = null;
     this.invalidatedAt = null;
     this.invalidReason = null;
     this.execution = {
@@ -479,6 +482,32 @@ export class TradeSessionStore {
       }
 
       this.#finishSession(session, TRADE_SESSION_STATES.CANCELLED);
+      session.cancelledByUserId = String(requestingUserId);
+      session.cancelledByRole = "PLAYER";
+      session.cancelReason = "participant-cancelled";
+      return session.toObject();
+    });
+  }
+
+  async cancelSessionByGM({ sessionId, authorityUserId, requestingUserId, reason, operationId }) {
+    return this.#runSessionMutation("cancel-session-by-gm", operationId, {
+      sessionId,
+      authorityUserId,
+      requestingUserId,
+      reason: String(reason ?? "Cancelado por GM")
+    }, async session => {
+      this.#assertAuthority(session, authorityUserId);
+      if (session.state === TRADE_SESSION_STATES.CANCELLED) return session.toObject();
+      if (session.state === TRADE_SESSION_STATES.EXECUTING) {
+        throw new Error("Una ejecución en curso no puede cancelarse manualmente.");
+      }
+      if ([TRADE_SESSION_STATES.COMPLETED, TRADE_SESSION_STATES.INVALID].includes(session.state)) {
+        throw new Error("La sesión ya terminó y no puede cancelarse.");
+      }
+      this.#finishSession(session, TRADE_SESSION_STATES.CANCELLED);
+      session.cancelledByUserId = normalizeRequiredString(requestingUserId, "GM que cancela");
+      session.cancelledByRole = "GM";
+      session.cancelReason = String(reason ?? "Cancelado por GM").trim().slice(0, 500) || "Cancelado por GM";
       return session.toObject();
     });
   }

@@ -7,6 +7,10 @@ import {
 } from "./trade-runtime.js";
 
 import {
+  registerTradeGMRuntimeHooks
+} from "./trade-gm-runtime.js";
+
+import {
   getRuntimeTradeLock,
   isTokenMovement,
   tradeMovementLocks
@@ -65,6 +69,7 @@ export function registerTradeLifecycleHooks() {
   if (registered) return;
   registered = true;
   registerTradeRuntimeHooks();
+  registerTradeGMRuntimeHooks();
 
   Hooks.on("userConnected", (user, connected) => {
     handleTradeUserConnection(user, connected)

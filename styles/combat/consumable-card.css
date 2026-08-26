@@ -1,0 +1,26 @@
+.mtrol-consumable-card .mtrol-consumable-card__header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.mtrol-consumable-card .mtrol-consumable-card__header img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.mtrol-consumable-card .mtrol-consumable-card__header h2 {
+  margin: 0;
+}
+
+.mtrol-consumable-card .mtrol-consumable-card__resource {
+  margin-bottom: 0;
+  font-size: 1.1em;
+}
+
+.mtrol-consumable-card .mtrol-consumable-card__full {
+  color: var(--mtrol-muted, #c6b995);
+  font-style: italic;
+}

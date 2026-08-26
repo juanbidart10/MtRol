@@ -40,11 +40,30 @@ const MAGIC_HYBRID_CLASSES = Object.freeze([
   ["bardo", "Bardo"]
 ]);
 
+const CLASS_SPECIAL_ABILITIES = Object.freeze({
+  mago: Object.freeze({
+    specialAbility1: Object.freeze({
+      key: "orbe-control",
+      label: "Orbe Control",
+      handler: "orb-contextual",
+      legacyNames: Object.freeze(["Orbe Control"])
+    }),
+    specialAbility2: Object.freeze({
+      key: "orbe-aumentado",
+      label: "Orbe Aumentado",
+      handler: "orb-contextual",
+      legacyNames: Object.freeze(["Orbe Aumentado"])
+    })
+  })
+});
+
 function createClassDefinitions(entries, resourceProfile) {
   return entries.map(([id, label]) => Object.freeze({
     id,
     label,
-    resourceProfile
+    resourceProfile,
+    specialAbility1: CLASS_SPECIAL_ABILITIES[id]?.specialAbility1 ?? null,
+    specialAbility2: CLASS_SPECIAL_ABILITIES[id]?.specialAbility2 ?? null
   }));
 }
 

@@ -227,6 +227,16 @@
 
     <div class="tab mtrol-tab-personaje" data-group="primary" data-tab="personaje">
 
+      <section class="mtrol-preparation-status" aria-label="Preparación acumulada">
+        <span>En preparación: <strong>+{{mtrolPreparation.value}}</strong></span>
+        {{#if esGM}}
+          <div class="mtrol-preparation-controls" aria-label="Modificar Preparación">
+            <button type="button" class="mtrol-preparation-adjust" data-delta="-1" title="Reducir Preparación" {{#if mtrolPreparation.atMinimum}}disabled{{/if}}>−</button>
+            <button type="button" class="mtrol-preparation-adjust" data-delta="1" title="Aumentar Preparación" {{#if mtrolPreparation.atMaximum}}disabled{{/if}}>+</button>
+          </div>
+        {{/if}}
+      </section>
+
       <section class="mtrol-panel atributos">
         <div class="atributos-grid mtrol-atributos-premium">
 
@@ -497,12 +507,26 @@
     <!-- =============================== -->
 
     <div class="tab mtrol-tab-combate" data-group="primary" data-tab="combate">
+      <section class="mtrol-preparation-status mtrol-preparation-status--combat" aria-label="Preparación de combate">
+        <span>En preparación: <strong>+{{mtrolPreparation.value}}</strong></span>
+        <button type="button"
+                class="mtrol-prepare-turn"
+                title="{{mtrolPreparation.reason}}"
+                {{#unless mtrolPreparation.canPrepare}}disabled{{/unless}}>Prepararse</button>
+        {{#if esGM}}
+          <div class="mtrol-preparation-controls" aria-label="Modificar Preparación">
+            <button type="button" class="mtrol-preparation-adjust" data-delta="-1" title="Reducir Preparación" {{#if mtrolPreparation.atMinimum}}disabled{{/if}}>−</button>
+            <button type="button" class="mtrol-preparation-adjust" data-delta="1" title="Aumentar Preparación" {{#if mtrolPreparation.atMaximum}}disabled{{/if}}>+</button>
+          </div>
+        {{/if}}
+      </section>
       <section class="mtrol-combat-library" aria-label="Biblioteca de acciones de combate">
         <div class="mtrol-combat-grid">
         {{#each combatLibrary.actions}}
           <article class="mtrol-combat-card mtrol-item"
                    data-item-id="{{this.id}}"
-                   data-combat-nature="{{this.mtrolCombatNature}}">
+                   data-combat-nature="{{this.mtrolCombatNature}}"
+                   data-cooldown-available="{{this.mtrolCooldownAvailable}}">
             <div class="mtrol-combat-card-artwork">
               <img class="mtrol-combat-card-artwork-image"
                    src="{{this.mtrolBanner}}"
@@ -522,7 +546,8 @@
                    data-mtrol-dharma-prepared="false">
                 <button type="button"
                         class="mtrol-action-execute mtrol-combat-use competencia-roll"
-                        data-item-id="{{this.id}}">Ejecutar</button>
+                        data-item-id="{{this.id}}"
+                        {{#unless this.mtrolActionAvailable}}disabled title="{{this.mtrolActionUnavailableReason}}"{{/unless}}>Ejecutar</button>
                 <button type="button"
                         class="mtrol-dharma-prepare"
                         aria-pressed="false"
@@ -535,7 +560,7 @@
               {{#if this.mtrolShowMeta}}
                 <div class="mtrol-combat-card-meta" aria-label="Datos mecánicos de {{this.name}}">
                   {{#if this.mtrolShowMp}}<span class="mtrol-combat-card-stat">MP {{this.mtrolMpCost}}</span>{{/if}}
-                  {{#if this.mtrolShowCooldown}}<span class="mtrol-combat-card-stat">CD {{this.mtrolCooldown}}</span>{{/if}}
+                  {{#if this.mtrolShowCooldown}}<span class="mtrol-combat-card-stat {{#unless this.mtrolCooldownAvailable}}is-cooldown{{/unless}}">{{#if this.mtrolCooldownAvailable}}CD {{this.mtrolCooldown}}{{else}}En enfriamiento{{/if}}</span>{{/if}}
                   {{#if this.mtrolShowStack}}<span class="mtrol-combat-card-stat">STACK {{this.mtrolStack}}</span>{{/if}}
                 </div>
               {{/if}}
@@ -606,9 +631,10 @@
                          data-mtrol-formula="{{this.mtrolRollFormula}}"
                          data-mtrol-dharma-eligible="{{this.mtrolDharmaEligible}}"
                          data-mtrol-dharma-prepared="false">
-                      <button type="button"
-                              class="mtrol-action-execute competencia-roll"
-                              data-item-id="{{this.id}}">Ejecutar</button>
+                       <button type="button"
+                               class="mtrol-action-execute competencia-roll"
+                               data-item-id="{{this.id}}"
+                               {{#unless this.mtrolActionAvailable}}disabled title="{{this.mtrolActionUnavailableReason}}"{{/unless}}>Ejecutar</button>
                       <button type="button"
                               class="mtrol-dharma-prepare"
                               aria-pressed="false"
@@ -648,6 +674,16 @@
     <!-- =============================== -->
 
     <div class="tab mtrol-tab-competencias" data-group="primary" data-tab="competencias">
+
+      <section class="mtrol-preparation-status" aria-label="Preparación acumulada">
+        <span>En preparación: <strong>+{{mtrolPreparation.value}}</strong></span>
+        {{#if esGM}}
+          <div class="mtrol-preparation-controls" aria-label="Modificar Preparación">
+            <button type="button" class="mtrol-preparation-adjust" data-delta="-1" title="Reducir Preparación" {{#if mtrolPreparation.atMinimum}}disabled{{/if}}>−</button>
+            <button type="button" class="mtrol-preparation-adjust" data-delta="1" title="Aumentar Preparación" {{#if mtrolPreparation.atMaximum}}disabled{{/if}}>+</button>
+          </div>
+        {{/if}}
+      </section>
 
       <section class="mtrol-competencias-section" aria-label="Competencias">
 
@@ -741,7 +777,8 @@
                   </button>
                   <button type="button"
                           class="mtrol-action-execute competencia-roll"
-                          data-item-id="{{this.id}}">Ejecutar</button>
+                          data-item-id="{{this.id}}"
+                          {{#unless this.mtrolActionAvailable}}disabled title="{{this.mtrolActionUnavailableReason}}"{{/unless}}>Ejecutar</button>
                 </div>
 
               </article>
@@ -951,6 +988,18 @@
                       <p class="mtrol-inventory-inspector-empty-description">Sin descripci&oacute;n.</p>
                     {{/if}}
                   </section>
+
+                  {{#if inventoryInspector.consumable.canUse}}
+                    <div class="mtrol-inventory-inspector-consumable" aria-label="Usar consumible">
+                      <button type="button"
+                              class="mtrol-consumable-use mtrol-inventory-asset-button"
+                              data-item-id="{{inventoryInspector.itemId}}"
+                              title="Usar {{inventoryInspector.name}}">
+                        <i class="fas fa-flask" aria-hidden="true"></i>
+                        USAR +{{inventoryInspector.consumable.effect.amount}} {{inventoryInspector.consumable.resourceLabel}}
+                      </button>
+                    </div>
+                  {{/if}}
 
                   {{#if @root.esGM}}
                     <div class="mtrol-inventory-inspector-admin" aria-label="Acciones administrativas del objeto">
@@ -1273,15 +1322,40 @@
                 <input type="text" name="system.recursos.despertar" value="{{system.recursos.despertar}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
               </div>
 
-              <div class="progresion-card progresion-card--talent">
-                <label>Habilidad Especial I</label>
-                <input type="text" name="system.recursos.habilidadEspecial1" value="{{system.recursos.habilidadEspecial1}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
+              {{#each specialAbilitySlots}}
+              <div class="progresion-card progresion-card--talent mtrol-special-ability {{#if locked}}is-locked{{/if}} {{#if invalidReference}}is-invalid{{/if}}">
+                <label>{{label}}</label>
+                <div class="mtrol-special-ability-summary">
+                  <img src="{{img}}" alt="{{name}}">
+                  <div>
+                    <strong>{{name}}</strong>
+                    <span>{{status}}</span>
+                    {{#if item}}{{#if cooldown}}<small>CD {{cooldown}}</small>{{/if}}{{/if}}
+                  </div>
+                </div>
+                <button type="button"
+                        class="competencia-roll mtrol-special-ability-use"
+                        data-item-id="{{itemId}}"
+                        data-special-slot="{{slot}}"
+                        {{#unless canUse}}disabled{{/unless}}>Usar</button>
+                {{#if ../esGM}}
+                <div class="mtrol-special-ability-gm-controls">
+                  <button type="button" class="mtrol-special-ability-lock" data-special-slot="{{slot}}">
+                    {{#if unlocked}}Bloquear{{else}}Desbloquear{{/if}}
+                  </button>
+                  <select class="mtrol-special-ability-override" data-special-slot="{{slot}}" aria-label="Override de {{label}}">
+                    <option value="">Usar habilidad de Clase</option>
+                    {{#each candidates}}
+                    <option value="{{uuid}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+                    {{/each}}
+                  </select>
+                  {{#if overrideItemUuid}}
+                  <button type="button" class="mtrol-special-ability-clear" data-special-slot="{{slot}}">Limpiar override</button>
+                  {{/if}}
+                </div>
+                {{/if}}
               </div>
-
-              <div class="progresion-card progresion-card--talent">
-                <label>Habilidad Especial II</label>
-                <input type="text" name="system.recursos.habilidadEspecial2" value="{{system.recursos.habilidadEspecial2}}" placeholder="Sin seleccionar" {{#unless esGM}}disabled{{/unless}}>
-              </div>
+              {{/each}}
             </div>
           </section>
 

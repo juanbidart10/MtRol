@@ -144,6 +144,50 @@
 
   </section>
 
+  <section class="sheet-section mtrol-consumable-config"
+           data-mtrol-consumable-config
+           {{#unless esConsumible}}hidden{{/unless}}>
+
+    <h2>Efecto del Consumible</h2>
+
+    <div class="objeto-grid">
+      <div class="objeto-field">
+        <label>Operaci&oacute;n</label>
+        <select name="system.consumible.operacion" {{#unless esGM}}disabled{{/unless}}>
+          {{#each operacionesConsumible as |operacion|}}
+            <option value="{{operacion.value}}" {{#if operacion.selected}}selected{{/if}}>
+              {{operacion.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="objeto-field">
+        <label>Recurso</label>
+        <select name="system.consumible.recurso" {{#unless esGM}}disabled{{/unless}}>
+          {{#each recursosConsumible as |recurso|}}
+            <option value="{{recurso.value}}" {{#if recurso.selected}}selected{{/if}}>
+              {{recurso.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="objeto-field">
+        <label>Valor</label>
+        <input type="number"
+               name="system.consumible.valor"
+               value="{{system.consumible.valor}}"
+               min="0.01"
+               step="0.01"
+               {{#unless esGM}}disabled{{/unless}} />
+      </div>
+    </div>
+
+    <p class="hint">El MVP admite un efecto: restaurar HP o MP con un valor positivo.</p>
+
+  </section>
+
   <section class="sheet-section">
 
     <h2>Descripción</h2>

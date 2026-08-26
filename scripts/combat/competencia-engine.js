@@ -21,6 +21,10 @@ import {
   getActionDefinitionFromItem
 } from "../actions/action-engine.js";
 
+import {
+  getActionGuard
+} from "./turn-system.js";
+
 // =========================
 // HELPERS
 // =========================
@@ -85,7 +89,8 @@ export async function resolverCompetencia({
   item,
   targetToken = null,
   formulaFallback = null,
-  dharmaSpend = null
+  dharmaSpend = null,
+  actionMode = null
 } = {}) {
 
   if (!actor || !item) {
@@ -95,6 +100,16 @@ export async function resolverCompetencia({
 
   if (item.type !== "competencia") {
     console.warn("MTROL | resolverCompetencia cancelado: el item no es competencia.", item);
+    return null;
+  }
+
+  const turnGuard = getActionGuard(actor, item, {
+    kindOverride: actionMode === "movement"
+      ? "movement"
+      : actionMode === "attack" ? "offensive" : null
+  });
+  if (!turnGuard.allowed) {
+    ui.notifications.warn(turnGuard.reason);
     return null;
   }
 
@@ -136,7 +151,7 @@ export async function resolverCompetencia({
   // TARGET
   // =========================
 
-  if (requiereTargetConfigurado(item, categoria, danioFormula) && !targetToken) {
+  if (actionMode !== "movement" && requiereTargetConfigurado(item, categoria, danioFormula) && !targetToken) {
     ui.notifications.warn(
       `Seleccioná un objetivo antes de usar ${item.name}.`
     );
@@ -179,7 +194,7 @@ export async function resolverCompetencia({
       `⚔️ ${item.name} | ${categoria.toUpperCase()}`,
       {
         item,
-        actionType: item.system?.actionType,
+        actionType: actionMode === "movement" ? "movement" : item.system?.actionType,
         defenseType: item.system?.defenseType,
         effect: item.system?.effect,
         category: categoria,
@@ -229,7 +244,8 @@ export async function resolverCompetencia({
     categoria,
     nivel,
     esHabilidadCombate,
-    esSkillBar
+    esSkillBar,
+    actionMode
   };
 
 }

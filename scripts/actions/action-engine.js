@@ -35,6 +35,11 @@ import {
   normalizarCategoria
 } from "../core/categories.js";
 
+import {
+  completeResolvedTurnAction,
+  getActionGuard
+} from "../combat/turn-system.js";
+
 const pendingActions =
   new Map();
 
@@ -840,6 +845,9 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     throw new Error("La competencia atacante ya no existe.");
   }
 
+  const turnGuard = getActionGuard(sourceActor, sourceItem);
+  if (!turnGuard.allowed) throw new Error(turnGuard.reason);
+
   const definition =
     getActionDefinitionFromItem(sourceItem);
 
@@ -1035,6 +1043,9 @@ export async function createReadyDamageActionAuthoritative(data = {}, {
   if (!sourceItem || sourceItem.type !== "competencia") {
     throw new Error("La competencia atacante ya no existe.");
   }
+
+  const turnGuard = getActionGuard(sourceActor, sourceItem);
+  if (!turnGuard.allowed) throw new Error(turnGuard.reason);
 
   const definition = getActionDefinitionFromItem(sourceItem);
   const config = getItemAbilityDamageConfig(sourceItem, {
@@ -1664,6 +1675,26 @@ export async function resolvePendingActionAuthoritative(
   broadcastPendingAction(pendingAction);
 
   console.log("MTROL | Opposed action resolved authoritatively", result);
+
+  const waitsForManualDamage = result.success === true &&
+    pendingAction.damage?.available === true &&
+    pendingAction.damage?.mode === "enabled" &&
+    pendingAction.damage?.status === "available";
+  if (!waitsForManualDamage) {
+    const sourceActor = pendingAction.sourceActorUuid
+      ? await fromUuid(pendingAction.sourceActorUuid)
+      : null;
+    if (sourceActor) {
+      try {
+        await completeResolvedTurnAction(sourceActor, {
+          resolutionId: pendingAction.id,
+          completionId: `opposition:${pendingAction.id}`
+        });
+      } catch (error) {
+        console.error("MTROL | No se pudo avanzar tras cerrar la oposición.", error);
+      }
+    }
+  }
 
   resolvingActions.delete(pendingActionId);
 

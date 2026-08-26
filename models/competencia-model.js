@@ -80,6 +80,19 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         choices: MTROL_ORB_IDS
       }),
 
+      specialAbilityKey: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: ""
+      }),
+
+      specialAbilityHandler: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "default",
+        choices: ["default", "orb-contextual"]
+      }),
+
       damageType: new fields.StringField({
         required: false,
         nullable: true,

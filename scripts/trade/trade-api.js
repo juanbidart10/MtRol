@@ -4,9 +4,11 @@ import {
 
 import {
   acceptTradeSessionAuthoritative,
+  cancelTradeSessionByGMAuthoritative,
   cancelTradeSessionAuthoritative,
   confirmTradeSessionAuthoritative,
   createTradeSessionAuthoritative,
+  getGMTradeMonitorViewAuthoritative,
   observeTradeSessionsAuthoritative,
   setTradeOfferAuthoritative
 } from "./trade-authority.js";
@@ -18,6 +20,10 @@ import {
   buildTradeItemInspectorView,
   findPublicOfferEntry
 } from "./trade-view-model.js";
+
+import { buildGMTradeMonitorView } from "./trade-gm-view-model.js";
+import { tradeAuditService } from "./trade-audit-service.js";
+import { isPrimaryActiveGM } from "../core/socket-requests.js";
 
 const clientSessions = new Map();
 const TERMINAL_SESSION_STATES = new Set(["CANCELLED", "COMPLETED", "INVALID"]);
@@ -62,6 +68,11 @@ function cacheClientSession(rawSession, reason) {
 export function receiveTradeSessionSync(data = {}) {
   if (!data.targetUserIds?.includes?.(game.user?.id)) return false;
   return Boolean(cacheClientSession(data.session, data.reason ?? "session-updated"));
+}
+
+export function receiveTradeGMSessionSync(data = {}) {
+  if (!game.user?.isGM || !data.targetGMUserIds?.includes?.(game.user.id)) return false;
+  return Boolean(cacheClientSession(data.session, data.reason ?? "gm-session-updated"));
 }
 
 export function receiveTradeAuthorityReset(data = {}) {
@@ -110,6 +121,17 @@ export function installTradeApi() {
       payload,
       cancelTradeSessionAuthoritative
     ),
+    cancelByGM: payload => {
+      if (!game.user?.isGM) return Promise.reject(new Error("La intervención de comercio es exclusiva para GM."));
+      const normalized = withOperationId(payload);
+      if (isPrimaryActiveGM()) {
+        return cancelTradeSessionByGMAuthoritative(normalized, { requestingUserId: game.user.id });
+      }
+      return requestPrimaryGM("mtrolTradeGMCancel", normalized).then(response => {
+        if (!response.ok) throw new Error(response.error ?? "La cancelación GM fue rechazada.");
+        return response.result?.session ?? null;
+      });
+    },
     getSession: sessionId => {
       const session = clientSessions.get(String(sessionId ?? ""));
       return session
@@ -150,6 +172,39 @@ export function installTradeApi() {
       }
       return buildTradeItemInspectorView(findPublicOfferEntry(session, itemReference));
     },
-    observeSessions: options => observeTradeSessionsAuthoritative(options)
+    observeSessions: options => {
+      if (!game.user?.isGM) throw new Error("La supervisión de comercio es exclusiva para GM.");
+      if (isPrimaryActiveGM()) return observeTradeSessionsAuthoritative(options);
+      return [...clientSessions.values()];
+    },
+    getGMMonitorView: async sessionId => {
+      if (!game.user?.isGM) throw new Error("La supervisión de comercio es exclusiva para GM.");
+      if (isPrimaryActiveGM()) return getGMTradeMonitorViewAuthoritative(sessionId);
+      const session = clientSessions.get(String(sessionId ?? ""));
+      if (!session) throw new Error("La sesión GM no está disponible localmente.");
+      const reservations = ["participantA", "participantB"].flatMap(participantKey =>
+        (session.publicOffers?.[participantKey] ?? []).map(entry => ({
+          actorUuid: session.participants[participantKey].actorUuid,
+          itemUuid: entry.itemUuid,
+          itemId: entry.itemId,
+          quantity: entry.quantity,
+          sessionId: session.id,
+          participantKey
+        }))
+      );
+      return buildGMTradeMonitorView({ session, user: game.user, reservations, timeline: [] });
+    },
+    getAuditHistory: filters => tradeAuditService.getHistory(filters, game.user),
+    getAuditTimeline: sessionId => tradeAuditService.getTimeline(sessionId, game.user),
+    openGMMonitor: async sessionId => {
+      if (!game.user?.isGM) throw new Error("La supervisión de comercio es exclusiva para GM.");
+      const { openTradeGMMonitor } = await import("./trade-gm-runtime.js");
+      return openTradeGMMonitor(sessionId);
+    },
+    openAuditHistory: async () => {
+      if (!game.user?.isGM) throw new Error("El historial de comercio es exclusivo para GM.");
+      const { openTradeAuditHistory } = await import("./trade-gm-runtime.js");
+      return openTradeAuditHistory();
+    }
   };
 }

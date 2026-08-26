@@ -227,9 +227,10 @@ test("template contiene Inspector data-driven, texto seguro y acciones administr
   assert.match(inspector, /#each inventoryInspector\.typeStats/);
   assert.match(inspector, /\{\{inventoryInspector\.description\}\}/);
   assert.doesNotMatch(inspector, /\{\{\{inventoryInspector\.description\}\}\}/);
+  assert.match(inspector, /#if inventoryInspector\.consumable\.canUse[\s\S]*?mtrol-consumable-use[\s\S]*?USAR/);
   assert.match(inspector, /{{#if @root\.esGM}}[\s\S]*?item-edit[\s\S]*?item-delete/);
-  assert.equal((inspector.match(/mtrol-inventory-asset-button/g) ?? []).length, 2);
-  assert.doesNotMatch(inspector, /item-equip|item-unequip|Usar|Enviar al chat/i);
+  assert.equal((inspector.match(/mtrol-inventory-asset-button/g) ?? []).length, 3);
+  assert.doesNotMatch(inspector, /item-equip|item-unequip|Enviar al chat/i);
 });
 
 test("Sheet limpia IDs invalidos, conserva filtro efimero y retira handlers legacy", async () => {

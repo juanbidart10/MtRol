@@ -34,6 +34,14 @@ import {
   validateTradeTokenProximity
 } from "./trade-proximity-service.js";
 
+import {
+  tradeAuditService
+} from "./trade-audit-service.js";
+
+import {
+  buildGMTradeMonitorView
+} from "./trade-gm-view-model.js";
+
 const LOCAL_AUTHORITY_EPOCH =
   globalThis.foundry?.utils?.randomID?.() ?? crypto.randomUUID();
 
@@ -154,15 +162,40 @@ function sessionUserIds(session) {
     .filter(Boolean);
 }
 
+function activeGMUserIds() {
+  return Array.from(game.users ?? []).filter(user => user.isGM && user.active).map(user => user.id);
+}
+
+function auditEvent(session, type, details = {}) {
+  tradeAuditService.recordEvent(session, type, details);
+}
+
+async function persistTerminalAudit(session, options = {}) {
+  try {
+    return await tradeAuditService.persistTerminal(session, options);
+  } catch (error) {
+    console.error("MTROL | No se pudo persistir la auditoría del comercio:", error);
+    return null;
+  }
+}
+
 export function publishTradeSession(session, { reason = "session-updated" } = {}) {
   if (!session) return false;
   const publicSession = buildPublicTradeSessionView(session);
+  const targetGMUserIds = activeGMUserIds();
+  if (targetGMUserIds.length) game.socket?.emit?.("system.mtrol", {
+    action: "mtrolTradeGMSessionSync",
+    targetGMUserIds,
+    session: publicSession,
+    reason
+  });
   game.socket?.emit?.("system.mtrol", {
     action: "mtrolTradeSessionSync",
     targetUserIds: sessionUserIds(session),
     session: publicSession,
     reason
   });
+  if (game.user?.isGM) globalThis.Hooks?.callAll?.("mtrolTradeGMSessionUpdated", publicSession, reason);
   return true;
 }
 
@@ -183,7 +216,11 @@ export function initializeTradeAuthority() {
       epoch: LOCAL_AUTHORITY_EPOCH,
       reason: "authority-runtime-reinitialized"
     });
-    for (const session of invalidated) tradeMovementLocks.releaseSession(session.id);
+    for (const session of invalidated) {
+      tradeMovementLocks.releaseSession(session.id);
+      auditEvent(session, "invalidation", { message: session.invalidReason });
+      persistTerminalAudit(session);
+    }
     publishTradeAuthorityReset({
       invalidated,
       authority: { gmUserId: game.user.id, epoch: LOCAL_AUTHORITY_EPOCH }
@@ -200,6 +237,8 @@ export function initializeTradeAuthority() {
   for (const session of invalidated) {
     tradeMovementLocks.releaseSession(session.id);
     publishTradeSession(session, { reason: session.invalidReason });
+    auditEvent(session, "invalidation", { message: session.invalidReason });
+    persistTerminalAudit(session);
   }
   return { primary: false, invalidated };
 }
@@ -248,6 +287,7 @@ export async function createTradeSessionAuthoritative(payload = {}, {
   });
 
   publishTradeSession(session, { reason: "session-requested" });
+  auditEvent(session, "create", { message: "Solicitud creada" });
   return session;
 }
 
@@ -278,9 +318,12 @@ export async function acceptTradeSessionAuthoritative(payload = {}, {
       operationId: `lock-failed-${payload.operationId}`
     });
     publishTradeSession(invalid, { reason: "movement-lock-failed" });
+    auditEvent(invalid, "invalidation", { message: error.message });
+    await persistTerminalAudit(invalid);
     throw error;
   }
   publishTradeSession(session, { reason: "session-accepted" });
+  auditEvent(session, "accept", { participantKey: payload.participantKey ?? "participantB", message: "Solicitud aceptada" });
   return session;
 }
 
@@ -301,6 +344,11 @@ export async function setTradeOfferAuthoritative(payload = {}, {
     operationId: payload.operationId
   });
   publishTradeSession(session, { reason: "offer-updated" });
+  await tradeAuditService.captureCanonicalOffers(session);
+  auditEvent(session, "setOffer", {
+    participantKey: payload.participantKey,
+    message: `Oferta actualizada (${(payload.entries ?? []).length} entradas)`
+  });
   return session;
 }
 
@@ -321,6 +369,10 @@ export async function confirmTradeSessionAuthoritative(payload = {}, {
     operationId: payload.operationId
   });
   publishTradeSession(session, { reason: "confirmation-updated" });
+  auditEvent(session, "confirm", {
+    participantKey: payload.participantKey,
+    message: `Confirmó revisión ${session.revision}`
+  });
   if (session.state !== "READY") return session;
 
   return executeTradeSessionAuthoritative({
@@ -386,6 +438,7 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
 
   let plan;
   try {
+    await tradeAuditService.captureCanonicalOffers(session);
     plan = await prepareTradeTransferPlan({
       session,
       executionId,
@@ -400,6 +453,10 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
     });
     tradeMovementLocks.releaseSession(invalid.id);
     publishTradeSession(invalid, { reason: "execution-prevalidation-failed" });
+    auditEvent(invalid, "invalidation", { message: error.message });
+    await persistTerminalAudit(invalid, {
+      executionResult: { success: false, error: String(error.message ?? "prevalidation-failed").slice(0, 500) }
+    });
     throw error;
   }
 
@@ -411,6 +468,7 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
     operationId: `begin-${executionId}`
   });
   publishTradeSession(executing, { reason: "execution-started" });
+  auditEvent(executing, "execute", { message: `Ejecución ${executionId} iniciada` });
 
   let receipt;
   try {
@@ -427,6 +485,17 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
     });
     tradeMovementLocks.releaseSession(invalid.id);
     publishTradeSession(invalid, { reason: "execution-failed" });
+    auditEvent(invalid, "rollback", {
+      message: error.rollbackSucceeded ? "Rollback completado" : "Rollback incompleto"
+    });
+    await persistTerminalAudit(invalid, {
+      executionResult: { success: false, error: String(error.cause?.message ?? error.message).slice(0, 500) },
+      rollback: {
+        attempted: true,
+        succeeded: error.rollbackSucceeded === true,
+        error: error.rollbackError?.message ?? null
+      }
+    });
     throw error;
   }
 
@@ -438,6 +507,8 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
   });
   tradeMovementLocks.releaseSession(completed.id);
   publishTradeSession(completed, { reason: "execution-completed" });
+  auditEvent(completed, "complete", { message: "Transferencia completada" });
+  await persistTerminalAudit(completed, { executionResult: receipt });
   await createTradeCompletionMessage(completed, receipt);
   return completed;
 }
@@ -459,7 +530,49 @@ export async function cancelTradeSessionAuthoritative(payload = {}, {
   });
   tradeMovementLocks.releaseSession(session.id);
   publishTradeSession(session, { reason: "session-cancelled" });
+  auditEvent(session, "cancel", { participantKey: payload.participantKey, message: "Cancelado por participante" });
+  await persistTerminalAudit(session);
   return session;
+}
+
+export async function cancelTradeSessionByGMAuthoritative(payload = {}, {
+  requestingUserId
+} = {}) {
+  const authority = requirePrimaryGM();
+  const requestingGM = game.users?.get?.(String(requestingUserId ?? ""));
+  if (!requestingGM?.isGM || !requestingGM.active) {
+    throw new Error("Sólo un GM activo puede cancelar un comercio desde supervisión.");
+  }
+  const current = tradeSessionStore.getSession(payload.sessionId);
+  if (!current) throw new Error("La sesión de comercio no existe.");
+  await tradeAuditService.captureCanonicalOffers(current);
+  const session = await tradeSessionStore.cancelSessionByGM({
+    sessionId: payload.sessionId,
+    authorityUserId: authority.id,
+    requestingUserId: requestingGM.id,
+    reason: payload.reason,
+    operationId: payload.operationId
+  });
+  tradeMovementLocks.releaseSession(session.id);
+  publishTradeSession(session, { reason: "session-cancelled-by-gm" });
+  auditEvent(session, "cancel", { message: `Cancelado por GM: ${session.cancelReason}` });
+  await persistTerminalAudit(session);
+  return session;
+}
+
+export async function getGMTradeMonitorViewAuthoritative(sessionId, {
+  requestingUserId = game.user?.id
+} = {}) {
+  const user = game.users?.get?.(String(requestingUserId ?? ""));
+  if (!user?.isGM) throw new Error("La supervisión de comercio es exclusiva para GM.");
+  const session = tradeSessionStore.getSession(sessionId);
+  if (!session) throw new Error("La sesión de comercio no existe en la autoridad actual.");
+  return buildGMTradeMonitorView({
+    session,
+    user,
+    reservations: tradeSessionStore.getReservationsForSession(session.id),
+    timeline: tradeAuditService.getTimeline(session.id, user)
+  });
 }
 
 export function observeTradeSessionsAuthoritative({ activeOnly = true } = {}) {

@@ -74,7 +74,9 @@ test("beneficios, Orbes otorgados y Desarrollo del personaje permanecen", () => 
   assert.match(templateSource, /<h3>Orbes otorgados<\/h3>/);
   assert.match(templateSource, /<h3>Desarrollo del personaje<\/h3>/);
   assert.match(templateSource, /class="progresion-orb-row-icon"/);
-  assert.equal((templateSource.match(/placeholder="Sin seleccionar"/g) ?? []).length, 4);
+  assert.equal((templateSource.match(/placeholder="Sin seleccionar"/g) ?? []).length, 2);
+  assert.match(templateSource, /\{\{#each specialAbilitySlots\}\}/);
+  assert.match(templateSource, /class="competencia-roll mtrol-special-ability-use"/);
   assert.match(styleSource, /\.progresion-lower-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(260px, 2fr\) minmax\(0, 3fr\)/);
 });
 

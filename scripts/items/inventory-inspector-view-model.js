@@ -12,6 +12,11 @@ import {
   isItemActuallyEquipped
 } from "./item-invariants.js";
 
+import {
+  canUserUseConsumable,
+  getConsumableConfiguration
+} from "./consumable-service.js";
+
 export const MTROL_INVENTORY_INSPECTOR_TYPE_LABELS = Object.freeze({
   arma: "Arma",
   armadura: "Armadura",
@@ -92,6 +97,7 @@ export function buildInventoryInspectorViewModel(actor, item) {
   const effectiveSlot = referencedSlots[0] ?? "";
   const declaredSlot = String(item.system?.slot ?? "").trim();
   const hasValidDeclaredSlot = MTROL_BODY_SLOTS.includes(declaredSlot);
+  const consumable = getConsumableConfiguration(item);
   const stats = [
     { label: "Cantidad", value: getItemQuantity(item) },
     { label: "Peso unitario", value: getItemUnitWeight(item) },
@@ -109,6 +115,11 @@ export function buildInventoryInspectorViewModel(actor, item) {
     quantity: getItemQuantity(item),
     weight: getItemUnitWeight(item),
     totalWeight: getItemWeightContribution(item),
+    consumable: {
+      ...consumable,
+      canUse: consumable.valid && canUserUseConsumable(actor),
+      resourceLabel: consumable.effect.resource === "mp" ? "MP" : "HP"
+    },
     equipped,
     declaredSlot,
     declaredSlotLabel: hasValidDeclaredSlot

@@ -1,0 +1,68 @@
+{{#if forbidden}}
+  <p class="trade-gm-error">Acceso exclusivo para GM.</p>
+{{else if unavailable}}
+  <section class="trade-gm-terminal">
+    <h2>Sesión finalizada o no disponible</h2>
+    <p>{{error}}</p>
+    {{#if terminal}}<p><strong>{{terminal.state}}</strong> — {{terminal.id}}</p>{{/if}}
+    <button type="button" data-action="history"><i class="fas fa-book"></i> Ver historial</button>
+  </section>
+{{else}}
+  <section class="trade-gm-shell">
+    <header class="trade-gm-header">
+      <div><h2>SUPERVISIÓN DE COMERCIO</h2><code>{{view.sessionId}}</code></div>
+      <div class="trade-gm-status"><span>{{view.state}}</span><small>Revisión {{view.revision}}</small></div>
+    </header>
+
+    <div class="trade-gm-identifiers">
+      <span>Execution: {{#if view.executionId}}{{view.executionId}}{{else}}—{{/if}}</span>
+      <span>Epoch: {{view.authority.epoch}}</span>
+      <span>GM autoridad: {{view.authority.gmUserId}}</span>
+    </div>
+
+    <div class="trade-gm-sides">
+      {{#each view.sides as |side|}}
+        <article class="trade-gm-side">
+          <header class="trade-gm-actor">
+            <img src="{{side.participant.actorImg}}" alt="">
+            <div><h3>{{side.participant.actorName}}</h3><small>{{side.participant.actorUuid}}</small><small>{{side.participant.tokenUuid}}</small></div>
+            <div class="trade-gm-confirm {{#if side.confirmation.current}}is-confirmed{{/if}}">
+              {{#if side.confirmation.current}}✓ CONFIRMADO{{else}}PENDIENTE{{/if}}
+              <small>rev. {{#if side.confirmation.revision}}{{side.confirmation.revision}}{{else}}—{{/if}}</small>
+            </div>
+          </header>
+
+          <h4>Inventario completo</h4>
+          <div class="trade-gm-table-wrap">
+            <table><thead><tr><th>Objeto</th><th>Tipo</th><th>Real</th><th>Reservado</th><th>Disponible</th><th>Estado</th></tr></thead>
+              <tbody>{{#each side.inventory as |item|}}<tr class="{{#if item.invalid}}is-invalid{{/if}}" title="{{item.itemUuid}}">
+                <td><img src="{{item.img}}" alt="">{{item.name}}<small>{{item.itemId}}</small></td><td>{{item.tipoObjeto}}</td><td>{{item.realQuantity}}</td><td>{{item.reservedQuantity}}</td><td>{{item.availableQuantity}}</td><td>{{#if item.equipped}}Equipado{{else}}Libre{{/if}}{{#if item.invalid}} · {{item.invalidReason}}{{/if}}</td>
+              </tr>{{else}}<tr><td colspan="6">Inventario vacío</td></tr>{{/each}}</tbody>
+            </table>
+          </div>
+
+          <h4>Oferta</h4>
+          <div class="trade-gm-offer-list">
+            {{#each side.offer as |item|}}<div class="trade-gm-offer {{#unless item.valid}}is-invalid{{/unless}}" title="{{item.itemUuid}}">
+              <img src="{{item.img}}" alt=""><strong>{{item.name}}</strong>
+              <span>Ofertado {{item.quantity}}</span><span>Real {{item.realQuantity}}</span><span>Reservado {{item.reservedQuantity}}</span>
+              <em>{{#if item.valid}}VÁLIDO{{else}}INVÁLIDO — {{item.invalidReason}}{{/if}}</em>
+            </div>{{else}}<p>Sin objetos ofertados.</p>{{/each}}
+          </div>
+        </article>
+      {{/each}}
+    </div>
+
+    <details class="trade-gm-audit-block"><summary>Reservas activas ({{view.reservations.length}})</summary>
+      {{#each view.reservations as |entry|}}<p><code>{{entry.participantKey}}</code> · {{entry.itemUuid}} · x{{entry.quantity}}</p>{{else}}<p>Sin reservas.</p>{{/each}}
+    </details>
+    <details class="trade-gm-audit-block"><summary>Timeline ({{view.timeline.length}})</summary>
+      {{#each view.timeline as |event|}}<p><time>{{event.at}}</time> · <strong>{{event.type}}</strong> · rev. {{event.revision}} {{event.message}}</p>{{else}}<p>Sin eventos.</p>{{/each}}
+    </details>
+
+    <footer class="trade-gm-actions">
+      <button type="button" data-action="history"><i class="fas fa-book"></i> Historial</button>
+      <button type="button" class="trade-gm-cancel" data-action="cancel" {{#unless view.canCancel}}disabled{{/unless}} title="{{view.cancelDisabledReason}}"><i class="fas fa-ban"></i> Cancelar comercio</button>
+    </footer>
+  </section>
+{{/if}}

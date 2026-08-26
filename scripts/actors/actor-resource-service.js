@@ -16,8 +16,11 @@ const RESOURCE_ORIGINS = new Set([
   "pending-competence",
   "class-resource-update",
   "permanent-resource-update",
-  "gm-resource-set"
+  "gm-resource-set",
+  "consumable"
 ]);
+
+const RESTORABLE_RESOURCES = new Set(["hp", "mp"]);
 
 const MANUAL_SPIRITUAL_RESOURCES = new Set(["karma", "dharma"]);
 
@@ -122,6 +125,76 @@ export async function applyDamageToHpAuthoritative(actor, damage, {
       hpBefore,
       hpAfter
     };
+  });
+}
+
+export async function restoreActorResourceAuthoritative(actor, resource, amount, {
+  transactionId,
+  commit = null,
+  updateOptions = {}
+} = {}) {
+  const normalizedResource = String(resource ?? "").trim().toLowerCase();
+  const normalizedAmount = Number(amount);
+
+  if (!RESTORABLE_RESOURCES.has(normalizedResource)) {
+    throw new TypeError("El recurso restaurable debe ser hp o mp.");
+  }
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    throw new RangeError("La restauración debe ser un número positivo.");
+  }
+  if (commit !== null && typeof commit !== "function") {
+    throw new TypeError("El commit posterior a la restauración debe ser una función.");
+  }
+
+  return runActorResourceTransaction(actor, {
+    transactionId,
+    origin: "consumable"
+  }, async canonicalActor => {
+    const resourceData = canonicalActor.system?.vitales?.[normalizedResource];
+    const before = Number(resourceData?.value);
+    const max = Number(resourceData?.max);
+
+    if (!Number.isFinite(before) || !Number.isFinite(max) || max < 0) {
+      throw new TypeError("El Actor no posee un recurso restaurable válido.");
+    }
+
+    const after = Math.min(before + normalizedAmount, max);
+    const restored = Math.max(0, after - before);
+    const overflow = Math.max(0, normalizedAmount - restored);
+    const resourcePath = `system.vitales.${normalizedResource}.value`;
+    const result = {
+      resource: normalizedResource,
+      amount: normalizedAmount,
+      before,
+      max,
+      after,
+      restored,
+      overflow
+    };
+
+    await canonicalActor.update({
+      [resourcePath]: after
+    }, updateOptions);
+
+    try {
+      const commitResult = commit ? await commit(result) : null;
+      return {
+        ...result,
+        ...(commitResult ?? {})
+      };
+    } catch (error) {
+      try {
+        await canonicalActor.update({
+          [resourcePath]: before
+        }, {
+          ...updateOptions,
+          mtrolConsumableRollback: true
+        });
+      } catch (rollbackError) {
+        error.rollbackError = rollbackError;
+      }
+      throw error;
+    }
   });
 }
 

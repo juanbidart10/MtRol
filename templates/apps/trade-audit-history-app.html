@@ -1,0 +1,23 @@
+{{#if forbidden}}
+  <p class="trade-gm-error">Acceso exclusivo para GM.</p>
+{{else}}
+  <section class="trade-audit-shell">
+    <header><h2>HISTORIAL DE COMERCIO</h2><label>Estado <select data-role="filter"><option value="ALL">Todos</option><option value="COMPLETED">Completados</option><option value="CANCELLED">Cancelados</option><option value="INVALID">Inválidos</option></select></label></header>
+    <div class="trade-audit-layout">
+      <div class="trade-audit-list">
+        {{#each records as |record|}}<button type="button" data-audit-id="{{record.auditId}}">
+          <time>{{record.endedAt}}</time><strong>{{record.participantA.actorName}} ↔ {{record.participantB.actorName}}</strong><span>{{record.finalState}}{{#if record.cancelledByRole}} BY {{record.cancelledByRole}}{{/if}}</span>
+        </button>{{else}}<p>No hay registros para este filtro.</p>{{/each}}
+      </div>
+      <article class="trade-audit-detail">
+        {{#if selected}}
+          <h3>{{selected.finalState}} — {{selected.participantA.actorName}} ↔ {{selected.participantB.actorName}}</h3>
+          <dl><dt>SessionId</dt><dd>{{selected.sessionId}}</dd><dt>ExecutionId</dt><dd>{{selected.executionId}}</dd><dt>Revisión</dt><dd>{{selected.finalRevision}}</dd><dt>Inicio</dt><dd>{{selected.startedAt}}</dd><dt>Final</dt><dd>{{selected.endedAt}}</dd><dt>Cancelado por</dt><dd>{{selected.cancelledByRole}} {{selected.cancelledByUserId}}</dd><dt>Motivo</dt><dd>{{selected.cancelReason}}{{selected.invalidReason}}</dd></dl>
+          <div class="trade-audit-offers"><section><h4>Oferta A</h4>{{#each selected.offerA as |item|}}<p>{{item.name}} ×{{item.quantityOffered}} <small>real: {{item.realQuantity}}</small></p>{{/each}}</section><section><h4>Oferta B</h4>{{#each selected.offerB as |item|}}<p>{{item.name}} ×{{item.quantityOffered}} <small>real: {{item.realQuantity}}</small></p>{{/each}}</section></div>
+          <h4>Rollback</h4><p>Intentado: {{selected.rollback.attempted}} · Correcto: {{selected.rollback.succeeded}} · {{selected.rollback.error}}</p>
+          <h4>Timeline</h4>{{#each selected.timeline as |event|}}<p><time>{{event.at}}</time> · {{event.type}} · rev. {{event.revision}} · {{event.message}}</p>{{/each}}
+        {{else}}<p>Selecciona una operación para inspeccionarla.</p>{{/if}}
+      </article>
+    </div>
+  </section>
+{{/if}}

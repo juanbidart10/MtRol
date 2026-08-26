@@ -96,6 +96,20 @@
               </div>
             {{/if}}
 
+            <div class="mtrol-field wide">
+              <label>Clave de Habilidad Especial</label>
+              <input type="text" name="system.specialAbilityKey" value="{{system.specialAbilityKey}}" placeholder="Ej. orbe-control" />
+              <small>Identificador estable opcional usado por las referencias de Clase.</small>
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Handler de Habilidad Especial</label>
+              <select name="system.specialAbilityHandler">
+                <option value="default" {{#if (eq system.specialAbilityHandler "default")}}selected{{/if}}>Ejecución normal</option>
+                <option value="orb-contextual" {{#if (eq system.specialAbilityHandler "orb-contextual")}}selected{{/if}}>Orbe contextual</option>
+              </select>
+            </div>
+
             <label class="mtrol-toggle">
               <span>Equipada en combate</span>
               <input type="checkbox"

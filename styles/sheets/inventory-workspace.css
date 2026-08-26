@@ -526,6 +526,21 @@
   flex: 1 1 110px;
 }
 
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable {
+  display: flex;
+  justify-content: stretch;
+}
+
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable button {
+  flex: 1 1 100%;
+}
+
+.mtrol-personaje-sheet .mtrol-consumable-use:disabled {
+  cursor: wait;
+  filter: grayscale(.65);
+  opacity: .65;
+}
+
 .mtrol-personaje-sheet .mtrol-inventory-inspector-admin .mtrol-inventory-asset-button {
   display: inline-flex;
   align-items: center;
@@ -564,6 +579,48 @@
 }
 
 .mtrol-personaje-sheet .mtrol-inventory-inspector-admin .mtrol-inventory-asset-button:focus-visible {
+  outline: 2px solid #f1d486;
+  outline-offset: -4px;
+}
+
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable .mtrol-inventory-asset-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 900 / 226;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 13%;
+  color: #edcf7b;
+  background: transparent url("../../assets/ui/combat/combat-execute-normal.png") center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--mtrol-font-title, "Morpheus"), serif;
+  font-weight: 700;
+  letter-spacing: .035em;
+  line-height: 1;
+  text-decoration: none;
+  text-shadow: 0 2px 3px #000;
+}
+
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable .mtrol-inventory-asset-button:hover {
+  color: #ffe7a3;
+  background-image: url("../../assets/ui/combat/combat-execute-hover.png");
+  box-shadow: none;
+}
+
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable .mtrol-inventory-asset-button:active {
+  color: #ffe9ad;
+  background-image: url("../../assets/ui/combat/combat-execute-active.png");
+  transform: translateY(1px);
+}
+
+.mtrol-personaje-sheet .mtrol-inventory-inspector-consumable .mtrol-inventory-asset-button:focus-visible {
   outline: 2px solid #f1d486;
   outline-offset: -4px;
 }

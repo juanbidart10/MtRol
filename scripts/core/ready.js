@@ -12,11 +12,15 @@ import {
   initializeTradeAuthority
 } from "../trade/trade-authority.js";
 
+import {
+  reconcileActiveTurn
+} from "../combat/turn-system.js";
+
 // =========================
 // MTROL - READY
 // =========================
 
-export function readyMtrol() {
+export async function readyMtrol() {
 
   // =====================================
   // API GLOBAL
@@ -56,4 +60,5 @@ export function readyMtrol() {
 
   installMtrolDebugApi();
   initializeTradeAuthority();
+  await reconcileActiveTurn();
 }

@@ -52,6 +52,10 @@ import {
   normalizarCategoria
 } from "../core/categories.js";
 
+import {
+  completeResolvedTurnAction
+} from "../combat/turn-system.js";
+
 const RESOLVED_DAMAGE_ACTION =
   "mtrol-resolved-damage";
 
@@ -546,6 +550,15 @@ export async function executeResolvedDamageAuthoritative(
 
     await publishPendingDamageState(pendingAction);
 
+    try {
+      await completeResolvedTurnAction(actor, {
+        resolutionId: pendingAction.id,
+        completionId: `damage:${pendingAction.id}`
+      });
+    } catch (turnError) {
+      console.error("MTROL | No se pudo avanzar tras cerrar el daño.", turnError);
+    }
+
     return result;
   } catch (error) {
     if (damage.additionalCostApplied === true && damage.rolled !== true) {
@@ -573,6 +586,19 @@ export async function executeResolvedDamageAuthoritative(
 
     if (damage.status === "failed") {
       await publishPendingDamageState(pendingAction);
+      const sourceActor = damage.sourceActorUuid
+        ? await fromUuid(damage.sourceActorUuid)
+        : null;
+      if (sourceActor) {
+        try {
+          await completeResolvedTurnAction(sourceActor, {
+            resolutionId: pendingAction.id,
+            completionId: `damage-failed:${pendingAction.id}`
+          });
+        } catch (turnError) {
+          console.error("MTROL | No se pudo avanzar tras fallar el daño.", turnError);
+        }
+      }
     }
 
     throw error;

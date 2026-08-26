@@ -38,7 +38,7 @@ Hooks.once("ready", async () => {
 
   registerMtrolSockets();
 
-  readyMtrol();
+  await readyMtrol();
 
 });
 

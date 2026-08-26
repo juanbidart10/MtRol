@@ -95,6 +95,23 @@ export class ObjetoSheet extends ItemSheet {
     const materialActual =
       this.item.system.material ?? "";
 
+    const operacionConsumible =
+      this.item.system.consumible?.operacion ?? "";
+
+    const recursoConsumible =
+      this.item.system.consumible?.recurso ?? "";
+
+    context.esConsumible = tipoActual === "consumible";
+    context.operacionesConsumible = [
+      { value: "", label: "-", selected: operacionConsumible === "" },
+      { value: "restore", label: "Restaurar", selected: operacionConsumible === "restore" }
+    ];
+    context.recursosConsumible = [
+      { value: "", label: "-", selected: recursoConsumible === "" },
+      { value: "hp", label: "HP", selected: recursoConsumible === "hp" },
+      { value: "mp", label: "MP", selected: recursoConsumible === "mp" }
+    ];
+
     context.slotsCorporales = [
       { value: "", label: "-", selected: slotActual === "" },
       { value: "cabeza", label: "Cabeza", selected: slotActual === "cabeza" },
@@ -156,6 +173,14 @@ export class ObjetoSheet extends ItemSheet {
     html.find('select[name="system.material"]')
       .off("change")
       .on("change", this._onMaterialChange.bind(this));
+
+    html.find('select[name="system.tipoObjeto"]')
+      .off("change.mtrolConsumable")
+      .on("change.mtrolConsumable", event => {
+        const form = event.currentTarget.closest("form");
+        const section = form?.querySelector?.("[data-mtrol-consumable-config]");
+        if (section) section.hidden = event.currentTarget.value !== "consumible";
+      });
   }
 
   async _onMaterialChange(event) {

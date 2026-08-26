@@ -350,6 +350,53 @@
   border-color: rgba(216, 194, 122, .26);
 }
 
+.mtrol-special-ability {
+  display: grid;
+  gap: 8px;
+}
+
+.mtrol-special-ability.is-locked {
+  opacity: 0.78;
+}
+
+.mtrol-special-ability.is-invalid {
+  border-color: #a94b4b;
+}
+
+.mtrol-special-ability-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mtrol-special-ability-summary img {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.mtrol-special-ability-summary div {
+  display: grid;
+  min-width: 0;
+}
+
+.mtrol-special-ability-summary span,
+.mtrol-special-ability-summary small {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.mtrol-special-ability-gm-controls {
+  display: grid;
+  gap: 5px;
+}
+
+.mtrol-special-ability-gm-controls select {
+  width: 100%;
+}
+
 .progresion-exp-bar {
   height: 6px;
   overflow: hidden;

@@ -27,6 +27,7 @@ import {
 
 import {
   acceptTradeSessionAuthoritative,
+  cancelTradeSessionByGMAuthoritative,
   cancelTradeSessionAuthoritative,
   confirmTradeSessionAuthoritative,
   createTradeSessionAuthoritative,
@@ -35,8 +36,13 @@ import {
 
 import {
   receiveTradeAuthorityReset,
+  receiveTradeGMSessionSync,
   receiveTradeSessionSync
 } from "../trade/trade-api.js";
+
+import {
+  useConsumableAuthoritative
+} from "../items/consumable-service.js";
 
 import {
   buildPublicTradeSessionView
@@ -47,6 +53,10 @@ import {
   isPrimaryActiveGM,
   respondToSocketRequest
 } from "./socket-requests.js";
+
+import {
+  turnSocketOperations
+} from "../combat/turn-system.js";
 
 async function respondWithResult(request, operation) {
   try {
@@ -79,6 +89,11 @@ export function registerMtrolSockets() {
       return;
     }
 
+    if (data.action === "mtrolTradeGMSessionSync") {
+      receiveTradeGMSessionSync(data);
+      return;
+    }
+
     if (data.action === "mtrolTradeAuthorityReset") {
       receiveTradeAuthorityReset(data);
       return;
@@ -105,6 +120,86 @@ export function registerMtrolSockets() {
     try {
       switch (data.action) {
 
+        case "mtrolPrepareTurn": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.prepareAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolSetPreparation": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.setPreparationAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolReservePreparation": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.reservePreparationAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolCompletePreparation": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.completePreparationAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolCancelPreparationReservation": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.cancelPreparationReservationAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolEndTurn": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.endTurnAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolGrantTurnMovement": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.grantMovementAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolCommitTurnMovement": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.commitTurnMovementAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolFinalizeTurnUse": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.finalizeTurnUseAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
+        case "mtrolCompleteTurnAction": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.completeResolvedTurnActionAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
         case "mtrolConsumeDharma": {
           await respondWithResult(data, async () => ({
             receipt:
@@ -122,6 +217,15 @@ export function registerMtrolSockets() {
         case "mtrolSpendMP": {
           await respondWithResult(data, async () => ({
             receipt: await aplicarConsumoMPAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            })
+          }));
+          break;
+        }
+
+        case "mtrolUseConsumable": {
+          await respondWithResult(data, async () => ({
+            receipt: await useConsumableAuthoritative(data.payload ?? {}, {
               requestingUserId: data.requestingUserId
             })
           }));
@@ -194,6 +298,17 @@ export function registerMtrolSockets() {
           await respondWithResult(data, async () => ({
             session: buildPublicTradeSessionView(
               await cancelTradeSessionAuthoritative(data.payload ?? {}, {
+                requestingUserId: data.requestingUserId
+              })
+            )
+          }));
+          break;
+        }
+
+        case "mtrolTradeGMCancel": {
+          await respondWithResult(data, async () => ({
+            session: buildPublicTradeSessionView(
+              await cancelTradeSessionByGMAuthoritative(data.payload ?? {}, {
                 requestingUserId: data.requestingUserId
               })
             )

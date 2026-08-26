@@ -52,6 +52,10 @@ import {
   resolveOrbRollPassiveBonus
 } from "../progression/orb-passive-effects.js";
 
+import {
+  consumePreparation
+} from "../combat/turn-system.js";
+
 function buildDharmaCardAudit(context, traces = []) {
   if (!context || !Array.isArray(traces)) return null;
 
@@ -127,17 +131,26 @@ export async function mtrolRoll(
       return null;
     }
 
-    const receipt =
-      await consumeDharma(actor, dharmaSpend);
-
-    activeDharmaContext =
-      markDharmaSpendConsumed(
-        dharmaSpend,
-        receipt
-      );
   }
 
-  await roll.evaluate();
+  const preparationExecution =
+    await consumePreparation(actor, async () => {
+      if (dharmaSpend?.enabled === true) {
+        const receipt =
+          await consumeDharma(actor, dharmaSpend);
+
+        activeDharmaContext =
+          markDharmaSpendConsumed(
+            dharmaSpend,
+            receipt
+          );
+      }
+
+      return roll.evaluate();
+    });
+
+  const preparationBonus =
+    Number(preparationExecution.preparationBonus ?? 0);
 
   // Esta visual pertenece a tiradas normales MtRol.
   // No afecta el daño localizado si ese daño no llama a mtrolRoll().
@@ -187,13 +200,17 @@ export async function mtrolRoll(
         ...baseCardContext,
         state: "fumble",
         total: 0,
-        dharma: dharmaCardAudit
+        dharma: dharmaCardAudit,
+        preparation: preparationBonus
       },
       content: `
         <div class="mtrol-chat-card mtrol-chat-pifia">
           <h2>💀 PIFIA 💀</h2>
           <p>${evaluacion.motivo}</p>
           ${chatRolls.html}
+          ${preparationBonus > 0
+            ? `<p>Preparación consumida: <strong>+${preparationBonus}</strong>.</p>`
+            : ""}
         </div>
       `
     });
@@ -206,6 +223,7 @@ export async function mtrolRoll(
       rolls: chatRolls.rolls,
       dharma: evaluacion.cantidadDharma,
       karma: evaluacion.cantidadKarma,
+      preparationBonus,
       dharmaSpend: activeDharmaContext
         ? {
             context: activeDharmaContext,
@@ -232,7 +250,8 @@ export async function mtrolRoll(
     evaluacion.totalExtra +
     Number(evaluacion.dharmaBonus ?? 0) +
     orbRollBonus.bonus +
-    orbPassiveBonus.bonus;
+    orbPassiveBonus.bonus +
+    preparationBonus;
 
   await mtrolAplicarDharmaKarma(
     actor,
@@ -329,6 +348,12 @@ export async function mtrolRoll(
           <hr>
         `).join("")}
 
+        ${preparationBonus > 0
+          ? `<div class="mtrol-details mtrol-preparation-roll-bonus">
+              Preparación <strong>+${preparationBonus}</strong>
+            </div><hr>`
+          : ""}
+
         <div class="mtrol-total">
           Total final:
           <strong>${totalFinal}</strong>
@@ -346,6 +371,7 @@ export async function mtrolRoll(
     rolls: chatRolls.rolls,
     extra: evaluacion.totalExtra,
     dharmaBonus: Number(evaluacion.dharmaBonus ?? 0),
+    preparationBonus,
     orbBonus: orbRollBonus.bonus,
     orb: orbRollBonus.bonus > 0 ? orbRollBonus : null,
     orbPassiveBonus: orbPassiveBonus.bonus,

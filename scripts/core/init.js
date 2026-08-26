@@ -92,6 +92,14 @@ import {
   installTradeApi
 } from "../trade/trade-api.js";
 
+import {
+  installMtrolTurnApi
+} from "../combat/turn-system.js";
+
+import {
+  installSpecialAbilityApi
+} from "../combat/special-ability-service.js";
+
 // =========================
 // INIT MTROL
 // =========================
@@ -197,6 +205,8 @@ export async function initMtrol() {
     aplicarDanioLocalizadoAutorizado;
 
   installTradeApi();
+  installMtrolTurnApi();
+  installSpecialAbilityApi();
 
   registerMtrolDebugSetting();
   installMtrolAmbientFxApi();

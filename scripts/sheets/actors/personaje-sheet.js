@@ -58,6 +58,10 @@ import {
 } from "../../items/inventory-inspector-view-model.js";
 
 import {
+  useConsumable
+} from "../../items/consumable-service.js";
+
+import {
   buildCompetenceLevelDisplay
 } from "../../items/competencia-presentation.js";
 
@@ -141,6 +145,19 @@ import {
 } from "../../ui/resource-segments.js";
 
 import {
+  canPrepare,
+  completeResolvedTurnAction,
+  finalizeResolvedCompetenciaUse,
+  getActionGuard,
+  getItemCooldownStatus,
+  getPreparation,
+  getPrepareGuard,
+  grantMovementFromResolvedRoll,
+  prepare,
+  setPreparation
+} from "../../combat/turn-system.js";
+
+import {
   setActorSpiritualResource
 } from "../../actors/actor-resource-service.js";
 
@@ -149,6 +166,19 @@ import {
   getClassDefinition,
   isValidClassId
 } from "../../actors/class-registry.js";
+
+import {
+  buildSpecialAbilitySlotView,
+  findSpecialAbilitySlotForItem,
+  MTROL_ORB_CONTEXTUAL_HANDLER,
+  resolveSpecialAbilitySlot,
+  updateSpecialAbilitySlot,
+  validateSpecialAbilityExecution
+} from "../../combat/special-ability-service.js";
+
+import {
+  selectOrbContextualMode
+} from "../../ui/special-ability-mode-selector.js";
 
 const { ActorSheet } = foundry.appv1.sheets;
 
@@ -379,6 +409,12 @@ function prepareExecutableItemData(item, availableDharma, actor, fallback = MTRO
     availableDharma <= 5;
   const mpCost = calcularConsumoMP(actor, item);
   const levelDisplay = buildCompetenceLevelDisplay(item.system?.nivel);
+  const cooldownStatus = getItemCooldownStatus(item);
+  const actionGuard = getActionGuard(actor, item);
+  const assignedSpecial = findSpecialAbilitySlotForItem(actor, item);
+  const specialRouteAllowed = !assignedSpecial || (
+    assignedSpecial.unlocked && assignedSpecial.handler !== MTROL_ORB_CONTEXTUAL_HANDLER
+  );
 
   return {
     ...prepareItemImageData(item, fallback),
@@ -391,6 +427,19 @@ function prepareExecutableItemData(item, availableDharma, actor, fallback = MTRO
     mtrolMpStackable: mpCost.stackea === true,
     mtrolMpStack: mpCost.stackAnterior,
     mtrolRoleLabel: getAbilityRoleLabel(item.system?.rol),
+    mtrolCooldownAvailable: cooldownStatus.available,
+    mtrolCooldownAvailableAtRound: cooldownStatus.availableAtRound,
+    mtrolCooldownRoundsRemaining: cooldownStatus.roundsRemaining,
+    mtrolActionAvailable: actionGuard.allowed && specialRouteAllowed && cooldownStatus.available,
+    mtrolActionUnavailableReason: !cooldownStatus.available
+      ? "En enfriamiento"
+      : actionGuard.reason ?? (
+        assignedSpecial?.locked
+        ? `${assignedSpecial.label} está bloqueada.`
+        : assignedSpecial?.handler === MTROL_ORB_CONTEXTUAL_HANDLER
+          ? "Usá esta habilidad desde su slot especial."
+          : "Acción no disponible."
+      ),
     mtrolDharmaEligible: eligible,
     mtrolDharmaEnabled: hasDharma && eligible,
     mtrolDharmaTitle: !hasDharma
@@ -506,6 +555,15 @@ export class PersonajeSheet extends ActorSheet {
     context.actor = this.actor;
     context.system = this.actor.system;
     context.esGM = game.user.isGM === true;
+    const preparation = getPreparation(this.actor);
+    const preparationGuard = getPrepareGuard(this.actor);
+    context.mtrolPreparation = {
+      value: preparation,
+      canPrepare: canPrepare(this.actor),
+      reason: preparationGuard.reason ?? "Renunciar al turno para obtener +1 Preparación.",
+      atMinimum: preparation <= 0,
+      atMaximum: preparation >= 5
+    };
     context.inventoryView = buildInventoryViewModel(this.actor);
     context.inventoryCarry = buildCarrySegments(context.inventoryView.weight.ratio);
     const selectedInventoryItem = resolveInventoryInspectorItem(
@@ -662,9 +720,16 @@ export class PersonajeSheet extends ActorSheet {
       ? `Gastar Dharma (${availableDharma} disponible${availableDharma === 1 ? "" : "s"})`
       : "No tienes Dharma disponible.";
 
-    const competencias = this.actor.items.filter(
+    const allCompetencias = this.actor.items.filter(
       i => i.type === "competencia"
     );
+    const lockedSpecialItemIds = new Set(
+      context.esGM ? [] : [1, 2]
+        .map(slot => resolveSpecialAbilitySlot(this.actor, slot))
+        .filter(state => state.configured && state.locked && state.item)
+        .map(state => state.item.id)
+    );
+    const competencias = allCompetencias.filter(item => !lockedSpecialItemIds.has(item.id));
 
     const habilidadesCombate = competencias.filter(
       esHabilidadBarraCombate
@@ -675,6 +740,11 @@ export class PersonajeSheet extends ActorSheet {
     );
 
     context.competencias = competencias.map(i => prepareExecutableItemData(i, availableDharma, this.actor));
+    context.specialAbilitySlots = [1, 2].map(slot => buildSpecialAbilitySlotView(
+      this.actor,
+      slot,
+      { getCooldownStatus: getItemCooldownStatus, getActionGuard, viewerIsGM: context.esGM }
+    ));
     context.habilidadesCombate = context.esGM
       ? habilidadesCombate.map(i => prepareExecutableItemData(i, availableDharma, this.actor))
       : [];
@@ -1039,7 +1109,14 @@ export class PersonajeSheet extends ActorSheet {
       .off("click")
       .on("click", this._onPrepareDharma.bind(this));
 
+    html.find(".mtrol-prepare-turn")
+      .off("click")
+      .on("click", this._onPrepareTurn.bind(this));
+
     if (game.user.isGM) {
+      html.find(".mtrol-preparation-adjust")
+        .off("click")
+        .on("click", this._onAdjustPreparation.bind(this));
       html.find(".add-competencia")
         .off("click")
         .on("click", this._onAddCompetencia.bind(this));
@@ -1121,6 +1198,18 @@ export class PersonajeSheet extends ActorSheet {
       .off("click")
       .on("click", this._onCompetenciaRoll.bind(this));
 
+    html.find(".mtrol-special-ability-lock")
+      .off("click")
+      .on("click", this._onSpecialAbilityLock.bind(this));
+
+    html.find(".mtrol-special-ability-override")
+      .off("change")
+      .on("change", this._onSpecialAbilityOverride.bind(this));
+
+    html.find(".mtrol-special-ability-clear")
+      .off("click")
+      .on("click", this._onSpecialAbilityClearOverride.bind(this));
+
     html.find(".mtrol-restaurar-dia")
       .off("click")
       .on("click", this._onRestaurarDia.bind(this));
@@ -1136,6 +1225,10 @@ export class PersonajeSheet extends ActorSheet {
     html.find(".mtrol-inventory-inspector-close")
       .off("click")
       .on("click", this._onInventoryInspectorClose.bind(this));
+
+    html.find(".mtrol-consumable-use")
+      .off("click")
+      .on("click", this._onUseConsumable.bind(this));
 
     const inventorySearchControls = html.find(".mtrol-inventory-search")
       .off("input")
@@ -1517,6 +1610,32 @@ export class PersonajeSheet extends ActorSheet {
 
     this._mtrolInventorySearchTerm = input.value;
     this._applyInventoryFilter(workspace);
+  }
+
+  async _onUseConsumable(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const itemId = String(
+      button?.dataset?.itemId ?? this._mtrolSelectedItemId ?? ""
+    ).trim();
+    const item = this.actor.items?.get?.(itemId);
+    if (!item || button.disabled) return false;
+
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+
+    try {
+      await useConsumable(this.actor, item);
+      this.render(false);
+      return true;
+    } catch (error) {
+      console.error("MTROL | No se pudo usar el consumible:", error);
+      ui.notifications.error(error.message ?? "No se pudo usar el consumible.");
+      return false;
+    } finally {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
   }
 
   _onInventoryFilterChange(event) {
@@ -1959,9 +2078,56 @@ export class PersonajeSheet extends ActorSheet {
     }
   }
 
+  async _onPrepareTurn(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const button = event.currentTarget;
+    if (button.disabled) return false;
+    button.disabled = true;
+    try {
+      const receipt = await prepare(this.actor);
+      ui.notifications.info(`${this.actor.name} queda En preparación: +${receipt.value}.`);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo Preparar al personaje.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
+  async _onAdjustPreparation(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!game.user.isGM) return false;
+    const button = event.currentTarget;
+    if (button.disabled) return false;
+    const delta = Number(button.dataset.delta ?? 0);
+    button.disabled = true;
+    try {
+      const receipt = await setPreparation(
+        this.actor,
+        getPreparation(this.actor) + delta
+      );
+      ui.notifications.info(`Preparación de ${this.actor.name}: +${receipt.value}.`);
+      return true;
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo modificar Preparación.");
+      return false;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+
   async _executeAtributoRoll(attr, {
     dharmaSpend = null
   } = {}) {
+
+    const turnGuard = getActionGuard(this.actor);
+    if (!turnGuard.allowed) {
+      ui.notifications.warn(turnGuard.reason);
+      return null;
+    }
 
     const fxData = FX_ATRIBUTOS[attr];
 
@@ -1995,6 +2161,12 @@ export class PersonajeSheet extends ActorSheet {
       await mtrolRoll(...args);
 
     if (!result) return null;
+
+    try {
+      await grantMovementFromResolvedRoll(this.actor, result);
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo otorgar el movimiento de la tirada.");
+    }
 
     await this._playAtributoFX(attr, fxData);
     return result;
@@ -2139,7 +2311,87 @@ export class PersonajeSheet extends ActorSheet {
     this.render(true);
   }
 
+  async _onSpecialAbilityLock(event) {
+    event.preventDefault();
+    const slot = Number(event.currentTarget.dataset.specialSlot);
+    const state = resolveSpecialAbilitySlot(this.actor, slot);
+    try {
+      await updateSpecialAbilitySlot(this.actor, slot, { unlocked: !state.unlocked });
+      this.render(true);
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo modificar el bloqueo.");
+    }
+  }
+
+  async _onSpecialAbilityOverride(event) {
+    event.preventDefault();
+    const slot = Number(event.currentTarget.dataset.specialSlot);
+    try {
+      await updateSpecialAbilitySlot(this.actor, slot, {
+        overrideItemUuid: event.currentTarget.value
+      });
+      this.render(true);
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo asignar el override.");
+    }
+  }
+
+  async _onSpecialAbilityClearOverride(event) {
+    event.preventDefault();
+    const slot = Number(event.currentTarget.dataset.specialSlot);
+    try {
+      await updateSpecialAbilitySlot(this.actor, slot, { clearOverride: true });
+      this.render(true);
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo limpiar el override.");
+    }
+  }
+
   async _onCompetenciaRoll(event) {
+    const slot = Number(event.currentTarget?.dataset?.specialSlot ?? 0);
+    if (![1, 2].includes(slot)) return this._executeCompetenciaRoll(event);
+
+    event.preventDefault();
+    event.stopPropagation();
+    this._mtrolSpecialAbilityUseLocks ??= new Set();
+    const lockKey = `${this.actor.uuid}:${slot}`;
+    if (this._mtrolSpecialAbilityUseLocks.has(lockKey)) return false;
+
+    const state = resolveSpecialAbilitySlot(this.actor, slot);
+    try {
+      validateSpecialAbilityExecution(this.actor, state.item, {
+        slot,
+        mode: state.handler === MTROL_ORB_CONTEXTUAL_HANDLER ? "attack" : null
+      });
+    } catch (error) {
+      ui.notifications.warn(error.message);
+      return false;
+    }
+
+    this._mtrolSpecialAbilityUseLocks.add(lockKey);
+    event.currentTarget.disabled = true;
+    try {
+      let mode = null;
+      if (state.handler === MTROL_ORB_CONTEXTUAL_HANDLER) {
+        mode = await selectOrbContextualMode({ abilityName: state.item.name });
+        if (!mode) return false;
+      }
+      return await this._executeCompetenciaRoll(event, {
+        actionMode: mode,
+        kindOverride: mode === "movement" ? "movement" : mode === "attack" ? "offensive" : null,
+        specialContext: { slot, mode }
+      });
+    } finally {
+      this._mtrolSpecialAbilityUseLocks.delete(lockKey);
+      if (event.currentTarget.isConnected) event.currentTarget.disabled = false;
+    }
+  }
+
+  async _executeCompetenciaRoll(event, {
+    actionMode = null,
+    kindOverride = null,
+    specialContext = null
+  } = {}) {
     event.preventDefault();
     event.stopPropagation();
 
@@ -2156,6 +2408,24 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     const actor = this.actor;
+
+    if (!specialContext) {
+      const assignedSpecial = findSpecialAbilitySlotForItem(actor, item);
+      if (assignedSpecial?.locked) {
+        ui.notifications.warn(`${assignedSpecial.label} está bloqueada.`);
+        return false;
+      }
+      if (assignedSpecial?.handler === MTROL_ORB_CONTEXTUAL_HANDLER) {
+        ui.notifications.warn(`${item.name} debe ejecutarse desde su slot de Habilidad Especial.`);
+        return false;
+      }
+    }
+
+    const turnGuard = getActionGuard(actor, item, { kindOverride });
+    if (!turnGuard.allowed) {
+      ui.notifications.warn(turnGuard.reason);
+      return;
+    }
 
     const nivel =
       Number(item.system?.nivel ?? 1);
@@ -2187,7 +2457,8 @@ export class PersonajeSheet extends ActorSheet {
         item,
         targetToken,
         formulaFallback: this._formulaCompetenciaPorNivel(nivel),
-        dharmaSpend
+        dharmaSpend,
+        actionMode
       });
     } finally {
       this._updatePreparedDharmaState(actionKey, null);
@@ -2216,7 +2487,8 @@ export class PersonajeSheet extends ActorSheet {
           actor,
           item,
           consumoMP,
-          resultadoCompetencia
+          resultadoCompetencia,
+          specialContext
         });
 
         return;
@@ -2234,9 +2506,23 @@ export class PersonajeSheet extends ActorSheet {
         actor,
         item,
         consumoMP,
-        resultadoCompetencia
+        resultadoCompetencia,
+        specialContext
       });
 
+      await this._completarTurnoTrasAccion({ actor, item });
+
+      return;
+    }
+
+    if (actionMode === "movement") {
+      await this._finalizarConsumoCompetencia({
+        actor,
+        item,
+        consumoMP,
+        resultadoCompetencia,
+        specialContext
+      });
       return;
     }
 
@@ -2271,23 +2557,28 @@ export class PersonajeSheet extends ActorSheet {
       });
 
       if (pendingAction) {
-        await this._finalizarConsumoCompetencia({
-          actor,
-          item,
-          consumoMP,
-          resultadoCompetencia
-        });
-
-        if (hasDamage && damageConfig.resolution === "immediate") {
-          if (damageConfig.mode === "enabled") {
-            await createReadyDamageActionFromCompetencia({
+        const immediateReadyDamage = hasDamage &&
+          damageConfig.resolution === "immediate" &&
+          damageConfig.mode === "enabled"
+          ? await createReadyDamageActionFromCompetencia({
               actor,
               item,
               targetToken,
               attackerRoll: resultadoCompetencia,
               damage: damageContext
-            });
-          } else {
+            })
+          : null;
+        await this._finalizarConsumoCompetencia({
+          actor,
+          item,
+          consumoMP,
+          resultadoCompetencia,
+          specialContext,
+          pendingResolutionIds: [pendingAction.id, immediateReadyDamage?.id].filter(Boolean)
+        });
+
+        if (hasDamage && damageConfig.resolution === "immediate") {
+          if (damageConfig.mode !== "enabled") {
             try {
               await executeConfiguredCompetenciaDamage({
                 actor,
@@ -2324,20 +2615,16 @@ export class PersonajeSheet extends ActorSheet {
         actor,
         item,
         consumoMP,
-        resultadoCompetencia
+        resultadoCompetencia,
+        specialContext
       });
+
+      await this._completarTurnoTrasAccion({ actor, item });
 
       return;
     }
 
     if (damageConfig.mode === "enabled") {
-      await this._finalizarConsumoCompetencia({
-        actor,
-        item,
-        consumoMP,
-        resultadoCompetencia
-      });
-
       const readyDamage = await createReadyDamageActionFromCompetencia({
         actor,
         item,
@@ -2348,6 +2635,15 @@ export class PersonajeSheet extends ActorSheet {
 
       if (!readyDamage) return;
 
+      await this._finalizarConsumoCompetencia({
+        actor,
+        item,
+        consumoMP,
+        resultadoCompetencia,
+        specialContext,
+        pendingResolutionId: readyDamage.id
+      });
+
       ui.notifications.info(`${item.name} habilitó su ejecución de daño.`);
       return;
     }
@@ -2356,7 +2652,8 @@ export class PersonajeSheet extends ActorSheet {
       actor,
       item,
       consumoMP,
-      resultadoCompetencia
+      resultadoCompetencia,
+      specialContext
     });
 
     try {
@@ -2376,7 +2673,8 @@ export class PersonajeSheet extends ActorSheet {
       });
     } catch (error) {
       ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
-      return;
+    } finally {
+      await this._completarTurnoTrasAccion({ actor, item });
     }
 
     return;
@@ -2387,8 +2685,22 @@ export class PersonajeSheet extends ActorSheet {
     actor,
     item,
     consumoMP,
-    resultadoCompetencia
+    resultadoCompetencia,
+    specialContext = null,
+    pendingResolutionId = null,
+    pendingResolutionIds = []
   } = {}) {
+    try {
+      await finalizeResolvedCompetenciaUse(actor, item, resultadoCompetencia, {
+        specialContext,
+        pendingResolutionId,
+        pendingResolutionIds
+      });
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo registrar el uso en el turno.");
+      throw error;
+    }
+
     if (!esCompetenciaMeditar(item)) {
       await aplicarConsumoMP(
         actor,
@@ -2498,6 +2810,18 @@ export class PersonajeSheet extends ActorSheet {
         </div>
       `
     });
+  }
+
+  async _completarTurnoTrasAccion({ actor, item, resolutionId = null } = {}) {
+    try {
+      return await completeResolvedTurnAction(actor, {
+        resolutionId,
+        completionId: `sheet:${item?.uuid ?? item?.id ?? "action"}`
+      });
+    } catch (error) {
+      ui.notifications.warn(error.message ?? "No se pudo finalizar automáticamente el turno.");
+      return null;
+    }
   }
 
   _puedeAdministrarBarraCombate() {

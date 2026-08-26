@@ -1,9 +1,9 @@
 {
   "id": "mtrol",
   "type": "system",
-  "title": "MtRol Beta",
-  "description": "Sistema oficial de MtRol para Foundry VTT en etapa de beta.",
-  "version": "1.2.7",
+  "title": "MtRol Oficial",
+  "description": "Sistema oficial de MtRol para Foundry VTT",
+  "version": "1.2.8",
   "compatibility": {
     "minimum": "14",
     "verified": "14",
@@ -39,7 +39,7 @@
     {
       "type": "cover",
       "url": "systems/mtrol/assets/ui/mtrol-arcane-bg.webp",
-      "caption": "MtRol Beta"
+      "caption": "MtRol Oficial"
     }
   ],
   "packs": [],

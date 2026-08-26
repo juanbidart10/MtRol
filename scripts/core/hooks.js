@@ -22,12 +22,22 @@ import {
   registerTradeLifecycleHooks
 } from "../trade/trade-hooks.js";
 
+import {
+  registerMtrolTurnHooks
+} from "../combat/turn-system.js";
+
+import {
+  installSpecialAbilityAuthorityHooks
+} from "../combat/special-ability-service.js";
+
 export function registerHooks() {
 
   registrarHooksPesoMtrol();
   registerMtrolSequencerHooks();
   registerMtrolAmbientFxHooks();
   registerTradeLifecycleHooks();
+  registerMtrolTurnHooks();
+  installSpecialAbilityAuthorityHooks();
 
   // =========================
   // MTROL - OVERRIDE INICIATIVA

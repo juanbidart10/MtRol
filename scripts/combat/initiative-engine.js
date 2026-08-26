@@ -13,6 +13,10 @@ import {
   mtrolPrepareChatRolls
 } from "../rolls/chat-rolls.js";
 
+import {
+  consumePreparation
+} from "./turn-system.js";
+
 export async function rollMtrolInitiative(actor) {
   if (!actor) {
     ui.notifications.warn("MtRol | No hay actor para iniciativa.");
@@ -25,11 +29,16 @@ export async function rollMtrolInitiative(actor) {
   data.atributos =
     actor.system?.atributos ?? {};
 
-  const mainRoll =
-    await new Roll(
-      "1d10 + @atributos.destreza",
-      data
-    ).evaluate();
+  const mainRoll = new Roll(
+    "1d10 + @atributos.destreza",
+    data
+  );
+
+  const preparationExecution =
+    await consumePreparation(actor, () => mainRoll.evaluate());
+
+  const preparationBonus =
+    Number(preparationExecution.preparationBonus ?? 0);
 
   await mtrolMostrarDados(mainRoll);
 
@@ -65,6 +74,7 @@ export async function rollMtrolInitiative(actor) {
         categoryLabel: "Iniciativa",
         formula: "1D10 + DESTREZA",
         total: 0,
+        preparation: preparationBonus,
         icon: actor.img ?? ""
       },
       content: `
@@ -72,6 +82,9 @@ export async function rollMtrolInitiative(actor) {
           <h2>💀 PIFIA DE INICIATIVA 💀</h2>
           <p>${evaluacion.motivo}</p>
           ${mainChatRolls.html}
+          ${preparationBonus > 0
+            ? `<p>Preparación consumida: <strong>+${preparationBonus}</strong>.</p>`
+            : ""}
           <p>La iniciativa queda en <strong>0</strong>.</p>
         </div>
       `
@@ -83,7 +96,8 @@ export async function rollMtrolInitiative(actor) {
       mainRoll,
       secondaryRoll: null,
       rolls: mainChatRolls.rolls,
-      evaluacion
+      evaluacion,
+      preparationBonus
     };
   }
 
@@ -91,7 +105,7 @@ export async function rollMtrolInitiative(actor) {
     mtrolCalcularTotalBaseSinCriticos(mainRoll);
 
   const totalPrincipal =
-    totalBase + evaluacion.totalExtra;
+    totalBase + evaluacion.totalExtra + preparationBonus;
 
   const secondaryRoll =
     await new Roll("1d10").evaluate();
@@ -123,6 +137,7 @@ export async function rollMtrolInitiative(actor) {
       categoryLabel: "Iniciativa",
       formula: "1D10 + DESTREZA + 1D10",
       total: totalFinal,
+      preparation: preparationBonus,
       icon: actor.img ?? ""
     },
     content: `
@@ -152,6 +167,10 @@ export async function rollMtrolInitiative(actor) {
             : ""
         }
 
+        ${preparationBonus > 0
+          ? `<p>Preparación: <strong>+${preparationBonus}</strong></p>`
+          : ""}
+
         <p>
           Dado secundario plano:
           <strong>${secondaryRoll.total}</strong>
@@ -178,6 +197,7 @@ export async function rollMtrolInitiative(actor) {
       ...mainChatRolls.rolls,
       ...secondaryChatRolls.rolls
     ],
-    evaluacion
+    evaluacion,
+    preparationBonus
   };
 }
