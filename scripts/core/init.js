@@ -61,7 +61,8 @@ import {
 } from "../scene-fx/ambient-fx-manager.js";
 
 import {
-  installMtrolActionsApi
+  installMtrolActionsApi,
+  registerOppositionChatHandler
 } from "../actions/action-engine.js";
 
 import {
@@ -215,6 +216,7 @@ export async function initMtrol() {
   installMtrolOrbAuthorityHooks();
   installMtrolClassResourceAuthorityHooks();
   installMtrolActionsApi();
+  registerOppositionChatHandler();
   registerResolvedDamageChatHandler();
   registerMtrolPremiumRollCards();
 

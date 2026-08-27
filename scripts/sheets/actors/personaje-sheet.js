@@ -2430,8 +2430,14 @@ export class PersonajeSheet extends ActorSheet {
     const nivel =
       Number(item.system?.nivel ?? 1);
 
-    const targetToken =
+    let targetToken =
       Array.from(game.user.targets)[0] ?? null;
+
+    if (turnGuard.reactive) {
+      targetToken = turnGuard.opposition?.sourceTokenUuid
+        ? await fromUuid(turnGuard.opposition.sourceTokenUuid)
+        : null;
+    }
 
     const control = this._getDharmaActionControl(event);
     const actionKey = control?.dataset?.mtrolActionKey;
@@ -2474,25 +2480,35 @@ export class PersonajeSheet extends ActorSheet {
       resultadoCompetencia
     } = resultado;
 
+    if (turnGuard.reactive) {
+      const oppositionResult = await attachDefenseRollForActor({
+        actor,
+        item,
+        defenderRoll: resultadoCompetencia,
+        pendingActionId: turnGuard.opposition?.id ?? null,
+        specialContext,
+        consumeResponse: true
+      });
+
+      if (!oppositionResult) {
+        ui.notifications.warn(
+          `${item.name} no pudo asociarse a la oposición activa para ${actor.name}.`
+        );
+      }
+      return oppositionResult;
+    }
+
     if (item.system?.actionType === "defense") {
       const defenseResult =
         await attachDefenseRollForActor({
           actor,
           item,
-          defenderRoll: resultadoCompetencia
+          defenderRoll: resultadoCompetencia,
+          specialContext,
+          consumeResponse: true
         });
 
-      if (defenseResult) {
-        await this._finalizarConsumoCompetencia({
-          actor,
-          item,
-          consumoMP,
-          resultadoCompetencia,
-          specialContext
-        });
-
-        return;
-      }
+      if (defenseResult) return;
 
       ui.notifications.warn(
         `${item.name} no pudo asociarse a una acción pendiente para ${actor.name}.`

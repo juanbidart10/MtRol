@@ -14,7 +14,8 @@ const users = new UserCollection([
 globalThis.game = {
   user: users.get("gm"),
   users,
-  combat: null
+  combat: null,
+  mtrol: { actions: {} }
 };
 globalThis.ui = { notifications: { warn: message => warnings.push(message) } };
 globalThis.Hooks = { on() {}, callAll() {} };
@@ -22,6 +23,16 @@ globalThis.canvas = { grid: { size: 100 }, scene: { grid: { size: 100, distance:
 
 const documents = new Map();
 globalThis.fromUuid = async uuid => documents.get(uuid) ?? null;
+
+let reactiveOpposition = null;
+let reactionMovement = null;
+game.mtrol.actions.getPendingOppositionForActor = actor =>
+  reactiveOpposition && (
+    reactiveOpposition.targetActorId === actor?.id ||
+    reactiveOpposition.targetActorUuid === actor?.uuid
+  ) ? reactiveOpposition : null;
+game.mtrol.actions.getReactionMovementForActor = actor =>
+  reactionMovement?.actorUuid === actor?.uuid ? reactionMovement : null;
 
 const {
   canPrepare,
@@ -109,6 +120,8 @@ function combatant(id, owner, turn) {
 }
 
 function scenario() {
+  reactiveOpposition = null;
+  reactionMovement = null;
   const attacker = actor(`attacker-${Math.random()}`, "owner-a");
   const defender = actor(`defender-${Math.random()}`, "owner-b");
   const scenarioId = Math.random().toString(36).slice(2);
@@ -134,7 +147,15 @@ test("guard central permite al activo, bloquea acciones ajenas y mantiene la rea
   const { attacker, defender } = scenario();
   assert.equal(getActionGuard(attacker, item(attacker, "attack", "attack")).allowed, true);
   assert.equal(getActionGuard(defender, item(defender, "other-attack", "attack")).allowed, false);
+  assert.equal(getActionGuard(defender, item(defender, "defense-before", "defense")).allowed, false);
+  reactiveOpposition = {
+    id: "opposition-guard",
+    status: "waiting-defense",
+    targetActorId: defender.id,
+    targetActorUuid: defender.uuid
+  };
   assert.equal(getActionGuard(defender, item(defender, "defense", "defense")).allowed, true);
+  assert.equal(getActionGuard(defender, item(defender, "spell", "attack")).allowed, true);
 });
 
 test("resolución ofensiva consume movimiento/acción pero la defensa no toca el turno futuro", async () => {
@@ -151,12 +172,42 @@ test("resolución ofensiva consume movimiento/acción pero la defensa no toca el
   assert.equal(combat.nextTurnCalls, 1, "el cierre duplicado no salta dos Combatants");
 
   const futureBefore = structuredClone(getCombatantTurnState(second));
+  reactiveOpposition = {
+    id: "opposition-defense",
+    status: "waiting-defense",
+    targetActorId: defender.id,
+    targetActorUuid: defender.uuid
+  };
   await turnSocketOperations.finalizeTurnUseAuthoritative({
     actorUuid: defender.uuid,
     itemId: item(defender, "defense", "defense").id,
     resolution: { finalResult: 30 }
   }, { requestingUserId: "owner-b" });
   assert.deepEqual(getCombatantTurnState(second), futureBefore);
+});
+
+test("una acción reactiva paga cooldown sin consumir el turno futuro", async () => {
+  const { defender, second } = scenario();
+  const spell = item(defender, "reactive-spell", "attack", 1);
+  reactiveOpposition = {
+    id: "opposition-spell",
+    status: "waiting-defense",
+    targetActorId: defender.id,
+    targetActorUuid: defender.uuid
+  };
+  const futureBefore = structuredClone(getCombatantTurnState(second));
+  const receipt = await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: defender.uuid,
+    itemId: spell.id,
+    resolution: { finalResult: 22 }
+  }, { requestingUserId: "owner-b" });
+  assert.equal(receipt.reactive, true);
+  assert.deepEqual(getCombatantTurnState(second), futureBefore);
+  assert.deepEqual(spell.flags.mtrol.cooldown, {
+    combatId: "combat",
+    usedAtRound: 1,
+    cooldownRounds: 1
+  });
 });
 
 test("una resolución pendiente bloquea fin manual y sólo su cierre autoritativo avanza", async () => {
@@ -342,6 +393,39 @@ test("preUpdateToken consulta la colisión real de Foundry antes de autorizar", 
   assert.match(warnings.at(-1), /pared o columna/);
 });
 
+test("movimiento de Esquiva acepta una diagonal, limita a un cuadro y no toca el turno futuro", () => {
+  const { defender, second } = scenario();
+  reactionMovement = {
+    pendingActionId: "dodge-resolution",
+    actorUuid: defender.uuid,
+    allowance: 1
+  };
+  const token = {
+    id: "dodge-token",
+    uuid: "Scene.scene.Token.dodge",
+    actor: defender,
+    parent: { grid: { size: 100, distance: 1 } },
+    x: 0,
+    y: 0,
+    elevation: 0,
+    object: {
+      center: { x: 50, y: 50 },
+      checkCollision: () => false
+    }
+  };
+  const futureBefore = structuredClone(getCombatantTurnState(second));
+  const diagonal = {};
+  assert.equal(validateTurnMovement(token, { x: 100, y: 100 }, diagonal, "owner-b"), true);
+  assert.deepEqual(diagonal.mtrolReactionMovement, {
+    pendingActionId: "dodge-resolution",
+    actorUuid: defender.uuid,
+    tokenUuid: token.uuid,
+    cost: 1
+  });
+  assert.equal(validateTurnMovement(token, { x: 200 }, {}, "owner-b"), false);
+  assert.deepEqual(getCombatantTurnState(second), futureBefore);
+});
+
 test("Prepararse suma uno, consume movimiento/acción y finaliza el turno", async () => {
   const { attacker, first, combat } = scenario();
   assert.equal(canPrepare(attacker), true);
@@ -500,6 +584,12 @@ test("escenario completo V1: movimiento, ataque, reacción, Prepararse, especial
     pendingResolutionId: "flow-opposition"
   }, { requestingUserId: "owner-a" });
   const defenderFuture = structuredClone(getCombatantTurnState(second));
+  reactiveOpposition = {
+    id: "flow-opposition",
+    status: "waiting-defense",
+    targetActorId: actorB.id,
+    targetActorUuid: actorB.uuid
+  };
   await turnSocketOperations.finalizeTurnUseAuthoritative({
     actorUuid: actorB.uuid,
     itemId: defense.id,

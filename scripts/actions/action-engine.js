@@ -37,8 +37,14 @@ import {
 
 import {
   completeResolvedTurnAction,
+  finalizeResolvedCompetenciaUse,
   getActionGuard
 } from "../combat/turn-system.js";
+
+import {
+  aplicarConsumoMP,
+  validarConsumoMP
+} from "../combat/mp-engine.js";
 
 const pendingActions =
   new Map();
@@ -57,6 +63,12 @@ const PENDING_ACTION_TERMINAL_RETENTION_MS =
 
 let pendingActionsCleanupTimer =
   null;
+
+let oppositionChatHandlerRegistered =
+  false;
+
+const REACTION_MOVEMENT_ACTION =
+  "mtrol-close-reaction-movement";
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -173,6 +185,9 @@ export function serializePendingAction(pendingAction) {
 export function broadcastPendingAction(pendingAction) {
   if (!game.user?.isGM || !pendingAction) return;
 
+  const targetActor = game.actors?.get?.(pendingAction.targetActorId) ?? null;
+  if (targetActor?.sheet?.rendered) targetActor.sheet.render(false);
+
   game.socket.emit("system.mtrol", {
     action: "mtrolPendingActionSync",
     pendingAction: serializePendingAction(pendingAction)
@@ -218,6 +233,22 @@ function cleanupExpiredPendingActions() {
         "timeout";
 
       broadcastPendingAction(pendingAction);
+
+    } else if (pendingAction.reactionMovement?.status === "available") {
+      pendingAction.reactionMovement.status = "skipped";
+      pendingAction.reactionMovement.reason = "timeout";
+      pendingAction.reactionMovement.closedAt = now;
+      pendingAction.updatedAt = now;
+      broadcastPendingAction(pendingAction);
+    }
+
+    if (game.user?.isGM && pendingAction.sourceActorUuid) {
+      fromUuid(pendingAction.sourceActorUuid)
+        .then(sourceActor => sourceActor && completeResolvedTurnAction(sourceActor, {
+          resolutionId: pendingAction.id,
+          completionId: `opposition-expired:${pendingAction.id}`
+        }))
+        .catch(error => console.error("MTROL | No se pudo cerrar la oposición vencida.", error));
     }
 
     pendingActions.delete(id);
@@ -249,12 +280,19 @@ export function receivePendingActionSync(serializedPendingAction) {
     pendingAction
   );
 
+  const targetActor = game.actors?.get?.(pendingAction.targetActorId) ?? null;
+  if (targetActor?.sheet?.rendered) targetActor.sheet.render(false);
+
   return pendingAction;
 }
 
 export function receivePendingActionCleared(pendingActionId) {
   if (!pendingActionId) return false;
-  return pendingActions.delete(pendingActionId);
+  const pendingAction = pendingActions.get(pendingActionId);
+  const removed = pendingActions.delete(pendingActionId);
+  const targetActor = game.actors?.get?.(pendingAction?.targetActorId) ?? null;
+  if (targetActor?.sheet?.rendered) targetActor.sheet.render(false);
+  return removed;
 }
 
 function normalizeDamageContext(data = {}) {
@@ -493,6 +531,11 @@ function canShowDamageButton(pendingAction, result) {
   );
 }
 
+function canShowReactionMovementButton(pendingAction) {
+  return pendingAction.status === "resolved" &&
+    pendingAction.reactionMovement?.status === "available";
+}
+
 function getResolutionDescription(result = {}) {
   switch (result.reason) {
     case "attacker-higher":
@@ -550,6 +593,18 @@ function buildResolutionContent(pendingAction, result, rollsHTML = "") {
                 data-action="mtrol-resolved-damage"
                 data-pending-action-id="${escapeHTML(pendingAction.id)}">
           TIRAR DAÑO
+        </button>
+      `
+      : "";
+
+  const reactionMovementButton =
+    canShowReactionMovementButton(pendingAction)
+      ? `
+        <p>Esquiva exitosa: el objetivo puede mover 1 cuadro en cualquier dirección o renunciar.</p>
+        <button type="button"
+                data-action="${REACTION_MOVEMENT_ACTION}"
+                data-pending-action-id="${escapeHTML(pendingAction.id)}">
+          NO MOVER
         </button>
       `
       : "";
@@ -618,6 +673,7 @@ function buildResolutionContent(pendingAction, result, rollsHTML = "") {
       ${damageExecutedMessage}
       ${damageErrorMessage}
       ${damageButton}
+      ${reactionMovementButton}
     </div>
   `;
 }
@@ -796,6 +852,12 @@ function buildPendingAction(data = {}) {
     defenseItemName: data.defenseItemName ?? null,
     defenseActionType: data.defenseActionType ?? null,
     defenseEffect: data.defenseEffect ?? null,
+    responseItemId: data.responseItemId ?? null,
+    responseItemName: data.responseItemName ?? null,
+    responseActionType: data.responseActionType ?? null,
+    responseEffect: data.responseEffect ?? null,
+    responseDamage: data.responseDamage ?? null,
+    reactionMovement: data.reactionMovement ?? null,
     shieldItemId: data.shieldItemId ?? null,
     shieldItemUuid: data.shieldItemUuid ?? null,
     shieldSlot: data.shieldSlot ?? null,
@@ -1162,6 +1224,29 @@ function getAvailableActionsForActor(actor) {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export function getPendingOppositionForActor(actor) {
+  return getAvailableActionsForActor(actor)[0] ?? null;
+}
+
+export function getReactionMovementForActor(actor) {
+  if (!actor) return null;
+  cleanupExpiredPendingActions();
+  const pendingAction = Array.from(pendingActions.values()).find(value =>
+    value.status === "resolved" &&
+    value.reactionMovement?.status === "available" &&
+    (
+      value.targetActorId === actor.id ||
+      value.targetActorUuid === actor.uuid
+    )
+  );
+  if (!pendingAction) return null;
+  return {
+    pendingActionId: pendingAction.id,
+    allowance: Number(pendingAction.reactionMovement.allowance ?? 0),
+    tokenUuid: pendingAction.reactionMovement.tokenUuid ?? pendingAction.targetTokenUuid ?? null
+  };
+}
+
 async function resolveDefenderActor(pendingAction, defenderActorUuid = null) {
   const actorUuid =
     defenderActorUuid ??
@@ -1216,6 +1301,8 @@ export async function attachDefenseRollAuthoritative({
   defenderActorUuid = null,
   defenseItemId = null,
   defenderRoll = null,
+  specialContext = null,
+  consumeResponse = false,
   requestingUserId = game.user?.id
 } = {}) {
   if (!game.user?.isGM) {
@@ -1278,12 +1365,16 @@ export async function attachDefenseRollAuthoritative({
   const defenseItem =
     actor.items.get(defenseItemId);
 
+  if (!defenseItem || defenseItem.type !== "competencia") {
+    throw new Error("La acción de oposición no es válida.");
+  }
+
+  const responseGuard = getActionGuard(actor, defenseItem);
   if (
-    !defenseItem ||
-    defenseItem.type !== "competencia" ||
-    defenseItem.system?.actionType !== "defense"
+    !responseGuard.allowed ||
+    (responseGuard.reactive && responseGuard.opposition?.id !== pendingAction.id)
   ) {
-    throw new Error("La competencia defensiva no es válida.");
+    throw new Error(responseGuard.reason ?? "La acción no pertenece a esta oposición.");
   }
 
   if (!isValidRollData(defenderRoll)) {
@@ -1295,6 +1386,18 @@ export async function attachDefenseRollAuthoritative({
       actor,
       defenseItem
     );
+
+  if (consumeResponse) {
+    const consumoMP = validarConsumoMP(actor, defenseItem);
+    if (!consumoMP?.exito) {
+      throw new Error(consumoMP?.motivo ?? "No hay MP suficiente para responder la oposición.");
+    }
+
+    await finalizeResolvedCompetenciaUse(actor, defenseItem, defenderRoll, {
+      specialContext
+    });
+    await aplicarConsumoMP(actor, consumoMP, { item: defenseItem });
+  }
 
   pendingAction.defenderRoll =
     rollToData(defenderRoll);
@@ -1313,6 +1416,32 @@ export async function attachDefenseRollAuthoritative({
 
   pendingAction.defenseItemName =
     defenseItem.name;
+
+  pendingAction.responseItemId =
+    defenseItem.id;
+
+  pendingAction.responseItemName =
+    defenseItem.name;
+
+  pendingAction.responseActionType =
+    defenseItem.system?.actionType ?? "utility";
+
+  pendingAction.responseEffect =
+    defenseItem.system?.effect ?? "none";
+
+  pendingAction.responseDamage =
+    getCanonicalDamageContext({
+      sourceActor: actor,
+      sourceItem: defenseItem,
+      targetActor: pendingAction.sourceActorUuid
+        ? await fromUuid(pendingAction.sourceActorUuid)
+        : null,
+      requiresOpposition: false,
+      data: {
+        sourceTokenUuid: pendingAction.targetTokenUuid,
+        targetTokenUuid: pendingAction.sourceTokenUuid
+      }
+    });
 
   pendingAction.shieldItemId =
     shieldValidation.shield?.item?.id ?? null;
@@ -1360,7 +1489,7 @@ function processAuthoritativeResponse(response) {
   return response.result?.resolutionResult ?? null;
 }
 
-export async function attachDefenseRoll(pendingActionId, rollData = {}) {
+export async function attachDefenseRoll(pendingActionId, rollData = {}, options = {}) {
   const pendingAction =
     pendingActions.get(pendingActionId);
 
@@ -1375,6 +1504,8 @@ export async function attachDefenseRoll(pendingActionId, rollData = {}) {
         defenderActorUuid: pendingAction.targetActorUuid,
         defenseItemId: rollData.itemId,
         defenderRoll: rollData,
+        specialContext: options.specialContext ?? null,
+        consumeResponse: options.consumeResponse === true,
         requestingUserId: game.user.id
       });
 
@@ -1388,7 +1519,9 @@ export async function attachDefenseRoll(pendingActionId, rollData = {}) {
         pendingActionId,
         defenderActorUuid: pendingAction.targetActorUuid,
         defenseItemId: rollData.itemId,
-        defenderRoll: rollToData(rollData)
+        defenderRoll: rollToData(rollData),
+        specialContext: options.specialContext ?? null,
+        consumeResponse: options.consumeResponse === true
       }
     );
 
@@ -1463,9 +1596,11 @@ export async function attachDefenseRollForActor({
   actor,
   item,
   defenderRoll,
-  pendingActionId = null
+  pendingActionId = null,
+  specialContext = null,
+  consumeResponse = false
 } = {}) {
-  if (!actor || !item || item.system?.actionType !== "defense") return null;
+  if (!actor || !item || item.type !== "competencia") return null;
 
   let selectedPendingActionId =
     pendingActionId;
@@ -1485,7 +1620,8 @@ export async function attachDefenseRollForActor({
     {
       ...defenderRoll,
       itemId: item.id
-    }
+    },
+    { specialContext, consumeResponse }
   );
 }
 
@@ -1587,6 +1723,62 @@ export async function resolvePendingActionAuthoritative(
         intensity: pendingAction.effectIntensity
       });
     }
+
+    if (!result.success && pendingAction.responseEffect === "stunned") {
+      const source = pendingAction.sourceTokenUuid
+        ? await fromUuid(pendingAction.sourceTokenUuid)
+        : await fromUuid(pendingAction.sourceActorUuid);
+      await applyState(source, pendingAction.responseEffect, {
+        source: pendingAction.responseItemName,
+        pendingActionId,
+        duration: 1,
+        intensity: 0
+      });
+    }
+
+    if (!result.success && pendingAction.defenseType === "dodge") {
+      pendingAction.reactionMovement = {
+        resolutionId: pendingAction.id,
+        actorUuid: pendingAction.targetActorUuid,
+        tokenUuid: pendingAction.targetTokenUuid,
+        allowance: 1,
+        status: "available",
+        grantedAt: Date.now()
+      };
+    }
+
+    if (!result.success && pendingAction.responseDamage?.available === true) {
+      const responseActor = pendingAction.targetActorUuid
+        ? await fromUuid(pendingAction.targetActorUuid)
+        : null;
+      const sourceActor = pendingAction.sourceActorUuid
+        ? await fromUuid(pendingAction.sourceActorUuid)
+        : null;
+      const sourceToken = pendingAction.sourceTokenUuid
+        ? await fromUuid(pendingAction.sourceTokenUuid)
+        : null;
+      const responseItem = responseActor?.items?.get?.(pendingAction.responseItemId) ?? null;
+      const { executeConfiguredCompetenciaDamage } =
+        await import("./action-damage-engine.js");
+      const damageResult = await executeConfiguredCompetenciaDamage({
+        actor: responseActor,
+        targetActor: sourceActor,
+        targetToken: sourceToken,
+        formula: pendingAction.responseDamage.formula,
+        flatValue: pendingAction.responseDamage.flatValue,
+        costoTotal: Number(pendingAction.responseDamage.costoTotal ?? 0),
+        damageCostType: pendingAction.responseDamage.costType ?? "none",
+        damageContext: {
+          ...pendingAction.responseDamage,
+          item: responseItem,
+          title: pendingAction.responseItemName,
+          icon: responseItem?.img ?? responseActor?.img ?? ""
+        }
+      });
+      pendingAction.responseDamage.status = damageResult?.success === true ? "rolled" : "failed";
+      pendingAction.responseDamage.rolled = true;
+      pendingAction.responseDamage.total = Number(damageResult?.totalFinalDanio ?? 0);
+    }
   } catch (error) {
     pendingAction.result =
       null;
@@ -1680,7 +1872,9 @@ export async function resolvePendingActionAuthoritative(
     pendingAction.damage?.available === true &&
     pendingAction.damage?.mode === "enabled" &&
     pendingAction.damage?.status === "available";
-  if (!waitsForManualDamage) {
+  const waitsForReactionMovement =
+    pendingAction.reactionMovement?.status === "available";
+  if (!waitsForManualDamage && !waitsForReactionMovement) {
     const sourceActor = pendingAction.sourceActorUuid
       ? await fromUuid(pendingAction.sourceActorUuid)
       : null;
@@ -1812,6 +2006,13 @@ export async function clearPendingActionAuthoritative(
 
   broadcastPendingAction(pendingAction);
 
+  if (sourceActor) {
+    await completeResolvedTurnAction(sourceActor, {
+      resolutionId: pendingAction.id,
+      completionId: `opposition-cancelled:${pendingAction.id}`
+    });
+  }
+
   return true;
 }
 
@@ -1846,6 +2047,109 @@ export async function clearPendingAction(pendingActionId, reason = "cancelled") 
   }
 
   return true;
+}
+
+export async function completeReactionMovementAuthoritative(
+  pendingActionId,
+  {
+    actorUuid = null,
+    tokenUuid = null,
+    cost = 0,
+    requestingUserId = game.user?.id,
+    reason = "skipped"
+  } = {}
+) {
+  if (!game.user?.isGM) {
+    throw new Error("Sólo el GM autoritativo puede cerrar el movimiento reactivo.");
+  }
+  const pendingAction = pendingActions.get(pendingActionId);
+  const movement = pendingAction?.reactionMovement;
+  if (!pendingAction || pendingAction.status !== "resolved" || movement?.status !== "available") {
+    throw new Error("El movimiento reactivo ya no está disponible.");
+  }
+  const actor = movement.actorUuid ? await fromUuid(movement.actorUuid) : null;
+  if (!actor || !userCanControlActor(actor, requestingUserId)) {
+    throw new Error("El usuario no controla al Actor que obtuvo la Esquiva.");
+  }
+  if (actorUuid && actor.uuid !== actorUuid) {
+    throw new Error("El Actor no coincide con esta Esquiva.");
+  }
+  if (tokenUuid && movement.tokenUuid && tokenUuid !== movement.tokenUuid) {
+    throw new Error("El Token no coincide con esta Esquiva.");
+  }
+  const spent = Math.max(0, Math.trunc(Number(cost) || 0));
+  if (spent > Number(movement.allowance ?? 0)) {
+    throw new Error("El movimiento supera el cuadro concedido por Esquiva.");
+  }
+  movement.status = spent > 0 ? "used" : "skipped";
+  movement.spent = spent;
+  movement.closedAt = Date.now();
+  movement.reason = reason;
+  pendingAction.updatedAt = movement.closedAt;
+  broadcastPendingAction(pendingAction);
+  await updateResolutionMessage(pendingAction);
+
+  const sourceActor = pendingAction.sourceActorUuid
+    ? await fromUuid(pendingAction.sourceActorUuid)
+    : null;
+  if (sourceActor) {
+    await completeResolvedTurnAction(sourceActor, {
+      resolutionId: pendingAction.id,
+      completionId: `reaction-movement:${pendingAction.id}`
+    });
+  }
+  return { pendingAction, movement: foundry.utils.deepClone(movement) };
+}
+
+export async function completeReactionMovement(pendingActionId, options = {}) {
+  if (game.user?.isGM) {
+    return completeReactionMovementAuthoritative(pendingActionId, {
+      ...options,
+      requestingUserId: options.requestingUserId ?? game.user.id
+    });
+  }
+  const response = await requestPrimaryGM("mtrolCompleteReactionMovement", {
+    pendingActionId,
+    actorUuid: options.actorUuid ?? null,
+    tokenUuid: options.tokenUuid ?? null,
+    cost: options.cost ?? 0,
+    reason: options.reason ?? "skipped"
+  });
+  if (!response.ok) throw new Error(response.error ?? "No se pudo cerrar el movimiento reactivo.");
+  if (response.result?.pendingAction) receivePendingActionSync(response.result.pendingAction);
+  return response.result;
+}
+
+async function onReactionMovementClick(event) {
+  const button = event.target.closest?.(`[data-action="${REACTION_MOVEMENT_ACTION}"]`);
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  button.disabled = true;
+  try {
+    await completeReactionMovement(button.dataset.pendingActionId, { reason: "skipped" });
+  } catch (error) {
+    ui.notifications.warn(error.message ?? "No se pudo omitir el movimiento reactivo.");
+    button.disabled = false;
+  }
+}
+
+export function registerOppositionChatHandler() {
+  if (oppositionChatHandlerRegistered) return;
+  oppositionChatHandlerRegistered = true;
+  Hooks.on("renderChatMessage", (_message, html) => {
+    const selector = `[data-action="${REACTION_MOVEMENT_ACTION}"]`;
+    if (typeof html?.find === "function") {
+      html.find(selector)
+        .off("click.mtrolReactionMovement")
+        .on("click.mtrolReactionMovement", onReactionMovementClick);
+      return;
+    }
+    html?.querySelectorAll?.(selector).forEach(button => {
+      button.removeEventListener("click", onReactionMovementClick);
+      button.addEventListener("click", onReactionMovementClick);
+    });
+  });
 }
 
 export function listPendingActions() {
@@ -1905,6 +2209,10 @@ export function installMtrolActionsApi() {
     resolvePendingAction,
     resolvePendingActionAuthoritative,
     requestPendingActionsForActor,
+    getPendingOppositionForActor,
+    getReactionMovementForActor,
+    completeReactionMovement,
+    completeReactionMovementAuthoritative,
     clearPendingAction,
     clearPendingActionAuthoritative,
     listPendingActions,

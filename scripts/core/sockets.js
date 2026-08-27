@@ -184,6 +184,14 @@ export function registerMtrolSockets() {
           break;
         }
 
+        case "mtrolCommitReactionMovement": {
+          await respondWithResult(data, () =>
+            turnSocketOperations.commitReactionMovementAuthoritative(data.payload ?? {}, {
+              requestingUserId: data.requestingUserId
+            }));
+          break;
+        }
+
         case "mtrolFinalizeTurnUse": {
           await respondWithResult(data, () =>
             turnSocketOperations.finalizeTurnUseAuthoritative(data.payload ?? {}, {
@@ -380,6 +388,8 @@ export function registerMtrolSockets() {
                 defenderActorUuid: data.payload?.defenderActorUuid ?? null,
                 defenseItemId: data.payload?.defenseItemId ?? null,
                 defenderRoll: data.payload?.defenderRoll ?? null,
+                specialContext: data.payload?.specialContext ?? null,
+                consumeResponse: data.payload?.consumeResponse === true,
                 requestingUserId: data.requestingUserId
               });
 
@@ -414,6 +424,26 @@ export function registerMtrolSockets() {
             };
           });
 
+          break;
+        }
+
+        case "mtrolCompleteReactionMovement": {
+          await respondWithResult(data, async () => {
+            const result = await game.mtrol.actions.completeReactionMovementAuthoritative(
+              data.payload?.pendingActionId,
+              {
+                actorUuid: data.payload?.actorUuid ?? null,
+                tokenUuid: data.payload?.tokenUuid ?? null,
+                cost: data.payload?.cost ?? 0,
+                reason: data.payload?.reason ?? "skipped",
+                requestingUserId: data.requestingUserId
+              }
+            );
+            return {
+              pendingAction: game.mtrol.actions.serializePendingAction(result.pendingAction),
+              movement: result.movement
+            };
+          });
           break;
         }
 

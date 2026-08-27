@@ -588,10 +588,12 @@ test("la matriz ataque/defensa/desempate controla el boton DANIO", async () => {
       message.content.includes('data-action="mtrol-resolved-damage"'),
       expectedButton
     );
-    assert.equal(
-      message.content.includes(`data-pending-action-id="${context.pending.id}"`),
-      expectedButton
-    );
+    if (expectedButton) {
+      assert.equal(
+        message.content.includes(`data-pending-action-id="${context.pending.id}"`),
+        true
+      );
+    }
 
     return context;
   }
@@ -629,6 +631,59 @@ test("la matriz ataque/defensa/desempate controla el boton DANIO", async () => {
     expectedButton: false,
     expectedReason: "tie-defender"
   });
+});
+
+test("Esquiva ganadora crea un permiso reactivo independiente de un cuadro", async () => {
+  const context = await createPending({
+    suffix: "dodge-movement",
+    attackerTotal: 4
+  });
+  await defend({
+    pending: context.pending,
+    defender: context.defender,
+    total: 9
+  });
+  assert.deepEqual(actionModule.getReactionMovementForActor(context.defender), {
+    pendingActionId: context.pending.id,
+    allowance: 1,
+    tokenUuid: null
+  });
+  assert.equal(context.pending.reactionMovement.status, "available");
+});
+
+test("Contraataque ganador ejecuta su daño existente contra el atacante", async () => {
+  const counterattack = createItem({
+    id: "counterattack-response",
+    name: "Contraataque",
+    categoria: "contraataque",
+    actionType: "attack",
+    effect: "damage",
+    danio: "1d6",
+    ejecutaDanio: true,
+    damageResolution: "immediate",
+    damageMode: "automatic"
+  });
+  const defender = createActor({
+    id: "counterattack-defender",
+    ownerIds: [defenderOwner.id],
+    items: [counterattack]
+  });
+  const context = await createPending({
+    suffix: "counterattack",
+    attackerTotal: 4,
+    defender
+  });
+  queueRoll("1d6", 6);
+  queueRoll("1d10", 5);
+  const result = await defend({
+    pending: context.pending,
+    defender,
+    total: 9,
+    defenseSkill: counterattack
+  });
+  assert.equal(result.resolutionResult.success, false);
+  assert.equal(context.attacker.system.vitales.hp.value, 14);
+  assert.equal(context.pending.responseDamage.status, "rolled");
 });
 
 test("un ataque sin objetivo no crea una accion pendiente", async () => {

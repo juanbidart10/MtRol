@@ -129,6 +129,16 @@ function turnSignature(context) {
   return `${context.combatId}:${context.round}:${context.turn}:${context.combatant?.id ?? ""}`;
 }
 
+function getReactiveOpposition(actor) {
+  if (!actor) return null;
+  return game.mtrol?.actions?.getPendingOppositionForActor?.(actor) ?? null;
+}
+
+function getReactionMovement(actor) {
+  if (!actor) return null;
+  return game.mtrol?.actions?.getReactionMovementForActor?.(actor) ?? null;
+}
+
 export function getTurnResolutionState(combatant = getTurnContext().combatant) {
   const value = combatantFlag(combatant, MTROL_TURN_RESOLUTION_FLAG);
   return value && typeof value === "object" ? value : null;
@@ -454,16 +464,34 @@ export function getActionGuard(actor, item = null, { kindOverride = null } = {})
     ? kindOverride
     : item ? classifyTurnAction(item) : "normal";
 
-  if (!context.combat) return { allowed: true, kind, reason: null };
-  if (kind === "reaction") {
-    const cooldown = getItemCooldownStatus(item, context);
-    return cooldown.available
-      ? { allowed: true, kind, reason: null }
-      : { allowed: false, kind, reason: `En cooldown hasta la ronda ${cooldown.availableAtRound}.` };
+  if (!context.combat) return { allowed: true, kind, reason: null, reactive: false };
+
+  const isActiveActor = context.actor?.uuid === actor?.uuid || context.actor?.id === actor?.id;
+  const opposition = isActiveActor ? null : getReactiveOpposition(actor);
+  const reactive = Boolean(opposition);
+
+  if (!isActiveActor && !reactive) {
+    return {
+      allowed: false,
+      kind,
+      reason: "No es tu turno ni estás respondiendo una oposición.",
+      reactive: false
+    };
   }
 
-  if (context.actor?.uuid !== actor?.uuid && context.actor?.id !== actor?.id) {
-    return { allowed: false, kind, reason: "No es tu turno." };
+  const cooldown = getItemCooldownStatus(item, context);
+  if (!cooldown.available) {
+    return {
+      allowed: false,
+      kind,
+      reason: `En cooldown hasta la ronda ${cooldown.availableAtRound}.`,
+      reactive,
+      opposition
+    };
+  }
+
+  if (reactive) {
+    return { allowed: true, kind, reason: null, reactive: true, opposition };
   }
 
   const state = getCombatantTurnState(context.combatant);
@@ -475,12 +503,7 @@ export function getActionGuard(actor, item = null, { kindOverride = null } = {})
     return { allowed: false, kind, reason: "La acción de este turno ya fue consumida." };
   }
 
-  const cooldown = getItemCooldownStatus(item, context);
-  if (!cooldown.available) {
-    return { allowed: false, kind, reason: `En cooldown hasta la ronda ${cooldown.availableAtRound}.` };
-  }
-
-  return { allowed: true, kind, reason: null };
+  return { allowed: true, kind, reason: null, reactive: false };
 }
 
 export const canAct = actor => getActionGuard(actor).allowed;
@@ -557,7 +580,13 @@ async function finalizeTurnUseAuthoritative({
     });
   }
 
-  if (guard.kind === "reaction" || !context.combat) return { kind: guard.kind };
+  if (guard.reactive || !context.combat) {
+    return {
+      kind: guard.kind,
+      reactive: guard.reactive === true,
+      resolutionId: guard.opposition?.id ?? null
+    };
+  }
 
   const combatant = context.combatant;
   const state = getCombatantTurnState(combatant);
@@ -750,6 +779,20 @@ export function validateTurnMovement(tokenDocument, changes, options = {}, userI
 
   const context = getTurnContext();
   if (!context.combat) return true;
+  const reactionMovement = getReactionMovement(tokenDocument?.actor);
+  if (reactionMovement && userOwnsActor(tokenDocument?.actor, userId)) {
+    if (cost > Number(reactionMovement.allowance ?? 0)) {
+      ui.notifications.warn("La Esquiva permite mover como máximo 1 cuadro.");
+      return false;
+    }
+    options.mtrolReactionMovement = {
+      pendingActionId: reactionMovement.pendingActionId,
+      actorUuid: tokenDocument.actor.uuid,
+      tokenUuid: tokenDocument.uuid,
+      cost
+    };
+    return true;
+  }
   const combatant = getCombatantForToken(tokenDocument, context.combat);
   if (!combatant || combatant.id !== context.combatant?.id || !userOwnsActor(tokenDocument?.actor, userId)) {
     ui.notifications.warn("Sólo puedes mover la ficha de tu turno activo.");
@@ -806,7 +849,43 @@ async function commitTurnMovementAuthoritative({ tokenUuid, movement } = {}, {
   return persisted;
 }
 
+async function commitReactionMovementAuthoritative({ tokenUuid, movement } = {}, {
+  requestingUserId = game.user?.id
+} = {}) {
+  if (!game.user?.isGM) throw new Error("El movimiento reactivo requiere autoridad GM.");
+  if (!movement) return null;
+  const tokenDocument = await fromUuid(tokenUuid);
+  if (!tokenDocument || !userOwnsActor(tokenDocument.actor, requestingUserId)) {
+    throw new Error("El usuario no controla el Token desplazado.");
+  }
+  return game.mtrol?.actions?.completeReactionMovementAuthoritative?.(
+    movement.pendingActionId,
+    {
+      actorUuid: tokenDocument.actor.uuid,
+      tokenUuid: tokenDocument.uuid,
+      cost: movement.cost,
+      requestingUserId,
+      reason: "used"
+    }
+  ) ?? null;
+}
+
 export async function commitTurnMovement(tokenDocument, options = {}, userId = game.user?.id) {
+  const reactionMovement = options?.mtrolReactionMovement;
+  if (reactionMovement && game.user?.id === userId) {
+    if (game.user?.isGM && isPrimaryActiveGM()) {
+      return commitReactionMovementAuthoritative({
+        tokenUuid: tokenDocument.uuid,
+        movement: reactionMovement
+      });
+    }
+    const response = await requestPrimaryGM("mtrolCommitReactionMovement", {
+      tokenUuid: tokenDocument.uuid,
+      movement: reactionMovement
+    });
+    if (!response.ok) throw new Error(response.error ?? "No se pudo cerrar el movimiento reactivo.");
+    return response.result;
+  }
   const movement = options?.mtrolTurnMovement;
   if (!movement || getUser(userId)?.isGM || game.user?.id !== userId) return null;
   const response = await requestPrimaryGM("mtrolCommitTurnMovement", {
@@ -1120,5 +1199,6 @@ export const turnSocketOperations = {
   finalizeTurnUseAuthoritative,
   grantMovementAuthoritative,
   commitTurnMovementAuthoritative,
+  commitReactionMovementAuthoritative,
   endTurnAuthoritative
 };
