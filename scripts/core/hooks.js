@@ -3,8 +3,8 @@
 // =========================
 
 import {
-  rollMtrolInitiative
-} from "../combat/initiative-engine.js";
+  installMtrolInitiativeAdapter
+} from "../combat/initiative-foundry-adapter.js";
 
 import {
   registrarHooksPesoMtrol
@@ -30,70 +30,45 @@ import {
   installSpecialAbilityAuthorityHooks
 } from "../combat/special-ability-service.js";
 
-export function registerHooks() {
+import { registerFoundryHookAdapters } from "./hook-dispatcher.js";
+import { actorRuntimeRepository } from "../runtime/runtime-foundation.js";
+import { logger } from "../utils/logger.js";
 
+let actorRuntimeCacheHooksRegistered = false;
+
+function evictActorRuntimeCache(actor, lifecycleReason) {
+  if (!actor) return;
+  void actorRuntimeRepository.evict(actor).catch(error => {
+    logger.warn("RUNTIME_CACHE", "Actor runtime cache eviction failed", {
+      command: "actor-runtime-cache.evict",
+      actorUuid: actor.uuid ?? null,
+      status: "isolated",
+      reasonCode: "ACTOR_RUNTIME_CACHE_EVICTION_FAILED",
+      lifecycleReason,
+      error
+    });
+  });
+}
+
+function registerActorRuntimeCacheLifecycleHooks() {
+  if (actorRuntimeCacheHooksRegistered) return false;
+  actorRuntimeCacheHooksRegistered = true;
+  Hooks.on("deleteActor", actor => evictActorRuntimeCache(actor, "ACTOR_DELETED"));
+  Hooks.on("deleteToken", token => {
+    const linked = token?.actorLink === true || token?.document?.actorLink === true;
+    if (!linked) evictActorRuntimeCache(token?.actor, "SYNTHETIC_ACTOR_DELETED");
+  });
+  return true;
+}
+
+export function registerHooks() {
+  registerFoundryHookAdapters();
+  registerActorRuntimeCacheLifecycleHooks();
   registrarHooksPesoMtrol();
   registerMtrolSequencerHooks();
   registerMtrolAmbientFxHooks();
   registerTradeLifecycleHooks();
   registerMtrolTurnHooks();
   installSpecialAbilityAuthorityHooks();
-
-  // =========================
-  // MTROL - OVERRIDE INICIATIVA
-  // =========================
-
-  const originalRollInitiative =
-    Combat.prototype.rollInitiative;
-
-  Combat.prototype.rollInitiative = async function (
-    ids,
-    options = {}
-  ) {
-    ids = typeof ids === "string" ? [ids] : ids;
-
-    if (!Array.isArray(ids)) {
-      ids = this.combatants
-        .filter(c => c.isOwner)
-        .map(c => c.id);
-    }
-
-    const updates = [];
-
-    for (const id of ids) {
-      const combatant =
-        this.combatants.get(id);
-
-      if (!combatant) continue;
-
-      const actor =
-        combatant.actor;
-
-      if (!actor) continue;
-
-      const resultado =
-        await rollMtrolInitiative(actor);
-
-      if (!resultado) continue;
-
-      updates.push({
-        _id: combatant.id,
-        initiative: resultado.total
-      });
-    }
-
-    if (updates.length) {
-      await this.updateEmbeddedDocuments(
-        "Combatant",
-        updates
-      );
-    }
-
-    await this.update({
-      turn: 0
-    });
-
-    return this;
-  };
-
+  installMtrolInitiativeAdapter();
 }

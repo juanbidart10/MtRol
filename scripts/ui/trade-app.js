@@ -15,12 +15,14 @@ function clampQuantity(value, maximum) {
 }
 
 export class MtrolTradeApp extends ApplicationClass {
-  constructor(sessionId, { onClosed = null, ...options } = {}) {
+  constructor(sessionId, { api, onClosed = null, ...options } = {}) {
     super({
       ...options,
       id: `mtrol-trade-app-${String(sessionId).replace(/[^A-Za-z0-9_-]/g, "-")}`
     });
     this.sessionId = String(sessionId);
+    if (!api) throw new TypeError("MtrolTradeApp requiere la API canónica de Trade.");
+    this.api = api;
     this.onClosed = onClosed;
     this.inspector = null;
     this.busy = false;
@@ -47,10 +49,10 @@ export class MtrolTradeApp extends ApplicationClass {
 
   async _prepareContext(options = {}) {
     const base = await super._prepareContext(options);
-    const session = game.mtrol.trade.getSession(this.sessionId);
+    const session = this.api.getSession(this.sessionId);
     if (!session) return { ...base, unavailable: true };
 
-    const view = await game.mtrol.trade.getMyTradeView(this.sessionId);
+    const view = await this.api.getMyTradeView(this.sessionId);
     return {
       ...base,
       ...buildTradeAppRenderContext({
@@ -84,7 +86,7 @@ export class MtrolTradeApp extends ApplicationClass {
   }
 
   #getSessionAndParticipant() {
-    const session = game.mtrol.trade.getSession(this.sessionId);
+    const session = this.api.getSession(this.sessionId);
     const participantKey = Object.entries(session?.participants ?? {})
       .find(([, participant]) => participant.userId === game.user.id)?.[0];
     if (!session || !participantKey) throw new Error("La sesión local ya no está disponible.");
@@ -98,9 +100,10 @@ export class MtrolTradeApp extends ApplicationClass {
   async #setOwnOffer(transform) {
     const { session, participantKey } = this.#getSessionAndParticipant();
     const entries = transform(this.#ownEntries(session, participantKey));
-    await game.mtrol.trade.setOffer({
+    await this.api.setOffer({
       sessionId: session.id,
       participantKey,
+      revision: session.revision,
       entries
     });
     this.editingConfirmedOffer = false;
@@ -161,12 +164,12 @@ export class MtrolTradeApp extends ApplicationClass {
 
       if (action === "accept") {
         const { session, participantKey } = this.#getSessionAndParticipant();
-        await game.mtrol.trade.acceptSession({ sessionId: session.id, participantKey });
+        await this.api.acceptSession({ sessionId: session.id, participantKey });
       }
 
       if (action === "confirm") {
         const { session, participantKey } = this.#getSessionAndParticipant();
-        await game.mtrol.trade.confirm({
+        await this.api.confirm({
           sessionId: session.id,
           participantKey,
           revision: session.revision
@@ -175,11 +178,11 @@ export class MtrolTradeApp extends ApplicationClass {
 
       if (action === "cancel") {
         const { session, participantKey } = this.#getSessionAndParticipant();
-        await game.mtrol.trade.cancel({ sessionId: session.id, participantKey });
+        await this.api.cancel({ sessionId: session.id, participantKey });
       }
 
       if (action === "inspect") {
-        this.inspector = game.mtrol.trade.inspectOfferItem(
+        this.inspector = this.api.inspectOfferItem(
           this.sessionId,
           button.dataset.itemUuid
         );

@@ -130,7 +130,26 @@
           <div class="mtrol-competencia-grid">
 
             <div class="mtrol-field wide">
-              <label>Tipo de accion</label>
+              <label>Identidad canónica</label>
+              <select name="system.actionIdentity">
+                <option value="">Derivar de categoría</option>
+                {{#each actionIdentityOptions}}
+                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Capabilities</label>
+              <select name="system.capabilities" multiple size="6">
+                {{#each capabilityOptions}}
+                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{value}}</option>
+                {{/each}}
+              </select>
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Comportamiento legacy</label>
               <select name="system.actionType">
                 <option value="attack" {{#if (eq system.actionType "attack")}}selected{{/if}}>Ataque</option>
                 <option value="basicAttack" {{#if (eq system.actionType "basicAttack")}}selected{{/if}}>Ataque basico</option>
@@ -168,6 +187,43 @@
                      name="system.requiresTarget"
                      {{checked system.requiresTarget}} />
             </label>
+
+            <div class="mtrol-field">
+              <label>Dominio ofensivo</label>
+              <select name="system.actionDomain">
+                <option value="">Sin configurar</option>
+                <option value="PHYSICAL" {{#if (eq system.actionDomain "PHYSICAL")}}selected{{/if}}>Físico</option>
+                <option value="MAGICAL" {{#if (eq system.actionDomain "MAGICAL")}}selected{{/if}}>Mágico</option>
+              </select>
+            </div>
+
+            <div class="mtrol-field">
+              <label>Dominio de respuesta</label>
+              <select name="system.responseDomain">
+                <option value="">No aplica</option>
+                <option value="PHYSICAL" {{#if (eq system.responseDomain "PHYSICAL")}}selected{{/if}}>Físico</option>
+                <option value="MAGICAL" {{#if (eq system.responseDomain "MAGICAL")}}selected{{/if}}>Mágico</option>
+              </select>
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Respuestas permitidas</label>
+              <select name="system.allowedResponses" multiple size="3">
+                {{#each allowedResponseOptions}}
+                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{value}}</option>
+                {{/each}}
+              </select>
+            </div>
+
+            <div class="mtrol-field wide">
+              <label>Capability de respuesta preset</label>
+              <select name="system.responseCapability">
+                <option value="">Automática</option>
+                <option value="DEFENSE" {{#if (eq system.responseCapability "DEFENSE")}}selected{{/if}}>DEFENSE</option>
+                <option value="DODGE" {{#if (eq system.responseCapability "DODGE")}}selected{{/if}}>DODGE</option>
+                <option value="COUNTERATTACK" {{#if (eq system.responseCapability "COUNTERATTACK")}}selected{{/if}}>COUNTERATTACK</option>
+              </select>
+            </div>
 
             <label class="mtrol-toggle">
               <span>Requiere oposicion</span>

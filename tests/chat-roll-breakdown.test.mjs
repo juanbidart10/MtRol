@@ -538,7 +538,7 @@ test("mensajes sin dados no reciben un desglose artificial", async () => {
   assert.equal(evaluationCount, beforeEvaluations);
 });
 
-test("system.json conserva la versión 1.2.7", async () => {
+test("system.json conserva la versión declarada de release", async () => {
   const system = JSON.parse(
     await readFile(
       new URL("../system.json", import.meta.url),
@@ -546,7 +546,7 @@ test("system.json conserva la versión 1.2.7", async () => {
     )
   );
 
-  assert.equal(system.version, "1.2.7");
+  assert.equal(system.version, "1.2.9");
 });
 
 test.after(() => {

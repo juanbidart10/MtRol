@@ -1,5 +1,13 @@
 const MOVEMENT_KEYS = Object.freeze(["x", "y", "elevation"]);
-const LOCKED_STATES = new Set(["NEGOTIATING", "READY", "EXECUTING"]);
+const LOCKED_STATES = new Set(["NEGOTIATING", "READY", "EXECUTING", "PAUSED", "RECOVERY_REQUIRED"]);
+let tradeApi = null;
+
+export function configureTradeProximityApi(api) {
+  if (!api || typeof api.listSessions !== "function") {
+    throw new TypeError("Trade Proximity requiere la API canónica de Trade.");
+  }
+  tradeApi = api;
+}
 
 function number(value, fallback = 0) {
   const parsed = Number(value);
@@ -158,7 +166,8 @@ export const tradeMovementLocks = new TradeMovementLockService();
 
 export function findClientTradeLock(tokenUuid) {
   const uuid = String(tokenUuid ?? "");
-  for (const session of game.mtrol?.trade?.listSessions?.() ?? []) {
+  if (!tradeApi) throw new Error("Trade Proximity no fue configurado durante setup.");
+  for (const session of tradeApi.listSessions()) {
     if (!LOCKED_STATES.has(session.state)) continue;
     const participant = Object.values(session.participants ?? {}).find(candidate =>
       candidate.tokenUuid === uuid

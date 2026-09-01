@@ -62,10 +62,6 @@ import {
 } from "../../items/consumable-service.js";
 
 import {
-  buildCompetenceLevelDisplay
-} from "../../items/competencia-presentation.js";
-
-import {
   requestTradeFromTarget
 } from "../../trade/trade-runtime.js";
 
@@ -73,8 +69,16 @@ import {
   attachDefenseRollForActor,
   createPendingActionFromCompetencia,
   createReadyDamageActionFromCompetencia,
+  declareOppositionResponse,
   getActionDefinitionFromItem
 } from "../../actions/action-engine.js";
+
+import {
+  COMPETENCE_MODE_IDS,
+  getCompetenceExecutionModes,
+  prepareCompetenceModeIntent,
+  selectCompetenceExecutionMode
+} from "../../actions/competence-mode-service.js";
 
 import {
   executeConfiguredCompetenciaDamage
@@ -84,10 +88,7 @@ import {
   buildCombatLibraryViewModel
 } from "../../combat/combat-library-view-model.js";
 
-import {
-  getAbilityRoleLabel,
-  getItemAbilityDamageConfig
-} from "../../actions/ability-config.js";
+import { getItemAbilityDamageConfig } from "../../actions/ability-config.js";
 
 import {
   calcularCargaActor
@@ -109,10 +110,6 @@ import {
 import {
   selectDharmaSpendForRoll
 } from "../../ui/dharma-selector.js";
-
-import {
-  formulaHasDharmaEligibleDice
-} from "../../rolls/dharma-engine.js";
 
 import {
   mtrolPrepararRollData
@@ -149,6 +146,7 @@ import {
   completeResolvedTurnAction,
   finalizeResolvedCompetenciaUse,
   getActionGuard,
+  getAttributeFollowUpTargetGuard,
   getItemCooldownStatus,
   getPreparation,
   getPrepareGuard,
@@ -180,6 +178,49 @@ import {
   selectOrbContextualMode
 } from "../../ui/special-ability-mode-selector.js";
 
+import {
+  buildInternalItemDragData,
+  classifyItemDropData,
+  MTROL_INTERNAL_ITEM_DRAG_SOURCE
+} from "./personaje-item-drag-policy.js";
+
+import {
+  calcularPorcentajeVital,
+  esHabilidadBarraCombate,
+  formulaCompetenciaPorNivel,
+  getCombatBanner,
+  getSafeImageSrc,
+  isValidImageSrc,
+  prepareExecutableItemData,
+  prepareItemImageData,
+  prepareProgressionEvaluationForSheet,
+  toNumber
+} from "./personaje-sheet-view-model.js";
+
+import {
+  createCombatAbilityData,
+  createCompetenceData,
+  createObjectData,
+  createSheetItem,
+  deleteSheetItem,
+  importDroppedItem,
+  setCombatBarEquipped
+} from "./personaje-inventory-controller.js";
+
+import {
+  setCompetenceImage,
+  setPersonajeFullBodyImage
+} from "./personaje-image-controller.js";
+
+import { adjustCompetenceLevel } from "../../progression/competence-level-service.js";
+import { logger } from "../../utils/logger.js";
+
+export {
+  buildInternalItemDragData,
+  classifyItemDropData,
+  MTROL_INTERNAL_ITEM_DRAG_SOURCE
+} from "./personaje-item-drag-policy.js";
+
 const { ActorSheet } = foundry.appv1.sheets;
 
 const MTROL_FALLBACK_ACTOR_IMG = "icons/svg/mystery-man.svg";
@@ -189,66 +230,6 @@ const MTROL_PERSONAJE_MIN_WIDTH = 480;
 const MTROL_PERSONAJE_MIN_HEIGHT = 520;
 const MTROL_PERSONAJE_TOP_FALLBACK = 40;
 const MTROL_PERSONAJE_VIEWPORT_GAP = 8;
-export const MTROL_INTERNAL_ITEM_DRAG_SOURCE = "mtrol-personaje-sheet";
-
-export function buildInternalItemDragData(actor, item, slotOrigin = "") {
-  return {
-    type: "Item",
-    uuid: item?.uuid ?? `${actor?.uuid ?? `Actor.${actor?.id}`}.Item.${item?.id}`,
-    actorId: actor?.id ?? "",
-    itemId: item?.id ?? "",
-    mtrolInternal: {
-      source: MTROL_INTERNAL_ITEM_DRAG_SOURCE,
-      actorId: actor?.id ?? "",
-      itemId: item?.id ?? "",
-      slotOrigin: String(slotOrigin ?? "")
-    }
-  };
-}
-
-export function classifyItemDropData(actor, data) {
-  const marker = data?.mtrolInternal;
-  const isMarkedInternal = marker?.source === MTROL_INTERNAL_ITEM_DRAG_SOURCE;
-  const actorId = String(marker?.actorId ?? data?.actorId ?? "").trim();
-  const itemId = String(marker?.itemId ?? data?.itemId ?? "").trim();
-  const uuid = String(data?.uuid ?? "").trim();
-  const actorItems = Array.from(actor?.items ?? []);
-  const uuidItem = uuid
-    ? actorItems.find(item => String(item?.uuid ?? "") === uuid) ?? null
-    : null;
-  const idItem = itemId
-    ? actor?.items?.get?.(itemId) ?? actorItems.find(item => item?.id === itemId) ?? null
-    : null;
-  const claimsCurrentActor = actorId === actor?.id || (
-    actor?.uuid && uuid.startsWith(`${actor.uuid}.Item.`)
-  );
-
-  if (isMarkedInternal) {
-    if (actorId !== actor?.id || !itemId || !idItem) {
-      return { kind: "invalid-internal", item: null };
-    }
-
-    if (uuid && String(idItem.uuid ?? "") !== uuid) {
-      return { kind: "invalid-internal", item: null };
-    }
-
-    return { kind: "internal", item: idItem };
-  }
-
-  if (uuidItem) return { kind: "internal", item: uuidItem };
-
-  if (claimsCurrentActor) {
-    if (idItem && uuid && String(idItem.uuid ?? "") !== uuid) {
-      return { kind: "invalid-internal", item: null };
-    }
-
-    return idItem
-      ? { kind: "internal", item: idItem }
-      : { kind: "invalid-internal", item: null };
-  }
-
-  return { kind: "external", item: null };
-}
 const MTROL_COMBAT_BAR_GM_WARNING =
   "Solo un GM puede modificar la Barra de Combate.";
 const MTROL_CLASS_RESOURCE_GM_WARNING =
@@ -260,201 +241,6 @@ const MTROL_CLASS_RESOURCE_CONFIG_KEYS = new Set([
   "mpModifier",
   "mpModifierLabel"
 ]);
-const MTROL_COMBAT_BAR_CATEGORIES = new Set([
-  "basico",
-  "combate",
-  "hechizo",
-  "contraataque"
-]);
-
-const MTROL_PROGRESSION_REQUIREMENT_VISUALS = Object.freeze({
-  mvp: Object.freeze({ label: "MVP", icon: "fa-trophy", description: "Reúne los puntos MVP exigidos para este ascenso." }),
-  exp: Object.freeze({ label: "EXPERIENCIA", icon: "fa-star", description: "Alcanza la experiencia total requerida para el siguiente nivel." }),
-  missionsCompleted: Object.freeze({ label: "MISIÓN COMPLETADA", icon: "fa-scroll", description: "Completa la cantidad de misiones requerida." }),
-  dungeonsCompleted: Object.freeze({ label: "DUNGEON COMPLETADO", icon: "fa-dungeon", description: "Supera la cantidad de dungeons requerida." }),
-  attributesAtFive: Object.freeze({ label: "ATRIBUTOS EN 5", icon: "fa-chart-bar", description: "Eleva suficientes atributos hasta nivel 5." }),
-  competencesAtLeastThree: Object.freeze({ label: "COMPETENCIA NIVEL 3", icon: "fa-book-open", description: "Desarrolla una competencia hasta nivel 3 o superior." }),
-  competencesAtFive: Object.freeze({ label: "COMPETENCIAS EN 5", icon: "fa-book-open", description: "Eleva suficientes competencias hasta nivel 5." }),
-  meritCredits: Object.freeze({ label: "CRÉDITOS POR MÉRITO", icon: "fa-coins", description: "Obtén los créditos de mérito requeridos." }),
-  defeatedLevel5Enemy: Object.freeze({ label: "ENEMIGO NIVEL 5 DERROTADO", icon: "fa-skull-crossbones", description: "Derrota a un enemigo de nivel 5." }),
-  dmApproval: Object.freeze({ label: "APROBACIÓN DM", icon: "fa-shield-alt", description: "Obtén la aprobación del Director de Juego." })
-});
-
-function formatProgressionVisualNumber(value) {
-  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(value) || 0);
-}
-
-function prepareProgressionEvaluationForSheet(evaluation, selectedKey = null) {
-  const requirements = evaluation.requirements.map(requirement => {
-      const visual = MTROL_PROGRESSION_REQUIREMENT_VISUALS[requirement.key] ?? {
-        label: String(requirement.label ?? requirement.key).toUpperCase(),
-        icon: "fa-circle",
-        description: "Completa este requisito para avanzar."
-      };
-      const isBoolean = typeof requirement.required === "boolean";
-
-      return {
-        ...requirement,
-        label: visual.label,
-        icon: visual.icon,
-        description: visual.description,
-        valueText: isBoolean
-          ? "—"
-          : `${formatProgressionVisualNumber(requirement.current)} / ${formatProgressionVisualNumber(requirement.required)}`,
-        stateLabel: requirement.met ? "COMPLETADO" : "PENDIENTE"
-      };
-    });
-  const selectedRequirement = requirements.find(requirement => requirement.key === selectedKey)
-    ?? requirements[0]
-    ?? null;
-
-  return {
-    ...evaluation,
-    requirements: requirements.map(requirement => ({
-      ...requirement,
-      selected: requirement.key === selectedRequirement?.key
-    })),
-    selectedRequirement
-  };
-}
-
-
-function normalizarNombreBanner(nombre) {
-  return String(nombre ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function getCombatBanner(item) {
-  const img =
-    item?.img;
-
-  if (isValidImageSrc(img) && !isDefaultImageSrc(img)) {
-    return img.trim();
-  }
-
-  console.warn("MTROL | Habilidad sin imagen personalizada para card de combate. Usando fallback.", {
-    item: item?.name,
-    img,
-    fallback: MTROL_FALLBACK_ITEM_IMG
-  });
-
-  return MTROL_FALLBACK_ITEM_IMG;
-}
-
-function isValidImageSrc(src) {
-  if (typeof src !== "string") return false;
-
-  const value = src.trim();
-  if (!value) return false;
-
-  return !["null", "undefined", "[object object]"].includes(value.toLowerCase());
-}
-
-function isDefaultImageSrc(src) {
-  if (!isValidImageSrc(src)) return false;
-
-  const value =
-    src.trim().toLowerCase();
-
-  return [
-    "icons/svg/item-bag.svg",
-    "icons/svg/mystery-man.svg"
-  ].includes(value);
-}
-
-function getSafeImageSrc(src, fallback, context = "imagen") {
-  if (isValidImageSrc(src)) return src.trim();
-
-  console.warn(`MTROL | Imagen invalida en ${context}. Usando fallback.`, {
-    src,
-    fallback
-  });
-
-  return fallback;
-}
-
-function prepareItemImageData(item, fallback = MTROL_FALLBACK_ITEM_IMG) {
-  return {
-    id: item.id,
-    name: item.name,
-    type: item.type,
-    img: item.img,
-    imgSeguro: getSafeImageSrc(item.img, fallback, `item ${item.name}`),
-    system: item.system
-  };
-}
-
-function formulaCompetenciaPorNivel(nivel) {
-  switch (Number(nivel)) {
-    case 1: return "1d4 + 1";
-    case 2: return "1d6 + 2";
-    case 3: return "1d8 + 3";
-    case 4: return "1d10 + 4";
-    case 5: return "1d12 + 5";
-    default: return "1d4 + 1";
-  }
-}
-
-function prepareExecutableItemData(item, availableDharma, actor, fallback = MTROL_FALLBACK_ITEM_IMG) {
-  const formula = getCompetenciaRollFormula(item, {
-    formulaFallback: formulaCompetenciaPorNivel(item.system?.nivel)
-  });
-  const eligible = formulaHasDharmaEligibleDice(formula);
-  const hasDharma =
-    Number.isInteger(availableDharma) &&
-    availableDharma >= 1 &&
-    availableDharma <= 5;
-  const mpCost = calcularConsumoMP(actor, item);
-  const levelDisplay = buildCompetenceLevelDisplay(item.system?.nivel);
-  const cooldownStatus = getItemCooldownStatus(item);
-  const actionGuard = getActionGuard(actor, item);
-  const assignedSpecial = findSpecialAbilitySlotForItem(actor, item);
-  const specialRouteAllowed = !assignedSpecial || (
-    assignedSpecial.unlocked && assignedSpecial.handler !== MTROL_ORB_CONTEXTUAL_HANDLER
-  );
-
-  return {
-    ...prepareItemImageData(item, fallback),
-    mtrolIsProgressionCompetence: isProgressionCompetence(item),
-    mtrolLevel: levelDisplay.value,
-    mtrolLevelLabel: levelDisplay.label,
-    mtrolLevelMarkers: levelDisplay.markers,
-    mtrolRollFormula: formula ?? "",
-    mtrolMpCost: mpCost.costoTotal,
-    mtrolMpStackable: mpCost.stackea === true,
-    mtrolMpStack: mpCost.stackAnterior,
-    mtrolRoleLabel: getAbilityRoleLabel(item.system?.rol),
-    mtrolCooldownAvailable: cooldownStatus.available,
-    mtrolCooldownAvailableAtRound: cooldownStatus.availableAtRound,
-    mtrolCooldownRoundsRemaining: cooldownStatus.roundsRemaining,
-    mtrolActionAvailable: actionGuard.allowed && specialRouteAllowed && cooldownStatus.available,
-    mtrolActionUnavailableReason: !cooldownStatus.available
-      ? "En enfriamiento"
-      : actionGuard.reason ?? (
-        assignedSpecial?.locked
-        ? `${assignedSpecial.label} está bloqueada.`
-        : assignedSpecial?.handler === MTROL_ORB_CONTEXTUAL_HANDLER
-          ? "Usá esta habilidad desde su slot especial."
-          : "Acción no disponible."
-      ),
-    mtrolDharmaEligible: eligible,
-    mtrolDharmaEnabled: hasDharma && eligible,
-    mtrolDharmaTitle: !hasDharma
-      ? "No tienes Dharma disponible."
-      : eligible
-        ? `Gastar Dharma (${availableDharma} disponible${availableDharma === 1 ? "" : "s"})`
-        : "Esta acción no contiene dados iniciales elegibles."
-  };
-}
-
-function toNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
 function getPersonajeInitialPosition() {
   const viewportHeight = Math.max(
     Number(globalThis.window?.innerHeight ?? 0),
@@ -478,37 +264,6 @@ function getPersonajeInitialPosition() {
       viewportHeight - top - MTROL_PERSONAJE_VIEWPORT_GAP
     )
   };
-}
-
-function calcularPorcentajeVital(vital) {
-  const value = toNumber(vital?.value, 0);
-  const max = toNumber(vital?.max, 0);
-
-  if (max <= 0) return 0;
-
-  return Math.clamp((value / max) * 100, 0, 100);
-}
-
-function normalizarNombreCompetencia(nombre) {
-  return String(nombre ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "");
-}
-
-function esCompetenciaMeditar(item) {
-  return normalizarNombreCompetencia(item?.name) === "meditar";
-}
-
-function esHabilidadBarraCombate(item) {
-  if (item?.type !== "competencia") return false;
-
-  return (
-    MTROL_COMBAT_BAR_CATEGORIES.has(item.system?.categoria) ||
-    item.system?.tipo === "habilidad-combate"
-  );
 }
 
 export class PersonajeSheet extends ActorSheet {
@@ -975,36 +730,8 @@ export class PersonajeSheet extends ActorSheet {
       return false;
     }
 
-    const item = await Item.implementation.fromDropData(data);
-
-    if (!item) {
-      ui.notifications.warn("No se pudo leer el objeto arrastrado.");
-      return false;
-    }
-
-    const itemData = item.toObject();
-
-    if (itemData.type === "item") {
-      itemData.type = "objeto";
-    }
-
-    itemData.system = {
-      tipoObjeto: itemData.system?.tipoObjeto ?? "general",
-      cantidad: itemData.system?.cantidad ?? 1,
-      material: itemData.system?.material ?? "",
-      peso: getItemUnitWeight(itemData),
-      equipable: itemData.system?.equipable ?? false,
-      equipado: false,
-      slot: itemData.system?.slot ?? "",
-      defensa: itemData.system?.defensa ?? 0,
-      defensaBase: itemData.system?.defensaBase ?? itemData.system?.defensa ?? 0,
-      danio: itemData.system?.danio ?? "",
-      valor: itemData.system?.valor ?? 0,
-      descripcion: itemData.system?.descripcion ?? itemData.system?.description ?? ""
-    };
-
-    await this.actor.createEmbeddedDocuments("Item", [itemData]);
-    ui.notifications.info(`Objeto agregado: ${item.name}`);
+    const result = await importDroppedItem(this.actor, data);
+    ui.notifications.info(`Objeto agregado: ${result.sourceName}`);
     this.render(true);
     return true;
   }
@@ -1017,7 +744,7 @@ export class PersonajeSheet extends ActorSheet {
     try {
       data = JSON.parse(event.dataTransfer.getData("text/plain"));
     } catch (err) {
-      console.error("MtRol | Drop inválido", err);
+      logger.warn("SHEET", "Drop inválido", { error: err.message });
       this._clearInternalDragFeedback();
       return false;
     }
@@ -1336,7 +1063,7 @@ export class PersonajeSheet extends ActorSheet {
       });
       return true;
     } catch (error) {
-      console.error("MTROL | No se pudo actualizar la configuración de recursos.", error);
+      logger.error("SHEET", "No se pudo actualizar la configuración de recursos", { error: error.message });
       ui.notifications.error(error?.message ?? "No se pudo actualizar la configuración de recursos.");
       return false;
     }
@@ -1369,7 +1096,7 @@ export class PersonajeSheet extends ActorSheet {
       });
       return true;
     } catch (error) {
-      console.error("MTROL | No se pudieron actualizar los modificadores de recursos.", error);
+      logger.error("SHEET", "No se pudieron actualizar los modificadores de recursos", { error: error.message });
       ui.notifications.error(error?.message ?? "No se pudieron actualizar los modificadores de recursos.");
       return false;
     }
@@ -1427,7 +1154,7 @@ export class PersonajeSheet extends ActorSheet {
 
         if (img.src?.endsWith(fallback)) return;
 
-        console.warn("MTROL | Imagen fallida en PersonajeSheet. Usando fallback.", {
+        logger.warn("SHEET", "Imagen fallida; se usa fallback", {
           actor: this.actor?.name,
           alt: img.alt,
           src: img.getAttribute("src"),
@@ -1447,7 +1174,7 @@ export class PersonajeSheet extends ActorSheet {
 
         if (img.src?.endsWith(fallback)) return;
 
-        console.warn("MTROL | Imagen con dimensiones invalidas en PersonajeSheet. Usando fallback.", {
+        logger.warn("SHEET", "Imagen con dimensiones inválidas; se usa fallback", {
           actor: this.actor?.name,
           alt: img.alt,
           src: img.getAttribute("src"),
@@ -1567,7 +1294,7 @@ export class PersonajeSheet extends ActorSheet {
 
       this._updatePreparedDharmaState(actionKey, context);
     } catch (error) {
-      console.warn("MTROL | No se pudo preparar Dharma Burn.", error);
+      logger.warn("SHEET", "No se pudo preparar Dharma Burn", { error: error.message });
       ui.notifications.warn(
         error.message ?? "No se pudo preparar Dharma Burn."
       );
@@ -1629,7 +1356,7 @@ export class PersonajeSheet extends ActorSheet {
       this.render(false);
       return true;
     } catch (error) {
-      console.error("MTROL | No se pudo usar el consumible:", error);
+      logger.error("SHEET", "No se pudo usar el consumible", { error: error.message });
       ui.notifications.error(error.message ?? "No se pudo usar el consumible.");
       return false;
     } finally {
@@ -1730,11 +1457,12 @@ export class PersonajeSheet extends ActorSheet {
         if (!selectedPath) return;
 
         try {
-          await this.actor.update({
-            "system.identidad.fullBodyImage": selectedPath
-          });
+          await setPersonajeFullBodyImage(this.actor, selectedPath);
         } catch (error) {
-          console.error("MTROL | No se pudo actualizar la imagen corporal.", error);
+          logger.error("SHEET", "No se pudo actualizar la imagen corporal", {
+            actorUuid: this.actor.uuid,
+            error: error.message
+          });
           ui.notifications.error("No se pudo actualizar la imagen corporal.");
         }
       },
@@ -1769,9 +1497,13 @@ export class PersonajeSheet extends ActorSheet {
         if (!selectedPath) return;
 
         try {
-          await item.update({ img: selectedPath });
+          await setCompetenceImage(item, selectedPath);
         } catch (error) {
-          console.error("MTROL | No se pudo actualizar la imagen de la competencia.", error);
+          logger.error("SHEET", "No se pudo actualizar la imagen de la competencia", {
+            actorUuid: this.actor.uuid,
+            itemUuid: item.uuid,
+            error: error.message
+          });
           ui.notifications.error("No se pudo actualizar la imagen de la competencia.");
         }
       },
@@ -1794,9 +1526,7 @@ export class PersonajeSheet extends ActorSheet {
       return false;
     }
 
-    await this.actor.update({
-      "system.identidad.fullBodyImage": ""
-    });
+    await setPersonajeFullBodyImage(this.actor, "");
     return true;
   }
 
@@ -2037,7 +1767,7 @@ export class PersonajeSheet extends ActorSheet {
     try {
       await restaurarAcumuladoresDia(this.actor);
     } catch (error) {
-      console.error("MTROL | No se pudo restaurar el día.", error);
+      logger.error("SHEET", "No se pudo restaurar el día", { error: error.message });
       ui.notifications.error(error.message ?? "No se pudo restaurar el día.");
       return;
     } finally {
@@ -2052,7 +1782,7 @@ export class PersonajeSheet extends ActorSheet {
         content: `<strong>🌙 ${this.actor.name}</strong> ha restaurado el día. Los costes acumulados de MP fueron reiniciados.`
       });
     } catch (error) {
-      console.warn("MTROL | El día fue restaurado, pero no se pudo crear el mensaje de chat.", error);
+      logger.warn("SHEET", "Día restaurado sin mensaje de chat", { error: error.message });
     }
   }
 
@@ -2123,6 +1853,7 @@ export class PersonajeSheet extends ActorSheet {
     dharmaSpend = null
   } = {}) {
 
+    const movementAttributes = new Set(["destreza", "fuerza", "aura", "suerte"]);
     const turnGuard = getActionGuard(this.actor);
     if (!turnGuard.allowed) {
       ui.notifications.warn(turnGuard.reason);
@@ -2162,10 +1893,12 @@ export class PersonajeSheet extends ActorSheet {
 
     if (!result) return null;
 
-    try {
-      await grantMovementFromResolvedRoll(this.actor, result);
-    } catch (error) {
-      ui.notifications.warn(error.message ?? "No se pudo otorgar el movimiento de la tirada.");
+    if (movementAttributes.has(attr)) {
+      try {
+        await grantMovementFromResolvedRoll(this.actor, result);
+      } catch (error) {
+        ui.notifications.warn(error.message ?? "No se pudo otorgar el movimiento de la tirada.");
+      }
     }
 
     await this._playAtributoFX(attr, fxData);
@@ -2175,12 +1908,12 @@ export class PersonajeSheet extends ActorSheet {
   async _playAtributoFX(attr, fxData) {
     try {
       if (!game.modules.get("sequencer")?.active) {
-        console.warn("MtRol | Sequencer no está activo. No se puede ejecutar FX.");
+        logger.warn("SHEET", "Sequencer no está activo; no se ejecuta FX");
         return;
       }
 
       if (!fxData?.file) {
-        console.warn(`MtRol | No hay FX configurado para el atributo: ${attr}`);
+        logger.warn("SHEET", "No hay FX configurado para el atributo", { attribute: attr });
         return;
       }
 
@@ -2202,7 +1935,7 @@ export class PersonajeSheet extends ActorSheet {
         .play();
 
     } catch (error) {
-      console.error("MtRol | Error ejecutando FX de atributo:", error);
+      logger.error("SHEET", "Error ejecutando FX de atributo", { attribute: attr, error: error.message });
     }
   }
 
@@ -2214,33 +1947,7 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    await this.actor.createEmbeddedDocuments("Item", [{
-      name: "Nueva competencia",
-      type: "competencia",
-      system: {
-        nivel: 1,
-        categoria: "competencia",
-        actionType: "utility",
-        effect: "none",
-        requiresTarget: false,
-        requiresOpposition: false,
-        oppositionType: "free",
-        effectDuration: 1,
-        effectIntensity: 0,
-        banner: "",
-        damageResolution: "immediate",
-        damageMode: "automatic",
-        damageCostType: "none",
-        cooldown: 0,
-        fx: {
-          visual: "",
-          sonido: "",
-          duracion: 5000,
-          escala: 1
-        },
-        descripcion: ""
-      }
-    }]);
+    await createSheetItem(this.actor, createCompetenceData());
 
     this.render(true);
   }
@@ -2263,17 +1970,12 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    if (!isProgressionCompetence(item)) {
-      ui.notifications.warn("Este Item no es una competencia de progresión.");
+    try {
+      await adjustCompetenceLevel(item, 1);
+    } catch (error) {
+      ui.notifications.warn(error.message);
       return false;
     }
-
-    const nivelActual = Number(item.system.nivel || 1);
-    const nivelNuevo = Math.min(5, nivelActual + 1);
-
-    await item.update({
-      "system.nivel": nivelNuevo
-    });
 
     this.render(true);
   }
@@ -2296,17 +1998,12 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    if (!isProgressionCompetence(item)) {
-      ui.notifications.warn("Este Item no es una competencia de progresión.");
+    try {
+      await adjustCompetenceLevel(item, -1);
+    } catch (error) {
+      ui.notifications.warn(error.message);
       return false;
     }
-
-    const nivelActual = Number(item.system.nivel || 1);
-    const nivelNuevo = Math.max(1, nivelActual - 1);
-
-    await item.update({
-      "system.nivel": nivelNuevo
-    });
 
     this.render(true);
   }
@@ -2403,11 +2100,12 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     if (item.type !== "competencia") {
-      console.warn("MtRol | El botón de competencia no pertenece a una competencia:", item);
+      logger.warn("SHEET", "El control no pertenece a una competencia", { itemId: item?.id ?? null });
       return;
     }
 
     const actor = this.actor;
+    const actionDefinition = getActionDefinitionFromItem(item);
 
     if (!specialContext) {
       const assignedSpecial = findSpecialAbilitySlotForItem(actor, item);
@@ -2427,6 +2125,24 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
+    const executionModes = getCompetenceExecutionModes(item);
+    if (executionModes.length > 0 && !actionMode) {
+      const selectedMode = await selectCompetenceExecutionMode(item);
+      if (!selectedMode) return false;
+      const executionModeIntent = await prepareCompetenceModeIntent(actor, item, selectedMode);
+      actionMode = selectedMode.modeId;
+      specialContext = { ...(specialContext ?? {}), executionModeIntent };
+    }
+
+    if (
+      actionDefinition.capabilities?.includes("DODGE") &&
+      actionDefinition.capabilities?.includes("REACTION") &&
+      !turnGuard.reactive
+    ) {
+      ui.notifications.warn(`${item.name} sólo puede usarse para responder una oposición activa.`);
+      return;
+    }
+
     const nivel =
       Number(item.system?.nivel ?? 1);
 
@@ -2437,6 +2153,22 @@ export class PersonajeSheet extends ActorSheet {
       targetToken = turnGuard.opposition?.sourceTokenUuid
         ? await fromUuid(turnGuard.opposition.sourceTokenUuid)
         : null;
+      const declaration = await declareOppositionResponse({
+        pendingActionId: turnGuard.opposition?.id ?? null,
+        actor,
+        item,
+        selectedCapability: item.system?.responseCapability ?? null,
+        mode: item.system?.responseMode ?? null
+      });
+      if (!declaration) return false;
+    }
+
+    if (turnGuard.attributeFollowUp) {
+      const followUpTargetGuard = getAttributeFollowUpTargetGuard(actor, targetToken);
+      if (!followUpTargetGuard.allowed) {
+        ui.notifications.warn(followUpTargetGuard.reason);
+        return false;
+      }
     }
 
     const control = this._getDharmaActionControl(event);
@@ -2487,14 +2219,11 @@ export class PersonajeSheet extends ActorSheet {
         defenderRoll: resultadoCompetencia,
         pendingActionId: turnGuard.opposition?.id ?? null,
         specialContext,
-        consumeResponse: true
+        consumeResponse: true,
+        selectedCapability: item.system?.responseCapability ?? null,
+        mode: item.system?.responseMode ?? null
       });
 
-      if (!oppositionResult) {
-        ui.notifications.warn(
-          `${item.name} no pudo asociarse a la oposición activa para ${actor.name}.`
-        );
-      }
       return oppositionResult;
     }
 
@@ -2517,33 +2246,39 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
+    const isMovementAction = actionMode === "movement" ||
+      kindOverride === "movement" ||
+      item.system?.actionType === "movement";
+
     if (resultadoCompetencia?.pifia) {
       await this._finalizarConsumoCompetencia({
         actor,
         item,
         consumoMP,
         resultadoCompetencia,
-        specialContext
+        specialContext,
+        targetActor,
+        targetToken
       });
 
-      await this._completarTurnoTrasAccion({ actor, item });
+      if (!isMovementAction) await this._completarTurnoTrasAccion({ actor, item });
 
       return;
     }
 
-    if (actionMode === "movement") {
+    if (isMovementAction) {
       await this._finalizarConsumoCompetencia({
         actor,
         item,
         consumoMP,
         resultadoCompetencia,
-        specialContext
+        specialContext,
+        targetActor,
+        targetToken
       });
       return;
     }
 
-    const actionDefinition =
-      getActionDefinitionFromItem(item);
     const damageConfig =
       getItemAbilityDamageConfig(item, {
         requiresOpposition: actionDefinition.requiresOpposition
@@ -2704,20 +2439,25 @@ export class PersonajeSheet extends ActorSheet {
     resultadoCompetencia,
     specialContext = null,
     pendingResolutionId = null,
-    pendingResolutionIds = []
+    pendingResolutionIds = [],
+    targetActor = null,
+    targetToken = null
   } = {}) {
     try {
       await finalizeResolvedCompetenciaUse(actor, item, resultadoCompetencia, {
         specialContext,
         pendingResolutionId,
-        pendingResolutionIds
+        pendingResolutionIds,
+        targetActorUuid: targetActor?.uuid ?? null,
+        targetTokenUuid: targetToken?.document?.uuid ?? targetToken?.uuid ?? null
       });
     } catch (error) {
       ui.notifications.warn(error.message ?? "No se pudo registrar el uso en el turno.");
       throw error;
     }
 
-    if (!esCompetenciaMeditar(item)) {
+    const executionMode = specialContext?.executionModeIntent ?? null;
+    if (!executionMode) {
       await aplicarConsumoMP(
         actor,
         consumoMP,
@@ -2743,7 +2483,7 @@ export class PersonajeSheet extends ActorSheet {
         "MTROL | Meditar no pudo determinar el coste real de MP. No se aplicó consumo ni restauración."
       );
 
-      console.warn("MTROL | Meditar sin coste aplicable", {
+      logger.warn("SHEET", "Meditar sin coste aplicable", {
         actor: actor?.name,
         item: item?.name,
         consumoMP
@@ -2804,6 +2544,20 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
+    if (executionMode.modeId === COMPETENCE_MODE_IDS.ASTRAL_PROJECTION) {
+      const mensaje = "La concentración tiene éxito: entra narrativamente al plano astral.";
+      ui.notifications.info(mensaje);
+      await ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        content: `<div class="mtrol-chat-card mtrol-chat-success"><h2>${mensaje}</h2><p>No genera estado mecánico.</p></div>`
+      });
+      return;
+    }
+
+    if (executionMode.modeId !== COMPETENCE_MODE_IDS.RECOVER_MP) {
+      throw new Error(`Modo de competencia no soportado: ${executionMode.modeId}`);
+    }
+
     const restauracionAplicada = await restaurarMPMeditacion(
       actor,
       consumoAplicado,
@@ -2852,43 +2606,7 @@ export class PersonajeSheet extends ActorSheet {
 
     if (!this._puedeAdministrarBarraCombate()) return false;
 
-    await this.actor.createEmbeddedDocuments("Item", [{
-      name: "Nueva habilidad de combate",
-      type: "competencia",
-      system: {
-        nivel: 1,
-        categoria: "combate",
-        actionType: "combatSkill",
-        effect: "none",
-        requiresTarget: false,
-        requiresOpposition: false,
-        oppositionType: "free",
-        effectDuration: 1,
-        effectIntensity: 0,
-        equipadaCombate: false,
-        formula: "",
-        danio: "",
-        atributo: "",
-        tipo: "habilidad-combate",
-        usaDanioLocalizado: false,
-        ejecutaDanio: true,
-        damageResolution: "immediate",
-        damageMode: "automatic",
-        damageCostType: "none",
-        banner: "",
-        cooldown: 0,
-        fx: {
-          visual: "",
-          autocast: "",
-          proyectil: "",
-          target: "",
-          sonido: "",
-          duracion: 5000,
-          escala: 1
-        },
-        descripcion: ""
-      }
-    }]);
+    await createSheetItem(this.actor, createCombatAbilityData());
 
     this.render(true);
   }
@@ -2901,9 +2619,7 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
-    await item.update({
-      "system.equipadaCombate": true
-    });
+    await setCombatBarEquipped(item, true);
 
     this.render(true);
   }
@@ -2917,9 +2633,7 @@ export class PersonajeSheet extends ActorSheet {
     const item = this._getItemFromEvent(event);
     if (!item) return;
 
-    await item.update({
-      "system.equipadaCombate": false
-    });
+    await setCombatBarEquipped(item, false);
 
     this.render(true);
   }
@@ -2932,24 +2646,7 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    await this.actor.createEmbeddedDocuments("Item", [{
-      name: "Nuevo objeto",
-      type: "objeto",
-      system: {
-        tipoObjeto: "general",
-        cantidad: 1,
-        material: "",
-        peso: 1,
-        equipable: false,
-        equipado: false,
-        slot: "",
-        defensa: 0,
-        defensaBase: 0,
-        danio: "",
-        valor: 0,
-        descripcion: ""
-      }
-    }]);
+    await createSheetItem(this.actor, createObjectData());
 
     this.render(true);
   }
@@ -3015,12 +2712,8 @@ export class PersonajeSheet extends ActorSheet {
       return false;
     }
 
-    if (isMtrolObject(item)) {
-      const unequipped = await desequiparObjeto(this.actor, item);
-      if (!unequipped) return;
-    }
-
-    await item.delete();
+    const result = await deleteSheetItem(this.actor, item);
+    if (!result.deleted) return false;
 
     this.render(true);
   }
@@ -3063,7 +2756,7 @@ export class PersonajeSheet extends ActorSheet {
       event.currentTarget.dataset?.itemId;
 
     if (!itemId) {
-      console.warn("MtRol | No se encontró data-item-id en el evento.", event);
+      logger.warn("SHEET", "Evento sin data-item-id");
       return null;
     }
 
@@ -3071,7 +2764,7 @@ export class PersonajeSheet extends ActorSheet {
       this.actor.items.get(itemId);
 
     if (!item) {
-      console.warn(`MtRol | No se encontró item con id: ${itemId}`);
+      logger.warn("SHEET", "Item del evento no encontrado", { itemId });
       return null;
     }
 

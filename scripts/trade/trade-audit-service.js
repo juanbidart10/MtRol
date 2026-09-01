@@ -1,11 +1,13 @@
+import { logger } from "../utils/logger.js";
+
 const AUDIT_JOURNAL_NAME = "MTROL — Historial de Comercio";
 const AUDIT_FLAG_SCOPE = "mtrol";
 const AUDIT_FLAG_KEY = "tradeAuditHistory";
-export const TRADE_AUDIT_RETENTION = 500;
+export const TRADE_AUDIT_RETENTION = null;
 
 const RELEVANT_EVENTS = new Set([
   "create", "accept", "setOffer", "confirm", "invalidation", "cancel",
-  "execute", "complete", "rollback", "disconnect", "externalMutation"
+  "execute", "complete", "rollback", "disconnect", "externalMutation", "pause", "resume"
 ]);
 
 function clone(value) {
@@ -75,10 +77,9 @@ export class JournalTradeAuditStorage {
 }
 
 export class TradeAuditService {
-  constructor({ storage = new JournalTradeAuditStorage(), now = () => Date.now(), retention = TRADE_AUDIT_RETENTION } = {}) {
+  constructor({ storage = new JournalTradeAuditStorage(), now = () => Date.now() } = {}) {
     this.storage = storage;
     this.now = now;
-    this.retention = Math.max(1, Number(retention) || TRADE_AUDIT_RETENTION);
     this.timelines = new Map();
     this.snapshots = new Map();
     this.confirmationSnapshots = new Map();
@@ -153,13 +154,18 @@ export class TradeAuditService {
     });
     const snapshots = this.snapshots.get(session.id) ?? this.capturePublicOffers(session);
     return {
+      schemaVersion: 1,
       auditId: `trade-audit-${session.id}`,
+      tradeId: session.id,
       sessionId: session.id,
       executionId: text(session.execution?.executionId),
       authorityEpoch: text(session.authority?.epoch),
       startedAt: session.createdAt ?? null,
+      createdAt: session.createdAt ?? null,
       endedAt,
+      completedAt: session.completedAt ?? null,
       finalState: text(session.state),
+      finalStatus: text(session.state),
       participantA: participant("participantA"),
       participantB: participant("participantB"),
       offerA: clone(snapshots?.participantA ?? []),
@@ -171,6 +177,9 @@ export class TradeAuditService {
       cancelReason: sanitizeMessage(session.cancelReason),
       invalidReason: sanitizeMessage(session.invalidReason),
       executionResult: executionResult ? clone(executionResult) : null,
+      commitTransactionId: text(session.execution?.executionId),
+      pauseState: clone(session.pauseState ?? null),
+      recovery: clone(session.recovery ?? null),
       rollback: {
         attempted: rollback?.attempted === true,
         succeeded: rollback?.succeeded === true,
@@ -183,13 +192,25 @@ export class TradeAuditService {
   async persistTerminal(session, options = {}) {
     requireGM();
     const record = this.buildRecord(session, options);
-    this.writeQueue = this.writeQueue.then(async () => {
+    // A rejected caller keeps its rejection, but must not poison later,
+    // independent audit writes in the serialization queue.
+    const operation = this.writeQueue.catch(() => undefined).then(async () => {
       const current = await this.storage.read();
       if (current.some(entry => entry.auditId === record.auditId)) return record;
-      const records = [...current, record].slice(-this.retention);
+      const records = [...current, record];
       await this.storage.write(records);
       globalThis.Hooks?.callAll?.("mtrolTradeAuditCreated", clone(record));
       return record;
+    });
+    this.writeQueue = operation.catch(error => {
+      logger.errorOnce("TRADE_AUDIT", "terminal trade audit persistence failed", {
+        transactionId: record.executionId ?? null,
+        command: "trade.audit.persist-terminal",
+        status: "failed",
+        reasonCode: "TRADE_AUDIT_PERSIST_FAILED",
+        error
+      }, { key: `trade-audit:${record.auditId}` });
+      throw error;
     });
     return this.writeQueue;
   }
@@ -209,6 +230,25 @@ export class TradeAuditService {
   getTimeline(sessionId, user = globalThis.game?.user) {
     requireGM(user);
     return clone(this.timelines.get(String(sessionId ?? "")) ?? []);
+  }
+
+  async prune(policy = {}, { apply = false } = {}, user = globalThis.game?.user) {
+    requireGM(user);
+    const current = await this.storage.read();
+    const finalStatuses = new Set(policy.finalStatuses ?? []);
+    const olderThan = Number(policy.olderThan ?? 0);
+    const maxCount = Number(policy.maxCount ?? 0);
+    let retained = current.filter(record => {
+      if (finalStatuses.size && finalStatuses.has(record.finalStatus) === false) return true;
+      if (olderThan > 0 && Number(record.completedAt ?? record.endedAt ?? record.createdAt ?? 0) >= olderThan) return true;
+      return !(finalStatuses.size || olderThan > 0);
+    });
+    if (Number.isInteger(maxCount) && maxCount > 0 && retained.length > maxCount) {
+      retained = retained.slice(-maxCount);
+    }
+    const result = { before: current.length, after: retained.length, removed: current.length - retained.length };
+    if (apply && result.removed > 0) await this.storage.write(retained);
+    return result;
   }
 }
 

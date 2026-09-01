@@ -2,6 +2,8 @@
 // MTROL - MP ENGINE
 // =========================
 
+import { logger } from "../utils/logger.js";
+
 import {
   mtrolFlagScope
 } from "../core/system.js";
@@ -19,6 +21,11 @@ import {
 import {
   requestPrimaryGM
 } from "../core/socket-requests.js";
+
+import {
+  COMPETENCE_MODE_IDS,
+  getCompetenceExecutionModes
+} from "../actions/competence-mode-service.js";
 
 // =========================
 // HELPERS
@@ -80,15 +87,6 @@ function userCanUseActor(actor, userId) {
   if (!user || !actor) return false;
   if (user.isGM) return true;
   return actor.testUserPermission?.(user, "OWNER") === true;
-}
-
-function isMeditateItem(item) {
-  return String(item?.name ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "") === "meditar";
 }
 
 function getMpIntent(item) {
@@ -198,7 +196,12 @@ export function calcularConsumoMP(actor, item) {
 export function validarConsumoMP(actor, item) {
 
   if (!actor || !item) {
-    console.warn("MTROL | procesarConsumoMP sin actor o item.", { actor, item });
+    logger.warn("RESOURCE", "MP validation rejected", {
+      actorUuid: actor?.uuid ?? null,
+      itemId: item?.id ?? null,
+      status: "rejected",
+      reasonCode: "MP_CONTEXT_INVALID"
+    });
 
     return {
       exito: false,
@@ -265,8 +268,9 @@ export async function aplicarConsumoMPAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "mp-cost"
-  }, async canonicalActor => {
+    origin: "mp-cost",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const canonicalConsumption = calcularConsumoMP(canonicalActor, item);
     if (!canonicalConsumption.exito) {
       throw new Error(
@@ -283,6 +287,8 @@ export async function aplicarConsumoMPAuthoritative(payload = {}, {
       changes[`flags.${mtrolFlagScope()}.mpStacks`] = stacks;
     }
 
+    await beforeWrite();
+
     await canonicalActor.update(changes);
 
     return {
@@ -290,7 +296,7 @@ export async function aplicarConsumoMPAuthoritative(payload = {}, {
       exito: true,
       intent: { ...intent },
       itemId: item.id ?? null,
-      meditateEligible: isMeditateItem(item),
+      executionModeIds: getCompetenceExecutionModes(item).map(mode => mode.modeId),
       costoTotal: canonicalConsumption.costoTotal,
       costoBasico: canonicalConsumption.costoBasico,
       costoStack: canonicalConsumption.costoStack,
@@ -323,7 +329,9 @@ export async function aplicarConsumoMP(actor, consumoMP, { item = null } = {}) {
   }
 
   const response = await requestPrimaryGM("mtrolSpendMP", payload);
-  if (!response.ok) throw new Error(response.error ?? "No se pudo consumir MP.");
+  if (!response.ok || response.result?.commandResult?.ok === false) {
+    throw new Error(response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo consumir MP.");
+  }
   return response.result?.receipt ?? null;
 }
 
@@ -340,16 +348,17 @@ export async function procesarConsumoMP(actor, item) {
   return aplicarConsumoMP(actor, consumoMP, { item });
 }
 
-export async function restaurarAcumuladoresDia(actor) {
+export async function restaurarAcumuladoresDia(actor, { transactionId = null } = {}) {
   if (!game.user?.isGM) {
     throw new Error("Solo un GM puede restaurar los acumuladores diarios.");
   }
   if (!actor) throw new Error("No se encontró el Actor para restaurar el día.");
 
   return runActorResourceTransaction(actor, {
-    transactionId: `daily-reset:${createTransactionId()}`,
-    origin: "daily-reset"
-  }, async canonicalActor => {
+    transactionId: transactionId ?? `daily-reset:${createTransactionId()}`,
+    origin: "daily-reset",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const stacksAnteriores = foundry.utils.duplicate(
       canonicalActor.getFlag?.(mtrolFlagScope(), "mpStacks") ?? {}
     );
@@ -358,6 +367,7 @@ export async function restaurarAcumuladoresDia(actor) {
     // anterior mientras se está restaurando el día.
     // Eliminar la clave completa evita el merge recursivo de Foundry: escribir
     // un objeto vacío conserva las entradas anteriores del flag.
+    await beforeWrite();
     await canonicalActor.unsetFlag(mtrolFlagScope(), "mpStacks");
     const stacksDespues = foundry.utils.duplicate(
       canonicalActor.getFlag?.(mtrolFlagScope(), "mpStacks") ?? {}
@@ -431,7 +441,9 @@ export async function reembolsarCostoResolucionMP(actor, consumoMP) {
   }
 
   const response = await requestPrimaryGM("mtrolRefundMP", payload);
-  if (!response.ok) throw new Error(response.error ?? "No se pudo reembolsar MP.");
+  if (!response.ok || response.result?.commandResult?.ok === false) {
+    throw new Error(response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo reembolsar MP.");
+  }
   return response.result?.receipt ?? false;
 }
 
@@ -451,11 +463,13 @@ export async function reembolsarCostoMPAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "mp-refund"
-  }, async canonicalActor => {
+    origin: "mp-refund",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const actual = Number(canonicalActor.system?.vitales?.mp?.value ?? 0);
     const maximo = Number(canonicalActor.system?.vitales?.mp?.max ?? actual);
     const mpNuevo = Math.min(maximo, actual + Number(original.costoTotal ?? 0));
+    await beforeWrite();
     await canonicalActor.update({ "system.vitales.mp.value": mpNuevo });
     return {
       authorized: true,
@@ -477,7 +491,11 @@ export async function restaurarMPMeditacionAuthoritative(payload = {}, {
   if (!userCanUseActor(actor, requestingUserId)) throw new Error("El usuario no puede usar Meditar con este Actor.");
 
   const original = getActorResourceTransaction(actor.uuid, payload.originalTransactionId);
-  if (!original?.meditateEligible || original.origin !== "mp-cost") {
+  if (
+    original.origin !== "mp-cost" ||
+    !Array.from(original.executionModeIds ?? []).includes(COMPETENCE_MODE_IDS.RECOVER_MP) ||
+    payload.modeId !== COMPETENCE_MODE_IDS.RECOVER_MP
+  ) {
     throw new Error("El consumo original no pertenece a Meditar.");
   }
 
@@ -492,12 +510,14 @@ export async function restaurarMPMeditacionAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "meditate"
-  }, async canonicalActor => {
+    origin: "meditate",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const actual = Number(canonicalActor.system?.vitales?.mp?.value ?? 0);
     const maximo = Number(canonicalActor.system?.vitales?.mp?.max ?? actual);
     const restoration = Number(original.costoTotal ?? 0) * 2;
     const mpNuevo = Math.min(maximo, actual + restoration);
+    await beforeWrite();
     await canonicalActor.update({ "system.vitales.mp.value": mpNuevo });
     return {
       authorized: true,
@@ -519,6 +539,7 @@ export async function restaurarMPMeditacion(actor, consumoAplicado, resultado = 
     transactionId: `${consumoAplicado.transactionId}:meditate`,
     total: Number(resultado.total ?? 0),
     fumble: resultado.pifia === true
+    ,modeId: COMPETENCE_MODE_IDS.RECOVER_MP
   };
 
   if (game.user?.isGM) {
@@ -529,6 +550,8 @@ export async function restaurarMPMeditacion(actor, consumoAplicado, resultado = 
   }
 
   const response = await requestPrimaryGM("mtrolRestoreMeditationMP", payload);
-  if (!response.ok) throw new Error(response.error ?? "No se pudo restaurar MP con Meditar.");
+  if (!response.ok || response.result?.commandResult?.ok === false) {
+    throw new Error(response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo restaurar MP con Meditar.");
+  }
   return response.result?.receipt ?? null;
 }

@@ -1,6 +1,10 @@
 import {
   restoreActorResourceAuthoritative
 } from "../actors/actor-resource-service.js";
+import {
+  actorRuntimeRepository,
+  transactionCoordinator
+} from "../runtime/runtime-foundation.js";
 
 import {
   requestPrimaryGM
@@ -19,6 +23,7 @@ import {
 import {
   createConsumableChatCard
 } from "../ui/consumable-chat-card.js";
+import { assertTradeQuantityAvailable } from "../trade/trade-reservation-boundary.js";
 
 const CONSUMABLE_OPERATIONS = new Set(["restore"]);
 const CONSUMABLE_RESOURCES = new Set(["hp", "mp"]);
@@ -110,23 +115,37 @@ function validateConsumableUse(actor, item, user) {
 }
 
 async function consumeOneUnit(actor, item, expectedConfiguration) {
-  const currentItem = getCanonicalItem(actor, item.id);
-  if (!currentItem || currentItem !== item) {
-    throw new Error("El consumible dejó de existir antes de completar el uso.");
-  }
+  let currentItem, currentConfiguration;
+  try {
+    currentItem = getCanonicalItem(actor, item.id);
+    if (!currentItem || currentItem !== item) {
+      throw new Error("El consumible dejó de existir antes de completar el uso.");
+    }
 
-  const currentConfiguration = getConsumableConfiguration(currentItem);
-  if (!currentConfiguration.valid) {
-    throw new Error(currentConfiguration.errors[0]);
-  }
-  if (
-    currentConfiguration.effect.operation !== expectedConfiguration.effect.operation ||
-    currentConfiguration.effect.resource !== expectedConfiguration.effect.resource ||
-    currentConfiguration.effect.amount !== expectedConfiguration.effect.amount
-  ) {
-    throw new Error("La configuración del consumible cambió durante el uso.");
-  }
+    currentConfiguration = getConsumableConfiguration(currentItem);
+    if (!currentConfiguration.valid) {
+      throw new Error(currentConfiguration.errors[0]);
+    }
+    if (
+      currentConfiguration.effect.operation !== expectedConfiguration.effect.operation ||
+      currentConfiguration.effect.resource !== expectedConfiguration.effect.resource ||
+      currentConfiguration.effect.amount !== expectedConfiguration.effect.amount
+    ) {
+      throw new Error("La configuración del consumible cambió durante el uso.");
+    }
 
+    assertTradeQuantityAvailable(
+      actor.uuid,
+      currentItem,
+      currentConfiguration.quantity,
+      1
+    );
+
+  } catch (error) {
+    // No inventory mutation has been attempted in this validation block.
+    error.transactionNoEffects = true;
+    throw error;
+  }
   const remainingQuantity = currentConfiguration.quantity - 1;
   if (remainingQuantity === 0) {
     await destroyEquippedItem({
@@ -203,14 +222,31 @@ async function useConsumableAuthoritativeInternal(payload, {
     itemId,
     itemName,
     itemImg,
-    operation: configuration.effect.operation
+    operation: configuration.effect.operation,
+    remainingQuantity: resourceResult.changed === false
+      ? configuration.quantity
+      : resourceResult.remainingQuantity,
+    itemDeleted: resourceResult.changed === false
+      ? false
+      : resourceResult.itemDeleted
   };
 
-  const message = await createConsumableChatCard(actor, result);
-  return {
+  const existingCardId = resourceResult.cardMessageId ?? null;
+  const cardMissing = existingCardId && game.messages?.get
+    ? !game.messages.get(existingCardId)
+    : false;
+  const message = !existingCardId || cardMissing
+    ? await createConsumableChatCard(actor, result)
+    : null;
+  const finalResult = {
     ...result,
-    cardMessageId: message?.id ?? null
+    cardMessageId: message?.id ?? existingCardId,
+    changed: resourceResult.changed !== false,
+    reasonCode: resourceResult.changed === false ? "RESOURCE_AT_MAXIMUM" : null
   };
+  const scope = game.combat ? { combat: game.combat } : { actor };
+  await transactionCoordinator.amendCompletedResult(scope, transactionId, () => finalResult);
+  return finalResult;
 }
 
 export async function useConsumableAuthoritative(payload = {}, options = {}) {
@@ -267,7 +303,9 @@ export async function useConsumable(actor, item) {
     }
 
     const response = await requestPrimaryGM("mtrolUseConsumable", payload);
-    if (!response.ok) throw new Error(response.error ?? "No se pudo usar el consumible.");
+    if (!response.ok || response.result?.commandResult?.ok === false) {
+      throw new Error(response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo usar el consumible.");
+    }
     return response.result?.receipt ?? null;
   })().finally(() => {
     clientUsesInProgress.delete(useKey);
@@ -281,4 +319,5 @@ export function resetConsumableServiceForTests() {
   authoritativeUsesInProgress.clear();
   clientUsesInProgress.clear();
   completedUses.clear();
+  actorRuntimeRepository.resetForTests();
 }

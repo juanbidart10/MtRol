@@ -3,14 +3,8 @@ import {
 } from "../core/socket-requests.js";
 
 import {
-  acceptTradeSessionAuthoritative,
-  cancelTradeSessionByGMAuthoritative,
-  cancelTradeSessionAuthoritative,
-  confirmTradeSessionAuthoritative,
-  createTradeSessionAuthoritative,
   getGMTradeMonitorViewAuthoritative,
-  observeTradeSessionsAuthoritative,
-  setTradeOfferAuthoritative
+  observeTradeSessionsAuthoritative
 } from "./trade-authority.js";
 
 import {
@@ -24,6 +18,7 @@ import {
 import { buildGMTradeMonitorView } from "./trade-gm-view-model.js";
 import { tradeAuditService } from "./trade-audit-service.js";
 import { isPrimaryActiveGM } from "../core/socket-requests.js";
+import { dispatchTradeCommandLocal } from "../runtime/trade-commands.js";
 
 const clientSessions = new Map();
 const TERMINAL_SESSION_STATES = new Set(["CANCELLED", "COMPLETED", "INVALID"]);
@@ -40,13 +35,14 @@ function withOperationId(payload = {}) {
   };
 }
 
-async function requestTrade(action, payload, authoritativeHandler) {
+async function requestTrade(action, payload) {
   const normalized = withOperationId(payload);
 
   if (game.user?.isGM) {
-    return authoritativeHandler(normalized, {
-      requestingUserId: game.user.id
-    });
+    const result = await dispatchTradeCommandLocal(action, normalized, game.user.id);
+    const session = result?.session ?? null;
+    if (session?.id) cacheClientSession(session, "local-command");
+    return session;
   }
 
   const response = await requestPrimaryGM(action, normalized);
@@ -93,42 +89,45 @@ export function receiveTradeAuthorityReset(data = {}) {
   return true;
 }
 
-export function installTradeApi() {
-  game.mtrol = game.mtrol || {};
-  game.mtrol.trade = {
-    createSession: payload => requestTrade(
-      "mtrolTradeCreateSession",
-      payload,
-      createTradeSessionAuthoritative
-    ),
-    acceptSession: payload => requestTrade(
-      "mtrolTradeAcceptSession",
-      payload,
-      acceptTradeSessionAuthoritative
-    ),
-    setOffer: payload => requestTrade(
-      "mtrolTradeSetOffer",
-      payload,
-      setTradeOfferAuthoritative
-    ),
-    confirm: payload => requestTrade(
-      "mtrolTradeConfirm",
-      payload,
-      confirmTradeSessionAuthoritative
-    ),
-    cancel: payload => requestTrade(
-      "mtrolTradeCancel",
-      payload,
-      cancelTradeSessionAuthoritative
-    ),
+export const tradeClientApi = {
+    createSession: payload => requestTrade("mtrolTradeCreateSession", payload),
+    acceptSession: payload => requestTrade("mtrolTradeAcceptSession", payload),
+    setOffer: payload => requestTrade("mtrolTradeSetOffer", payload),
+    confirm: payload => requestTrade("mtrolTradeConfirm", payload),
+    cancel: payload => requestTrade("mtrolTradeCancel", payload),
     cancelByGM: payload => {
       if (!game.user?.isGM) return Promise.reject(new Error("La intervención de comercio es exclusiva para GM."));
       const normalized = withOperationId(payload);
       if (isPrimaryActiveGM()) {
-        return cancelTradeSessionByGMAuthoritative(normalized, { requestingUserId: game.user.id });
+        return dispatchTradeCommandLocal("mtrolTradeGMCancel", normalized, game.user.id)
+          .then(result => result?.session ?? null);
       }
       return requestPrimaryGM("mtrolTradeGMCancel", normalized).then(response => {
         if (!response.ok) throw new Error(response.error ?? "La cancelación GM fue rechazada.");
+        return response.result?.session ?? null;
+      });
+    },
+    pause: payload => {
+      if (!game.user?.isGM) return Promise.reject(new Error("La pausa de comercio es exclusiva para GM."));
+      const normalized = withOperationId(payload);
+      if (isPrimaryActiveGM()) {
+        return dispatchTradeCommandLocal("mtrolTradePause", normalized, game.user.id)
+          .then(result => result?.session ?? null);
+      }
+      return requestPrimaryGM("mtrolTradePause", normalized).then(response => {
+        if (!response.ok) throw new Error(response.error ?? "La pausa fue rechazada.");
+        return response.result?.session ?? null;
+      });
+    },
+    resume: payload => {
+      if (!game.user?.isGM) return Promise.reject(new Error("La reanudación de comercio es exclusiva para GM."));
+      const normalized = withOperationId(payload);
+      if (isPrimaryActiveGM()) {
+        return dispatchTradeCommandLocal("mtrolTradeResume", normalized, game.user.id)
+          .then(result => result?.session ?? null);
+      }
+      return requestPrimaryGM("mtrolTradeResume", normalized).then(response => {
+        if (!response.ok) throw new Error(response.error ?? "La reanudación fue rechazada.");
         return response.result?.session ?? null;
       });
     },
@@ -206,5 +205,10 @@ export function installTradeApi() {
       const { openTradeAuditHistory } = await import("./trade-gm-runtime.js");
       return openTradeAuditHistory();
     }
-  };
+};
+
+export function installTradeApi() {
+  game.mtrol = game.mtrol || {};
+  game.mtrol.trade = tradeClientApi;
+  return tradeClientApi;
 }

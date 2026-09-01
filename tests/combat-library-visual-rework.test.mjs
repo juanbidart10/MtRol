@@ -27,6 +27,10 @@ const sheetSource = await readFile(
   resolve(projectRoot, "scripts/sheets/actors/personaje-sheet.js"),
   "utf8"
 );
+const sheetViewModelSource = await readFile(
+  resolve(projectRoot, "scripts/sheets/actors/personaje-sheet-view-model.js"),
+  "utf8"
+);
 
 function action(id, {
   categoria = "combate",
@@ -175,9 +179,9 @@ test("assets finales conservan PNG RGBA y dimensiones fuente", async () => {
 });
 
 test("PersonajeSheet reutiliza coste/stack existentes y navegación ocupa cinco columnas", () => {
-  assert.match(sheetSource, /const mpCost = calcularConsumoMP\(actor, item\)/);
-  assert.match(sheetSource, /mtrolMpStackable:\s*mpCost\.stackea === true/);
-  assert.match(sheetSource, /mtrolMpStack:\s*mpCost\.stackAnterior/);
+  assert.match(sheetViewModelSource, /const mpCost = calcularConsumoMP\(actor, item\)/);
+  assert.match(sheetViewModelSource, /mtrolMpStackable:\s*mpCost\.stackea === true/);
+  assert.match(sheetViewModelSource, /mtrolMpStack:\s*mpCost\.stackAnterior/);
   assert.match(sheetSource, /context\.combatLibrary = buildCombatLibraryViewModel/);
   assert.doesNotMatch(sheetSource, /maxActions/);
   assert.match(premiumStyle, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);

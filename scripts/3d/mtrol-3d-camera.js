@@ -9,6 +9,7 @@ import {
   notifyMtrol3DCamera,
   setMtrolDefault3DCameraView
 } from "./mtrol-3d-settings.js";
+import { logger } from "../utils/logger.js";
 
 const WARN_PREFIX = "MTROL 3D |";
 
@@ -20,12 +21,12 @@ const cameraState = {
 };
 
 function warn(message, data = null) {
-  if (data) {
-    console.warn(`${WARN_PREFIX} ${message}`, data);
-    return;
-  }
-
-  console.warn(`${WARN_PREFIX} ${message}`);
+  logger.warn("3D_CAMERA", message, {
+    status: "isolated",
+    reasonCode: "CAMERA_3D_OPERATION_FAILED",
+    error: data instanceof Error ? data : undefined,
+    detail: data instanceof Error ? undefined : data
+  });
 }
 
 function getModule() {
@@ -364,7 +365,7 @@ function applyCameraZoom(api, presetOptions) {
 function logGameCameraState(api) {
   if (!api?.GameCamera?.enabled || cameraState.gameCameraLogged) return;
 
-  console.log("MTROL | 3D Camera GameCamera active");
+  logger.debug("3D_CAMERA", "GameCamera active");
   cameraState.gameCameraLogged = true;
 }
 
@@ -379,7 +380,7 @@ function applyCameraViaAnimateTarget(api, cameraPosition, lookAt, presetOptions)
   applyCameraZoom(api, presetOptions);
 
   if (presetOptions.logDiagnostics) {
-    console.log("MTROL | 3D Camera applied via animate target");
+    logger.debug("3D_CAMERA", "camera applied via animate target");
   }
 
   return true;
@@ -418,7 +419,7 @@ function applyDirectCameraFallback(api, cameraPosition, lookAt, presetOptions) {
   callFirst([api, api?.renderer], ["render", "refresh", "update"]);
 
   if (applied && presetOptions.logDiagnostics) {
-    console.log("MTROL | 3D Camera applied via direct fallback");
+    logger.debug("3D_CAMERA", "camera applied via direct fallback");
   }
 
   return applied;
@@ -438,7 +439,7 @@ function applyPresetCamera(api, viewName, resolvedTarget, presetOptions) {
     applyDirectCameraFallback(api, cameraPosition, lookAt, presetOptions);
 
   if (applied && presetOptions.logDiagnostics) {
-    console.log("MTROL | Camera preset applied", {
+    logger.debug("3D_CAMERA", "camera preset applied", {
       view: viewName,
       distance: presetOptions.distance,
       height: getPresetHeight(api, viewName, presetOptions),
@@ -587,7 +588,7 @@ function setView(viewName, options = {}) {
     cameraState.targetTokenId = resolvedTarget.tokenId ?? cameraState.targetTokenId;
 
     if (shouldLogDiagnostics) {
-      console.log(`MTROL | 3D Camera view: ${viewName}`);
+      logger.debug("3D_CAMERA", "camera view applied", { view: viewName });
     }
 
     return true;
@@ -669,7 +670,7 @@ function follow(tokenOrNull = null, options = {}) {
       }
     );
 
-    console.log("MTROL | 3D Camera follow enabled");
+    logger.debug("3D_CAMERA", "camera follow enabled");
     return true;
   } catch (error) {
     warn("Error activando seguimiento 3D.", error);
@@ -683,7 +684,7 @@ function stopFollow() {
 
   if (game.mtrol3d) game.mtrol3d._followEnabled = false;
 
-  console.log("MTROL | 3D Camera follow disabled");
+  logger.debug("3D_CAMERA", "camera follow disabled");
   return true;
 }
 
@@ -911,7 +912,7 @@ export function installMtrol3DApi() {
       _followEnabled: cameraState.followEnabled
     });
 
-    console.log("MTROL | 3D Camera ready");
+    logger.debug("3D_CAMERA", "camera API ready");
     return true;
   } catch (error) {
     warn("No se pudo instalar game.mtrol3d.", error);

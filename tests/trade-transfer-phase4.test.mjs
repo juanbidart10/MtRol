@@ -15,6 +15,9 @@ const {
   prepareTradeTransferPlan
 } = await import("../scripts/trade/trade-transfer-service.js");
 const { TradeSessionStore } = await import("../scripts/trade/trade-session-service.js");
+const { tradeRuntimeRepository } = await import("../scripts/trade/trade-runtime-repository.js");
+
+test.beforeEach(() => tradeRuntimeRepository.resetForTests());
 
 let nextItemId = 0;
 

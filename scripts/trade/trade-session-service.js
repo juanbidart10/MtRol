@@ -3,6 +3,8 @@ export const TRADE_SESSION_STATES = Object.freeze({
   NEGOTIATING: "NEGOTIATING",
   READY: "READY",
   EXECUTING: "EXECUTING",
+  PAUSED: "PAUSED",
+  RECOVERY_REQUIRED: "RECOVERY_REQUIRED",
   COMPLETED: "COMPLETED",
   CANCELLED: "CANCELLED",
   INVALID: "INVALID"
@@ -17,7 +19,9 @@ const ACTIVE_STATES = new Set([
   TRADE_SESSION_STATES.REQUESTED,
   TRADE_SESSION_STATES.NEGOTIATING,
   TRADE_SESSION_STATES.READY,
-  TRADE_SESSION_STATES.EXECUTING
+  TRADE_SESSION_STATES.EXECUTING,
+  TRADE_SESSION_STATES.PAUSED,
+  TRADE_SESSION_STATES.RECOVERY_REQUIRED
 ]);
 
 const MUTABLE_OFFER_STATES = new Set([
@@ -143,6 +147,7 @@ export class TradeSession {
     createdAt
   }) {
     this.id = normalizeRequiredString(id, "sessionId");
+    this.schemaVersion = 1;
     this.state = TRADE_SESSION_STATES.REQUESTED;
     this.authority = {
       gmUserId: normalizeRequiredString(authority?.gmUserId, "GM autoritativo"),
@@ -186,6 +191,19 @@ export class TradeSession {
       failedAt: null,
       failureReason: null
     };
+    this.pauseState = {
+      paused: false,
+      previousState: null,
+      pausedAt: null,
+      pausedByUserId: null,
+      resumedAt: null,
+      resumedByUserId: null
+    };
+    this.recovery = {
+      required: false,
+      reasonCode: null,
+      updatedAt: null
+    };
   }
 
   toObject() {
@@ -199,18 +217,74 @@ export class TradeSessionStore {
     now = defaultNow,
     resolveRealQuantity = null,
     resolveOfferItem = null,
-    onSessionCreated = null
+    onSessionCreated = null,
+    repository = null
   } = {}) {
     this.idFactory = idFactory;
     this.now = now;
     this.resolveRealQuantity = resolveRealQuantity;
     this.resolveOfferItem = resolveOfferItem;
     this.onSessionCreated = onSessionCreated;
+    this.repository = repository;
     this.sessions = new Map();
     this.activeSessionByActor = new Map();
     this.reservationsByItem = new Map();
     this.operationReceipts = new Map();
     this.authority = { gmUserId: null, epoch: null };
+    this.mutationQueue = Promise.resolve();
+  }
+
+  hydrateRuntime(runtime = {}) {
+    this.sessions.clear();
+    this.activeSessionByActor.clear();
+    this.reservationsByItem.clear();
+    this.operationReceipts = new Map(Object.entries(runtime.operationReceipts ?? {}));
+    this.authority = clone(runtime.authority ?? { gmUserId: null, epoch: null });
+    for (const raw of Object.values(runtime.sessions ?? {})) {
+      if (!raw?.id || !ACTIVE_STATES.has(raw.state)) continue;
+      const session = Object.assign(Object.create(TradeSession.prototype), clone(raw));
+      session.schemaVersion ??= 1;
+      session.pauseState ??= {
+        paused: session.state === TRADE_SESSION_STATES.PAUSED,
+        previousState: null,
+        pausedAt: null,
+        pausedByUserId: null,
+        resumedAt: null,
+        resumedByUserId: null
+      };
+      session.recovery ??= { required: false, reasonCode: null, updatedAt: null };
+      this.sessions.set(session.id, session);
+      for (const participant of Object.values(session.participants ?? {})) {
+        this.activeSessionByActor.set(participant.actorUuid, session.id);
+      }
+      this.#rebuildSessionReservations(session);
+    }
+    return this.listSessions({ activeOnly: true });
+  }
+
+  async hydrateFromPersistence() {
+    if (!this.repository) return this.listSessions({ activeOnly: true });
+    return this.hydrateRuntime(await this.repository.ensure());
+  }
+
+  async #persistRuntime() {
+    if (!this.repository) return null;
+    const sessions = Object.fromEntries(
+      [...this.sessions.values()]
+        .filter(session => ACTIVE_STATES.has(session.state))
+        .map(session => [session.id, session.toObject?.() ?? clone(session)])
+    );
+    const operationReceipts = Object.fromEntries(this.operationReceipts);
+    const authority = clone(this.authority);
+    return this.repository.mutate(this.repository.target, draft => {
+      draft.sessions = clone(sessions);
+      draft.operationReceipts = clone(operationReceipts);
+      draft.authority = {
+        ...draft.authority,
+        ...authority,
+        updatedAt: this.now()
+      };
+    });
   }
 
   setQuantityResolver(resolveRealQuantity) {
@@ -367,16 +441,20 @@ export class TradeSessionStore {
     });
   }
 
-  async setOffer({ sessionId, participantKey, requestingUserId, entries, operationId }) {
+  async setOffer({ sessionId, participantKey, requestingUserId, entries, revision = null, operationId }) {
     return this.#runSessionMutation("set-offer", operationId, {
       sessionId,
       participantKey,
       requestingUserId,
-      entries
+      entries,
+      revision
     }, async session => {
       const participant = this.#assertParticipant(session, participantKey, requestingUserId);
       if (!MUTABLE_OFFER_STATES.has(session.state)) {
         throw new Error("La sesión no admite cambios de oferta en su estado actual.");
+      }
+      if (revision !== null && revision !== undefined && Number(revision) !== session.revision) {
+        throw new Error("La oferta no corresponde a la revisión vigente.");
       }
 
       const normalizedEntries = normalizeOfferEntries(entries, participant);
@@ -512,6 +590,68 @@ export class TradeSessionStore {
     });
   }
 
+  async pauseSession({ sessionId, authorityUserId, requestingUserId, operationId }) {
+    return this.#runSessionMutation("pause-session", operationId, {
+      sessionId, authorityUserId, requestingUserId
+    }, async session => {
+      this.#assertAuthority(session, authorityUserId);
+      if (session.state === TRADE_SESSION_STATES.PAUSED) return session.toObject();
+      if (![TRADE_SESSION_STATES.NEGOTIATING, TRADE_SESSION_STATES.READY].includes(session.state)) {
+        throw new Error("La sesión no admite pausa en su estado actual.");
+      }
+      session.pauseState = {
+        ...session.pauseState,
+        paused: true,
+        previousState: session.state,
+        pausedAt: this.now(),
+        pausedByUserId: normalizeRequiredString(requestingUserId, "GM que pausa")
+      };
+      session.state = TRADE_SESSION_STATES.PAUSED;
+      session.updatedAt = this.now();
+      return session.toObject();
+    });
+  }
+
+  async resumeSession({ sessionId, authorityUserId, requestingUserId, operationId }) {
+    return this.#runSessionMutation("resume-session", operationId, {
+      sessionId, authorityUserId, requestingUserId
+    }, async session => {
+      this.#assertAuthority(session, authorityUserId);
+      if (session.state !== TRADE_SESSION_STATES.PAUSED) {
+        throw new Error("Sólo una sesión pausada puede reanudarse.");
+      }
+      const previous = session.pauseState?.previousState;
+      session.state = [TRADE_SESSION_STATES.NEGOTIATING, TRADE_SESSION_STATES.READY].includes(previous)
+        ? previous
+        : TRADE_SESSION_STATES.NEGOTIATING;
+      session.pauseState = {
+        ...session.pauseState,
+        paused: false,
+        resumedAt: this.now(),
+        resumedByUserId: normalizeRequiredString(requestingUserId, "GM que reanuda")
+      };
+      session.updatedAt = this.now();
+      return session.toObject();
+    });
+  }
+
+  async markRecoveryRequired({ sessionId, authorityUserId, reasonCode, operationId }) {
+    return this.#runSessionMutation("mark-recovery-required", operationId, {
+      sessionId, authorityUserId, reasonCode
+    }, async session => {
+      this.#assertAuthority(session, authorityUserId);
+      if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) return session.toObject();
+      session.state = TRADE_SESSION_STATES.RECOVERY_REQUIRED;
+      session.recovery = {
+        required: true,
+        reasonCode: String(reasonCode ?? "TRADE_STATE_AMBIGUOUS"),
+        updatedAt: this.now()
+      };
+      session.updatedAt = this.now();
+      return session.toObject();
+    });
+  }
+
   async beginExecution({ sessionId, authorityUserId, executionId, revision, operationId }) {
     return this.#runSessionMutation("begin-execution", operationId, {
       sessionId,
@@ -555,8 +695,8 @@ export class TradeSessionStore {
     }, async session => {
       this.#assertAuthority(session, authorityUserId);
       if (session.state === TRADE_SESSION_STATES.COMPLETED) return session.toObject();
-      if (session.state !== TRADE_SESSION_STATES.EXECUTING) {
-        throw new Error("Solo una sesión EXECUTING puede completarse.");
+      if (![TRADE_SESSION_STATES.EXECUTING, TRADE_SESSION_STATES.RECOVERY_REQUIRED].includes(session.state)) {
+        throw new Error("Solo una sesión EXECUTING o RECOVERY_REQUIRED puede completarse.");
       }
       if (session.execution?.executionId !== String(executionId ?? "")) {
         throw new Error("El executionId no corresponde a la ejecución activa.");
@@ -703,12 +843,27 @@ export class TradeSessionStore {
     return invalidated;
   }
 
+  async adoptAuthority({ gmUserId, epoch } = {}) {
+    const normalizedGmId = normalizeRequiredString(gmUserId, "GM autoritativo");
+    const normalizedEpoch = normalizeRequiredString(epoch, "epoch de autoridad");
+    for (const session of this.sessions.values()) {
+      if (!ACTIVE_STATES.has(session.state)) continue;
+      session.authority = { gmUserId: normalizedGmId, epoch: normalizedEpoch };
+      session.updatedAt = this.now();
+    }
+    this.authority = { gmUserId: normalizedGmId, epoch: normalizedEpoch };
+    await this.#persistRuntime();
+    return this.listSessions({ activeOnly: true });
+  }
+
   reset() {
     this.sessions.clear();
     this.activeSessionByActor.clear();
     this.reservationsByItem.clear();
     this.operationReceipts.clear();
     this.authority = { gmUserId: null, epoch: null };
+    this.mutationQueue = Promise.resolve();
+    this.repository?.resetForTests?.();
   }
 
   async #runSessionMutation(action, operationId, payload, operation) {
@@ -722,24 +877,43 @@ export class TradeSessionStore {
   }
 
   async #runIdempotent(action, operationId, payload, operation) {
-    const normalizedOperationId = normalizeRequiredString(operationId, "operationId");
-    const fingerprint = operationFingerprint(action, payload);
-    const previous = this.operationReceipts.get(normalizedOperationId);
+    const run = async () => {
+      const normalizedOperationId = normalizeRequiredString(operationId, "operationId");
+      const fingerprint = operationFingerprint(action, payload);
+      const previous = this.operationReceipts.get(normalizedOperationId);
 
-    if (previous) {
-      if (previous.fingerprint !== fingerprint) {
-        throw new Error("El operationId ya fue utilizado con otro payload.");
+      if (previous) {
+        if (previous.fingerprint !== fingerprint) {
+          throw new Error("El operationId ya fue utilizado con otro payload.");
+        }
+        return clone(previous.result);
       }
-      return clone(previous.result);
-    }
 
-    const result = await operation();
-    this.operationReceipts.set(normalizedOperationId, {
-      action,
-      fingerprint,
-      result: clone(result)
-    });
-    return clone(result);
+      const before = {
+        sessions: Object.fromEntries([...this.sessions].map(([id, session]) => [
+          id,
+          session.toObject?.() ?? clone(session)
+        ])),
+        operationReceipts: Object.fromEntries(this.operationReceipts),
+        authority: clone(this.authority)
+      };
+      try {
+        const result = await operation();
+        this.operationReceipts.set(normalizedOperationId, {
+          action,
+          fingerprint,
+          result: clone(result)
+        });
+        await this.#persistRuntime();
+        return clone(result);
+      } catch (error) {
+        this.hydrateRuntime(before);
+        throw error;
+      }
+    };
+    const queued = this.mutationQueue.catch(() => undefined).then(run);
+    this.mutationQueue = queued;
+    return queued;
   }
 
   #assertParticipant(session, participantKey, requestingUserId) {

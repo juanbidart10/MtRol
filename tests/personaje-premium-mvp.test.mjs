@@ -153,6 +153,10 @@ test("HP and MP use the MP geometry as their sole clipped ornamental frame", asy
   const template = await readFile(templatePath, "utf8");
   const style = await readFile(stylePath, "utf8");
   const sheet = await readFile(sheetPath, "utf8");
+  const sheetViewModel = await readFile(
+    new URL("../scripts/sheets/actors/personaje-sheet-view-model.js", import.meta.url),
+    "utf8"
+  );
 
   assert.equal((template.match(/class="mtrol-vital-bar resource-bar"/g) ?? []).length, 2);
   assert.equal((template.match(/class="mtrol-vital-track resource-bar__track"/g) ?? []).length, 2);
@@ -176,7 +180,8 @@ test("HP and MP use the MP geometry as their sole clipped ornamental frame", asy
   assert.match(style, /width:\s*clamp\(0%,\s*var\(--mtrol-vital-percent, 0%\),\s*100%\)/);
   assert.match(style, /\.resource-bar__fill\.hp-fill\s*\{[\s\S]*?#4b2025[\s\S]*?#351217/);
   assert.match(style, /\.resource-bar__fill\.mp-fill\s*\{[\s\S]*?#172d45[\s\S]*?#0d2033/);
-  assert.match(sheet, /Math\.clamp\(\(value \/ max\) \* 100, 0, 100\)/);
+  assert.match(sheet, /calcularPorcentajeVital/);
+  assert.match(sheetViewModel, /Math\.clamp\(\(value \/ max\) \* 100, 0, 100\)/);
 
   const visualPercentage = (current, max) => max <= 0
     ? 0

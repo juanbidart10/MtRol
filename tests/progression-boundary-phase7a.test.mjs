@@ -97,6 +97,14 @@ test("Sheet y servicio reutilizan el helper para Pending y controles GM", async 
     new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url),
     "utf8"
   );
+  const sheetViewModel = await readFile(
+    new URL("../scripts/sheets/actors/personaje-sheet-view-model.js", import.meta.url),
+    "utf8"
+  );
+  const competenceLevelService = await readFile(
+    new URL("../scripts/progression/competence-level-service.js", import.meta.url),
+    "utf8"
+  );
   const template = await readFile(
     new URL("../templates/actors/personaje-sheet.html", import.meta.url),
     "utf8"
@@ -107,8 +115,8 @@ test("Sheet y servicio reutilizan el helper para Pending y controles GM", async 
   );
 
   assert.match(sheet, /\.filter\(item => isProgressionCompetence\(item\)\s*&&\s*Number\(item\.system\?\.nivel\)\s*<\s*competenceCap\)/);
-  assert.match(sheet, /mtrolIsProgressionCompetence:\s*isProgressionCompetence\(item\)/);
-  assert.match(sheet, /if\s*\(!isProgressionCompetence\(item\)\)\s*\{/);
+  assert.match(sheetViewModel, /mtrolIsProgressionCompetence:\s*isProgressionCompetence\(item\)/);
+  assert.match(competenceLevelService, /if\s*\(!isProgressionCompetence\(item\)\)\s*\{/);
   assert.match(template, /{{#if this\.mtrolIsProgressionCompetence}}[\s\S]*?competencia-down/);
   assert.match(template, /{{#if this\.mtrolIsProgressionCompetence}}[\s\S]*?competencia-up/);
   assert.match(service, /const item = canonicalActor\.items\?\.get\?\.\(itemId\) \?\? null;[\s\S]*?if \(!isProgressionCompetence\(item\)\)/);

@@ -3,6 +3,8 @@ import {
   isMtrolActor,
   isMtrolObject
 } from "../items/item-invariants.js";
+import { preUpdateTokenDispatcher } from "./hook-dispatcher.js";
+import { logger } from "../utils/logger.js";
 
 // =========================
 // MTROL - CARRY WEIGHT
@@ -95,7 +97,7 @@ export function puedeCargarItem(_actor, _itemData) {
 }
 
 export function registrarHooksPesoMtrol() {
-  Hooks.on("preUpdateToken", (tokenDocument, changes, _options, userId) => {
+  preUpdateTokenDispatcher.subscribe("carry-weight.guard", (tokenDocument, changes, _options, userId) => {
     if (!isTokenMovement(tokenDocument, changes)) return true;
     if (isMovementRequestedByGM(userId)) return true;
 
@@ -114,7 +116,9 @@ export function registrarHooksPesoMtrol() {
     );
 
     return false;
-  });
+  }, { priority: 10, critical: true });
 
-  console.log("MTROL | Sistema de carga registrado.");
+  logger.info("HOOK", "Sistema de carga registrado", {
+    adapter: "carry-weight.guard"
+  });
 }

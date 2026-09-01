@@ -1,6 +1,7 @@
 import {
   MTROL_ORB_IDS
 } from "./orb-registry.js";
+import { preUpdateActorDispatcher, preUpdateItemDispatcher } from "../core/hook-dispatcher.js";
 
 function requestingUser(options = {}) {
   const id = options.requestingUserId ?? options.userId ?? game.user?.id;
@@ -66,21 +67,21 @@ export function guardCompetenciaOrbUpdate(item, changes, options = {}) {
 }
 
 export function installMtrolOrbAuthorityHooks() {
-  Hooks.on("preUpdateActor", (_actor, changes, options, userId) => {
+  preUpdateActorDispatcher.subscribe("orb.actor-guard", (_actor, changes, options, userId) => {
     const allowed = guardActorOrbUpdate(changes, {
       ...options,
       requestingUserId: userId
     });
     if (!allowed) ui.notifications.warn("Sólo un GM puede administrar Orbes.");
     return allowed;
-  });
+  }, { priority: 20, critical: true });
 
-  Hooks.on("preUpdateItem", (item, changes, options, userId) => {
+  preUpdateItemDispatcher.subscribe("orb.item-guard", (item, changes, options, userId) => {
     const allowed = guardCompetenciaOrbUpdate(item, changes, {
       ...options,
       requestingUserId: userId
     });
     if (!allowed) ui.notifications.warn("Sólo un GM puede asociar un hechizo a un Orbe.");
     return allowed;
-  });
+  }, { priority: 10, critical: true });
 }

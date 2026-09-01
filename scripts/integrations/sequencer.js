@@ -8,6 +8,8 @@
 // Sequencer solo renderiza el estado local de la escena activa.
 // =========================
 
+import { logger } from "../utils/logger.js";
+
 const MTROL_FX_PREFIX = "mtrol-fx-";
 const MTROL_FX_FLAG = "persistentFx";
 const MTROL_LEGACY_FX_FLAG = "persistentSequencerFx";
@@ -417,7 +419,13 @@ export async function teardownMtrolSequencerFX() {
     patchSequencerEffectManager();
     await endAllActiveMtrolSequencerFx();
   } catch (error) {
-    console.error("MtRol | Error finalizando FX locales al salir de escena:", error);
+    logger.warn("SEQUENCER", "local scene FX teardown failed", {
+      command: "sequencer.teardown",
+      sceneId: getCurrentSceneId(),
+      status: "failed",
+      reasonCode: "SEQUENCER_TEARDOWN_FAILED",
+      error
+    });
   }
 }
 
@@ -481,7 +489,13 @@ export async function restoreMtrolCompetenciaPersistentFX() {
     await syncMtrolCompetenciaPersistentFX(activeSceneId);
     await restoreCurrentSceneMtrolPersistentFX();
   } catch (error) {
-    console.error("MtRol | Error sincronizando FX persistentes por escena:", error);
+    logger.warn("SEQUENCER", "persistent scene FX restore failed", {
+      command: "sequencer.restore",
+      sceneId: getCurrentSceneId(),
+      status: "failed",
+      reasonCode: "SEQUENCER_RESTORE_FAILED",
+      error
+    });
   }
 }
 
@@ -559,14 +573,23 @@ export function registerMtrolSequencerHooks() {
   Hooks.on("canvasInit", teardownMtrolSequencerFX);
   Hooks.on("canvasReady", restoreMtrolCompetenciaPersistentFX);
 
-  const removeFlagFromEndedEffect = async effect => {
+  const removeFlagFromEndedEffect = effect => {
     if (suppressFlagRemoval) return;
 
     const name = getEffectName(effect);
     if (!isMtrolFxName(name)) return;
 
     forgetActiveMtrolFxName(name);
-    await removePersistentFxFlagByName(name);
+    // Foundry/Sequencer hook emitters do not await callbacks.
+    void removePersistentFxFlagByName(name).catch(error => {
+      logger.warn("SEQUENCER", "ended FX flag cleanup failed", {
+        command: "sequencer.effect.cleanup",
+        sceneId: getCurrentSceneId(),
+        status: "failed",
+        reasonCode: "SEQUENCER_FLAG_CLEANUP_FAILED",
+        error
+      });
+    });
   };
 
   Hooks.on("endedSequencerEffect", removeFlagFromEndedEffect);
@@ -581,7 +604,12 @@ export async function playCompetenciaFX(
 ) {
   try {
     if (!game.modules.get("sequencer")?.active) {
-      console.warn("MtRol | Sequencer no esta activo.");
+      logger.warn("SEQUENCER", "Sequencer module is inactive", {
+        command: "sequencer.play",
+        actorUuid: actor?.uuid ?? null,
+        status: "skipped",
+        reasonCode: "SEQUENCER_INACTIVE"
+      });
       return;
     }
 
@@ -618,7 +646,12 @@ export async function playCompetenciaFX(
       getCurrentSceneId();
 
     if (!sceneId) {
-      console.warn("MtRol | FX cancelado: no hay escena activa en canvas.");
+      logger.warn("SEQUENCER", "FX skipped without active scene", {
+        command: "sequencer.play",
+        actorUuid: actor?.uuid ?? null,
+        status: "skipped",
+        reasonCode: "SEQUENCER_SCENE_MISSING"
+      });
       return;
     }
 
@@ -633,17 +666,25 @@ export async function playCompetenciaFX(
     }
 
     if (!tokenBelongsToScene(casterToken, sceneId)) {
-      console.warn("MtRol | FX cancelado: el token caster no pertenece a la escena activa.", {
+      logger.warn("SEQUENCER", "caster token is outside active scene", {
+        command: "sequencer.play",
+        actorUuid: actor?.uuid ?? null,
         sceneId,
-        tokenId: getTokenId(casterToken)
+        tokenUuid: casterToken?.document?.uuid ?? null,
+        status: "skipped",
+        reasonCode: "SEQUENCER_CASTER_SCENE_MISMATCH"
       });
       return;
     }
 
     if (targetToken && !tokenBelongsToScene(targetToken, sceneId)) {
-      console.warn("MtRol | FX target cancelado: el token objetivo no pertenece a la escena activa.", {
+      logger.warn("SEQUENCER", "target token is outside active scene", {
+        command: "sequencer.play",
+        actorUuid: actor?.uuid ?? null,
         sceneId,
-        tokenId: getTokenId(targetToken)
+        tokenUuid: targetToken?.document?.uuid ?? null,
+        status: "skipped",
+        reasonCode: "SEQUENCER_TARGET_SCENE_MISMATCH"
       });
       targetToken = null;
     }
@@ -762,9 +803,13 @@ export async function playCompetenciaFX(
 
     await seq.play();
   } catch (error) {
-    console.error(
-      "MtRol | Error ejecutando FX:",
+    logger.warn("SEQUENCER", "FX execution failed", {
+      command: "sequencer.play",
+      actorUuid: actor?.uuid ?? null,
+      tokenUuid: targetToken?.document?.uuid ?? null,
+      status: "failed",
+      reasonCode: "SEQUENCER_PLAY_FAILED",
       error
-    );
+    });
   }
 }

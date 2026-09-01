@@ -8,6 +8,7 @@
 import {
   buildMtrolCardMetadata
 } from "../ui/chat-card-assets.js";
+import { logger } from "../utils/logger.js";
 
 function normalizeEntry(entry) {
   if (!entry) return null;
@@ -86,10 +87,12 @@ export function mtrolRestoreRoll(serializedRoll) {
 
     return Roll.fromData(rollData);
   } catch (error) {
-    console.warn(
-      "MTROL | No se pudo restaurar un Roll evaluado para el chat.",
+    logger.warn("CHAT_ROLL", "evaluated Roll restoration failed", {
+      command: "chat-roll.restore",
+      status: "fallback",
+      reasonCode: "CHAT_ROLL_RESTORE_FAILED",
       error
-    );
+    });
 
     return null;
   }

@@ -14,6 +14,7 @@ import {
   finalizeDharmaCritical,
   resolveDharmaInitialDie
 } from "./dharma-engine.js";
+import { logger } from "../utils/logger.js";
 
 // =========================
 // DELAY CINEMÁTICO
@@ -38,7 +39,12 @@ export async function mtrolMostrarDados(roll, {
       )
     );
   } catch (error) {
-    console.warn("MTROL | No se pudo esperar la animacion de dados.", error);
+    logger.warn("DICE", "dice animation wait failed", {
+      command: "dice3d.show",
+      status: "isolated",
+      reasonCode: "DICE_ANIMATION_FAILED",
+      error
+    });
   }
 }
 

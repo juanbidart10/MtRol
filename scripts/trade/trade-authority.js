@@ -10,10 +10,16 @@ import {
   getPrimaryActiveGM,
   isPrimaryActiveGM
 } from "../core/socket-requests.js";
+import { authorityService } from "../core/authority-service.js";
+import { logger } from "../utils/logger.js";
 
 import {
   TradeSessionStore
 } from "./trade-session-service.js";
+import {
+  tradeRuntimeRepository
+} from "./trade-runtime-repository.js";
+import { configureTradeReservationBoundary } from "./trade-reservation-boundary.js";
 
 import {
   buildPublicTradeItemSnapshot
@@ -98,11 +104,17 @@ async function resolveOfferTradeItem(reference) {
 
 export const tradeSessionStore = new TradeSessionStore({
   resolveRealQuantity: resolveRealTradeQuantity,
-  resolveOfferItem: resolveOfferTradeItem
+  resolveOfferItem: resolveOfferTradeItem,
+  repository: tradeRuntimeRepository
+});
+
+configureTradeReservationBoundary({
+  getReservedQuantity: (actorUuid, itemReference) =>
+    tradeSessionStore.getReservedQuantity(actorUuid, itemReference)
 });
 
 function requirePrimaryGM() {
-  if (!game.user?.isGM || !isPrimaryActiveGM()) {
+  if (!authorityService.isPrimaryGM()) {
     throw new Error("La operación de comercio requiere al GM primario.");
   }
   return game.user;
@@ -119,7 +131,9 @@ function requireUser(userId) {
 async function requireOwnedActor(actorUuid, user) {
   const actor = actorUuid ? await fromUuid(String(actorUuid)) : null;
   if (!actor) throw new Error("El Actor participante no existe.");
-  if (actor.testUserPermission?.(user, "OWNER") !== true) {
+  try {
+    authorityService.assertActorOwnership(actor, user);
+  } catch (_error) {
     throw new Error("El usuario no posee OWNER sobre el Actor participante.");
   }
   return actor;
@@ -174,7 +188,11 @@ async function persistTerminalAudit(session, options = {}) {
   try {
     return await tradeAuditService.persistTerminal(session, options);
   } catch (error) {
-    console.error("MTROL | No se pudo persistir la auditoría del comercio:", error);
+    logger.error("HISTORY", "trade terminal audit failed", {
+      tradeId: session?.id ?? null,
+      status: session?.state ?? null,
+      error: error.message
+    });
     return null;
   }
 }
@@ -207,43 +225,44 @@ export function publishTradeAuthorityReset({ invalidated = [], authority = null 
   });
 }
 
-export function initializeTradeAuthority() {
+export async function initializeTradeAuthority() {
   const primary = getPrimaryActiveGM();
 
   if (game.user?.isGM && primary?.id === game.user.id) {
-    const invalidated = tradeSessionStore.reconcileAuthority({
+    await tradeSessionStore.hydrateFromPersistence();
+    const recovered = await tradeSessionStore.adoptAuthority({
       gmUserId: game.user.id,
-      epoch: LOCAL_AUTHORITY_EPOCH,
-      reason: "authority-runtime-reinitialized"
+      epoch: LOCAL_AUTHORITY_EPOCH
     });
-    for (const session of invalidated) {
-      tradeMovementLocks.releaseSession(session.id);
-      auditEvent(session, "invalidation", { message: session.invalidReason });
-      persistTerminalAudit(session);
+    for (const session of recovered) {
+      try {
+        const tokens = await resolveSessionTokens(session);
+        tradeMovementLocks.releaseSession(session.id);
+        tradeMovementLocks.lockSession(session, tokens);
+        publishTradeSession(session, { reason: "authority-recovered" });
+      } catch (error) {
+        logger.warn("RECOVERY", "trade movement lock could not be rebuilt", {
+          tradeId: session.id,
+          status: session.state,
+          error: error.message
+        });
+      }
     }
     publishTradeAuthorityReset({
-      invalidated,
+      invalidated: [],
       authority: { gmUserId: game.user.id, epoch: LOCAL_AUTHORITY_EPOCH }
     });
-    return { primary: true, invalidated };
+    return { primary: true, invalidated: [], recovered };
   }
 
-  const invalidated = tradeSessionStore.reconcileAuthority({
-    gmUserId: primary?.id ?? null,
-    epoch: primary ? `remote:${primary.id}` : null,
-    reason: primary ? "primary-gm-changed" : "primary-gm-lost"
+  publishTradeAuthorityReset({
+    invalidated: [],
+    authority: primary ? { gmUserId: primary.id, epoch: `remote:${primary.id}` } : null
   });
-
-  for (const session of invalidated) {
-    tradeMovementLocks.releaseSession(session.id);
-    publishTradeSession(session, { reason: session.invalidReason });
-    auditEvent(session, "invalidation", { message: session.invalidReason });
-    persistTerminalAudit(session);
-  }
-  return { primary: false, invalidated };
+  return { primary: false, invalidated: [], recovered: [] };
 }
 
-export function reconcileTradeAuthority() {
+export async function reconcileTradeAuthority() {
   return initializeTradeAuthority();
 }
 
@@ -341,6 +360,7 @@ export async function setTradeOfferAuthoritative(payload = {}, {
     participantKey: payload.participantKey,
     requestingUserId,
     entries: payload.entries ?? [],
+    revision: payload.revision ?? null,
     operationId: payload.operationId
   });
   publishTradeSession(session, { reason: "offer-updated" });
@@ -378,7 +398,7 @@ export async function confirmTradeSessionAuthoritative(payload = {}, {
   return executeTradeSessionAuthoritative({
     sessionId: session.id,
     revision: session.revision,
-    executionId: `trade-${session.id}-${session.revision}-${foundry.utils.randomID()}`
+    executionId: `trade:${session.id}:${session.revision}`
   });
 }
 
@@ -387,6 +407,12 @@ async function validateExecutionParticipants(session) {
     const user = requireUser(participant.userId);
     await requireOwnedActor(participant.actorUuid, user);
   }
+  const tokens = await resolveSessionTokens(session);
+  validateTradeTokenProximity({
+    tokenA: tokens.participantA,
+    tokenB: tokens.participantB,
+    grid: globalThis.canvas?.grid
+  });
 }
 
 async function createTradeCompletionMessage(session, receipt) {
@@ -409,7 +435,11 @@ async function createTradeCompletionMessage(session, receipt) {
     });
     return true;
   } catch (error) {
-    console.error("MTROL | Comercio completado, pero falló el ChatMessage:", error);
+    logger.error("TRADE", "Comercio completado, pero falló el ChatMessage", {
+      sessionId: session.id,
+      executionId: receipt.executionId,
+      error: error?.message ?? String(error)
+    });
     return false;
   }
 }
@@ -427,6 +457,18 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
       previousReceipt.revision !== Number(payload.revision)
     ) {
       throw new Error("El executionId ya fue utilizado con otro payload.");
+    }
+    if (["EXECUTING", "RECOVERY_REQUIRED"].includes(session.state)) {
+      const completed = await tradeSessionStore.completeSession({
+        sessionId: session.id,
+        authorityUserId: gm.id,
+        executionId,
+        operationId: `complete-${executionId}`
+      });
+      tradeMovementLocks.releaseSession(completed.id);
+      publishTradeSession(completed, { reason: "execution-recovered-completed" });
+      await persistTerminalAudit(completed, { executionResult: previousReceipt });
+      return completed;
     }
     return tradeSessionStore.getSession(session.id);
   }
@@ -474,6 +516,23 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
   try {
     receipt = await tradeTransferCoordinator.executePlan(plan);
   } catch (error) {
+    if (error.transactionRolledBack !== true) {
+      const recoveryRequired = await tradeSessionStore.markRecoveryRequired({
+        sessionId: session.id,
+        authorityUserId: gm.id,
+        reasonCode: error.reasonCode ?? "TRADE_COMMIT_INTERRUPTED",
+        operationId: `recovery-required-${executionId}`
+      });
+      publishTradeSession(recoveryRequired, { reason: "execution-recovery-required" });
+      logger.error("RECOVERY", "trade commit requires recovery", {
+        tradeId: session.id,
+        transactionId: executionId,
+        status: recoveryRequired.state,
+        reasonCode: recoveryRequired.recovery?.reasonCode ?? null,
+        error: error.message
+      });
+      throw error;
+    }
     const invalid = await tradeSessionStore.failExecution({
       sessionId: session.id,
       authorityUserId: gm.id,
@@ -511,6 +570,52 @@ export async function executeTradeSessionAuthoritative(payload = {}) {
   await persistTerminalAudit(completed, { executionResult: receipt });
   await createTradeCompletionMessage(completed, receipt);
   return completed;
+}
+
+export async function recoverTradeTransactionsAuthoritative() {
+  const gm = requirePrimaryGM();
+  const recovered = [];
+  const required = [];
+  for (const session of tradeSessionStore.listSessions({ activeOnly: true })) {
+    if (session.state === "READY") {
+      required.push(session.id);
+      continue;
+    }
+    if (!["EXECUTING", "RECOVERY_REQUIRED"].includes(session.state)) continue;
+    const executionId = session.execution?.executionId;
+    if (!executionId) {
+      required.push(session.id);
+      continue;
+    }
+    try {
+      const receipt = await tradeTransferCoordinator.recoverExecution(executionId);
+      const completed = await tradeSessionStore.completeSession({
+        sessionId: session.id,
+        authorityUserId: gm.id,
+        executionId,
+        operationId: `complete-${executionId}`
+      });
+      tradeMovementLocks.releaseSession(completed.id);
+      publishTradeSession(completed, { reason: "execution-recovered" });
+      await persistTerminalAudit(completed, { executionResult: receipt });
+      recovered.push(session.id);
+    } catch (error) {
+      required.push(session.id);
+      logger.error("RECOVERY", "trade recovery remains required", {
+        tradeId: session.id,
+        transactionId: executionId,
+        status: session.state,
+        reasonCode: error.reasonCode ?? "TRADE_RECOVERY_REQUIRED",
+        error: error.message
+      });
+    }
+  }
+  await tradeRuntimeRepository.mutate(tradeRuntimeRepository.target, draft => {
+    draft.recovery.lastRunAt = Date.now();
+    draft.recovery.lastResult = required.length ? "recovery-required" : "recovered";
+    draft.recovery.requiredTradeIds = required;
+  });
+  return { recovered, required };
 }
 
 export async function cancelTradeSessionAuthoritative(payload = {}, {
@@ -557,6 +662,41 @@ export async function cancelTradeSessionByGMAuthoritative(payload = {}, {
   publishTradeSession(session, { reason: "session-cancelled-by-gm" });
   auditEvent(session, "cancel", { message: `Cancelado por GM: ${session.cancelReason}` });
   await persistTerminalAudit(session);
+  return session;
+}
+
+function requireRequestingGM(requestingUserId) {
+  const authority = requirePrimaryGM();
+  const requestingGM = game.users?.get?.(String(requestingUserId ?? ""));
+  if (!requestingGM?.isGM || !requestingGM.active) {
+    throw new Error("La intervención de comercio es exclusiva para un GM activo.");
+  }
+  return { authority, requestingGM };
+}
+
+export async function pauseTradeSessionAuthoritative(payload = {}, { requestingUserId } = {}) {
+  const { authority, requestingGM } = requireRequestingGM(requestingUserId);
+  const session = await tradeSessionStore.pauseSession({
+    sessionId: payload.sessionId,
+    authorityUserId: authority.id,
+    requestingUserId: requestingGM.id,
+    operationId: payload.operationId
+  });
+  publishTradeSession(session, { reason: "session-paused" });
+  auditEvent(session, "pause", { message: `Pausado por GM ${requestingGM.id}` });
+  return session;
+}
+
+export async function resumeTradeSessionAuthoritative(payload = {}, { requestingUserId } = {}) {
+  const { authority, requestingGM } = requireRequestingGM(requestingUserId);
+  const session = await tradeSessionStore.resumeSession({
+    sessionId: payload.sessionId,
+    authorityUserId: authority.id,
+    requestingUserId: requestingGM.id,
+    operationId: payload.operationId
+  });
+  publishTradeSession(session, { reason: "session-resumed" });
+  auditEvent(session, "resume", { message: `Reanudado por GM ${requestingGM.id}` });
   return session;
 }
 

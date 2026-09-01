@@ -5,9 +5,7 @@
 // Sequencer/JB2A solo renderizan la escena activa.
 // =========================
 
-import {
-  MtrolAmbientFxApp
-} from "./ambient-fx-app.js";
+import { logger } from "../utils/logger.js";
 
 const MTROL_AMBIENT_FX_FLAG = "ambientFx";
 const MTROL_AMBIENT_FX_PREFIX = "mtrol-ambient-";
@@ -17,8 +15,16 @@ const MTROL_AMBIENT_ALLOWED_PATHS = /^(modules|systems|world)\//i;
 const MTROL_AMBIENT_UI_BUTTON = "mtrolAmbientFx";
 
 let ambientFxApp = null;
+let AmbientFxAppClass = null;
 let ambientFxUiButtonRegistered = false;
 let ambientFxUiWarningShown = false;
+
+export function configureAmbientFxApp(AppClass) {
+  if (typeof AppClass !== "function") {
+    throw new TypeError("MTROL Ambient FX requiere una clase Application válida.");
+  }
+  AmbientFxAppClass = AppClass;
+}
 
 function getFlagScope() {
   return game.system?.id ?? "mtrol";
@@ -73,7 +79,12 @@ function normalizeAmbientFilePath(path) {
 function warnMissingFile(path) {
   const message = `MTROL Ambient FX | Archivo no encontrado: ${path}`;
   ui.notifications.warn(message);
-  console.warn(message);
+  logger.warnOnce("AMBIENT_FX", "ambient FX file missing", {
+    command: "ambient.file.validate",
+    file: path,
+    status: "rejected",
+    reasonCode: "AMBIENT_FX_FILE_MISSING"
+  }, { key: `ambient-file:${path}` });
 }
 
 function validateAmbientFilePath(path) {
@@ -108,7 +119,13 @@ export async function checkAmbientFxFile(path) {
     warnMissingFile(file);
     return null;
   } catch (error) {
-    console.warn("MTROL Ambient FX | Error al validar archivo", error);
+    logger.warn("AMBIENT_FX", "ambient FX file validation failed", {
+      command: "ambient.file.validate",
+      file,
+      status: "rejected",
+      reasonCode: "AMBIENT_FX_FILE_VALIDATION_FAILED",
+      error
+    });
     ui.notifications.warn(`MTROL Ambient FX | Archivo no encontrado: ${file}`);
     return null;
   }
@@ -225,7 +242,12 @@ function applyOptionalSequencerLayerMethods(effect, data) {
 async function playAmbientFxData(data, { persist = true, preview = false } = {}) {
   if (!game.modules.get("sequencer")?.active) {
     ui.notifications.warn("Sequencer no esta activo.");
-    console.warn("MTROL Ambient FX | Sequencer no esta activo.");
+    logger.warnOnce("AMBIENT_FX", "Sequencer module is inactive", {
+      command: "ambient.play",
+      sceneId: getCurrentScene()?.id ?? null,
+      status: "skipped",
+      reasonCode: "SEQUENCER_INACTIVE"
+    }, { key: "ambient-fx:sequencer-inactive" });
     return null;
   }
 
@@ -274,7 +296,13 @@ async function playAmbientFxData(data, { persist = true, preview = false } = {})
     await sequence.play();
     return name;
   } catch (error) {
-    console.warn("MTROL Ambient FX | Error capturado al reproducir", error);
+    logger.warn("AMBIENT_FX", "ambient FX playback failed", {
+      command: "ambient.play",
+      sceneId: getCurrentScene()?.id ?? null,
+      status: "isolated",
+      reasonCode: "AMBIENT_FX_PLAY_FAILED",
+      error
+    });
     ui.notifications.warn("MTROL Ambient FX | No se pudo reproducir el FX.");
     return null;
   }
@@ -319,7 +347,13 @@ export async function addAmbientFx(data = {}) {
 
     return effectData;
   } catch (error) {
-    console.warn("MTROL Ambient FX | Error capturado al guardar", error);
+    logger.warn("AMBIENT_FX", "ambient FX save failed", {
+      command: "ambient.save",
+      sceneId: getCurrentScene()?.id ?? null,
+      status: "failed",
+      reasonCode: "AMBIENT_FX_SAVE_FAILED",
+      error
+    });
     ui.notifications.warn("MTROL Ambient FX | No se pudo guardar el FX.");
     return null;
   }
@@ -350,7 +384,13 @@ export async function removeAmbientFx(id) {
 
     return true;
   } catch (error) {
-    console.warn("MTROL Ambient FX | Error capturado al eliminar", error);
+    logger.warn("AMBIENT_FX", "ambient FX delete failed", {
+      command: "ambient.delete",
+      sceneId: getCurrentScene()?.id ?? null,
+      status: "failed",
+      reasonCode: "AMBIENT_FX_DELETE_FAILED",
+      error
+    });
     ui.notifications.warn("MTROL Ambient FX | No se pudo eliminar el FX.");
     return false;
   }
@@ -418,7 +458,13 @@ export async function refreshSceneAmbientFx() {
     await stopActiveAmbientFx();
     return playSceneAmbientFx(getCurrentScene()?.id);
   } catch (error) {
-    console.warn("MTROL Ambient FX | Error capturado al refrescar", error);
+    logger.warn("AMBIENT_FX", "ambient FX refresh failed", {
+      command: "ambient.refresh",
+      sceneId: getCurrentScene()?.id ?? null,
+      status: "isolated",
+      reasonCode: "AMBIENT_FX_REFRESH_FAILED",
+      error
+    });
     ui.notifications.warn("MTROL Ambient FX | No se pudo refrescar la escena.");
     return [];
   }
@@ -445,7 +491,10 @@ export function openManager() {
     return null;
   }
 
-  ambientFxApp ??= new MtrolAmbientFxApp();
+  if (!AmbientFxAppClass) {
+    throw new Error("MTROL Ambient FX UI no fue configurada durante init.");
+  }
+  ambientFxApp ??= new AmbientFxAppClass();
   ambientFxApp.render(true);
   return ambientFxApp;
 }
@@ -489,7 +538,7 @@ function getAmbientFxToolData() {
     type: "button",
     visible: game.user.isGM,
     order: 999,
-    onClick: () => game.mtrol.fx.openManager()
+    onClick: () => openManager()
   };
 }
 
@@ -624,7 +673,7 @@ function addSceneControlButton(controls) {
 
 function openAmbientFxManagerFromButton(event) {
   event?.preventDefault?.();
-  game.mtrol?.fx?.openManager();
+  openManager();
 }
 
 function addAmbientFxDirectoryButton(app, html) {
@@ -693,7 +742,11 @@ function warnMissingAmbientFxUiButton() {
   if (!game.user?.isGM || ambientFxUiButtonRegistered || ambientFxUiWarningShown) return;
 
   ambientFxUiWarningShown = true;
-  console.warn("MTROL Ambient FX | No se pudo registrar botón UI, usar game.mtrol.fx.openManager()");
+  logger.warnOnce("AMBIENT_FX_UI", "ambient FX directory button registration failed", {
+    command: "ambient.ui.register",
+    status: "fallback",
+    reasonCode: "AMBIENT_FX_UI_BUTTON_MISSING"
+  }, { key: "ambient-fx:ui-button-missing" });
 }
 
 function scheduleAmbientFxUiFallback() {
@@ -713,12 +766,21 @@ export function registerMtrolAmbientFxHooks() {
   Hooks.on("canvasReady", scheduleAmbientFxUiFallback);
 
   Hooks.on("canvasTearDown", () => stopActiveAmbientFx().catch(error => {
-    console.warn("MTROL Ambient FX | Error capturado al detener por cambio de escena", error);
+    logger.warn("AMBIENT_FX", "scene teardown stop failed", {
+      command: "ambient.stop.scene-teardown", status: "isolated",
+      reasonCode: "AMBIENT_FX_TEARDOWN_FAILED", error
+    });
   }));
   Hooks.on("canvasInit", () => stopActiveAmbientFx().catch(error => {
-    console.warn("MTROL Ambient FX | Error capturado al detener por inicializacion de canvas", error);
+    logger.warn("AMBIENT_FX", "canvas init stop failed", {
+      command: "ambient.stop.canvas-init", status: "isolated",
+      reasonCode: "AMBIENT_FX_CANVAS_INIT_FAILED", error
+    });
   }));
   Hooks.on("canvasReady", () => playSceneAmbientFx(getCurrentScene()?.id).catch(error => {
-    console.warn("MTROL Ambient FX | Error capturado al reproducir escena", error);
+    logger.warn("AMBIENT_FX", "scene playback hook failed", {
+      command: "ambient.play.scene", sceneId: getCurrentScene()?.id ?? null,
+      status: "isolated", reasonCode: "AMBIENT_FX_SCENE_PLAY_FAILED", error
+    });
   }));
 }

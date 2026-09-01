@@ -2,9 +2,11 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const ApplicationClass = HandlebarsApplicationMixin(ApplicationV2);
 
 export class MtrolTradeAuditHistoryApp extends ApplicationClass {
-  constructor({ onClosed = null, ...options } = {}) {
+  constructor({ api, onClosed = null, ...options } = {}) {
     super({ ...options, id: "mtrol-trade-audit-history" });
     this.onClosed = onClosed;
+    if (!api) throw new TypeError("MtrolTradeAuditHistoryApp requiere la API canónica de Trade.");
+    this.api = api;
     this.filter = "ALL";
     this.selectedAuditId = null;
   }
@@ -22,7 +24,7 @@ export class MtrolTradeAuditHistoryApp extends ApplicationClass {
   async _prepareContext(options = {}) {
     const base = await super._prepareContext(options);
     if (!game.user?.isGM) return { ...base, forbidden: true };
-    const records = await game.mtrol.trade.getAuditHistory(
+    const records = await this.api.getAuditHistory(
       this.filter === "ALL" ? {} : { state: this.filter }
     );
     return {

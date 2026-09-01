@@ -7,6 +7,7 @@ import {
   MTROL_3D_VISUAL_PRESET_CHOICES,
   notifyMtrol3DCamera
 } from "./mtrol-3d-settings.js";
+import { logger } from "../utils/logger.js";
 
 const SYSTEM_ID = "mtrol";
 const BACKUP_FLAG = "visual3DBackup";
@@ -120,12 +121,12 @@ const VISUAL_PRESETS = {
 };
 
 function warn(message, data = null) {
-  if (data) {
-    console.warn(`MTROL 3D Visual | ${message}`, data);
-    return;
-  }
-
-  console.warn(`MTROL 3D Visual | ${message}`);
+  logger.warn("3D_VISUAL", message, {
+    status: "isolated",
+    reasonCode: "VISUAL_3D_OPERATION_FAILED",
+    error: data instanceof Error ? data : undefined,
+    detail: data instanceof Error ? undefined : data
+  });
 }
 
 function getScene() {
@@ -579,7 +580,7 @@ export function installMtrol3DVisualApi() {
       visual: mtrol3dVisualApi
     });
 
-    console.log("MTROL | 3D Visual ready");
+    logger.debug("3D_VISUAL", "visual API ready");
     return true;
   } catch (error) {
     warn("No se pudo instalar game.mtrol3d.visual.", error);

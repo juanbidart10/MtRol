@@ -40,6 +40,24 @@ const MAGIC_HYBRID_CLASSES = Object.freeze([
   ["bardo", "Bardo"]
 ]);
 
+const HYBRID_CLASS_IDS = new Set([
+  "alquimista",
+  "bardo",
+  "clerigo"
+]);
+
+export const MTROL_CLASS_FAMILIES = Object.freeze({
+  PHYSICAL: "PHYSICAL",
+  MAGICAL: "MAGICAL",
+  HYBRID: "HYBRID"
+});
+
+const COUNTERATTACK_DOMAINS_BY_FAMILY = Object.freeze({
+  [MTROL_CLASS_FAMILIES.PHYSICAL]: Object.freeze(["PHYSICAL"]),
+  [MTROL_CLASS_FAMILIES.MAGICAL]: Object.freeze(["MAGICAL"]),
+  [MTROL_CLASS_FAMILIES.HYBRID]: Object.freeze(["PHYSICAL"])
+});
+
 const CLASS_SPECIAL_ABILITIES = Object.freeze({
   mago: Object.freeze({
     specialAbility1: Object.freeze({
@@ -57,19 +75,34 @@ const CLASS_SPECIAL_ABILITIES = Object.freeze({
   })
 });
 
-function createClassDefinitions(entries, resourceProfile) {
+function createClassDefinitions(entries, resourceProfile, familyResolver) {
   return entries.map(([id, label]) => Object.freeze({
     id,
     label,
     resourceProfile,
+    family: familyResolver(id),
+    counterattackDomains: COUNTERATTACK_DOMAINS_BY_FAMILY[familyResolver(id)],
+    attributeMovementFollowUp: resourceProfile === "physical"
+      ? "attack-if-in-range"
+      : "none",
     specialAbility1: CLASS_SPECIAL_ABILITIES[id]?.specialAbility1 ?? null,
     specialAbility2: CLASS_SPECIAL_ABILITIES[id]?.specialAbility2 ?? null
   }));
 }
 
 const CLASS_DEFINITIONS = Object.freeze([
-  ...createClassDefinitions(PHYSICAL_CLASSES, "physical"),
-  ...createClassDefinitions(MAGIC_HYBRID_CLASSES, "magicHybrid")
+  ...createClassDefinitions(
+    PHYSICAL_CLASSES,
+    "physical",
+    () => MTROL_CLASS_FAMILIES.PHYSICAL
+  ),
+  ...createClassDefinitions(
+    MAGIC_HYBRID_CLASSES,
+    "magicHybrid",
+    id => HYBRID_CLASS_IDS.has(id)
+      ? MTROL_CLASS_FAMILIES.HYBRID
+      : MTROL_CLASS_FAMILIES.MAGICAL
+  )
 ]);
 
 export const MTROL_CLASS_IDS = Object.freeze(
@@ -94,6 +127,21 @@ export function getResourceProfileForClass(classId) {
   return definition
     ? MTROL_CLASS_RESOURCE_PROFILES[definition.resourceProfile] ?? null
     : null;
+}
+
+export function getAttributeMovementFollowUpForClass(classId) {
+  return getClassDefinition(classId)?.attributeMovementFollowUp ?? "none";
+}
+
+export function getCounterattackPolicyForClass(classId) {
+  const definition = getClassDefinition(classId);
+  if (!definition) return null;
+  const fallback = COUNTERATTACK_DOMAINS_BY_FAMILY[definition.family] ?? [];
+  return {
+    classId: definition.id,
+    family: definition.family,
+    counterattackDomains: Array.from(definition.counterattackDomains ?? fallback)
+  };
 }
 
 export const getClassResourceProfile = getResourceProfileForClass;

@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const users = new Map([
-  ["gm", { id: "gm", isGM: true }],
-  ["player", { id: "player", isGM: false }]
+  ["gm", { id: "gm", isGM: true, active: true }],
+  ["player", { id: "player", isGM: false, active: true }]
 ]);
 
 globalThis.game = {
   user: users.get("gm"),
-  users: { get: id => users.get(id) ?? null }
+  users
 };
 globalThis.foundry = {
   utils: {

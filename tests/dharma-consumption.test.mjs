@@ -161,7 +161,7 @@ test("saldo insuficiente, usuario ajeno y reutilizacion alterada no modifican el
     /no puede gastar Dharma/
   );
 
-  const receipt = await service.consumeDharmaSpendAuthoritative(payload(), {
+  const receipt = await service.consumeDharmaSpendAuthoritative(payload({ transactionId: "tx-valid" }), {
     requestingUserId: player.id
   });
 
@@ -170,6 +170,7 @@ test("saldo insuficiente, usuario ajeno y reutilizacion alterada no modifican el
 
   await assert.rejects(
     service.consumeDharmaSpendAuthoritative(payload({
+      transactionId: "tx-valid",
       selectedIds: ["initial:0:1"]
     }), {
       requestingUserId: player.id

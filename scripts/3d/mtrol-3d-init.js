@@ -3,6 +3,8 @@ import {
   is3DCanvasActive,
   refreshFollowTarget
 } from "./mtrol-3d-camera.js";
+import { updateTokenDispatcher } from "../core/hook-dispatcher.js";
+import { logger } from "../utils/logger.js";
 
 import {
   getMtrol3DCameraPreferences,
@@ -72,13 +74,14 @@ export function initMtrol3D() {
 
   Hooks.once("ready", () => {
     if (!is3DCanvasActive()) {
-      console.warn(
-        "MTROL 3D | 3D Canvas no esta activo. La capa 3D queda en modo seguro."
-      );
+      logger.warn("3D", "3D Canvas inactive; safe mode enabled", {
+        status: "safe-mode",
+        reasonCode: "CANVAS_3D_INACTIVE"
+      });
       return;
     }
 
-    console.log("MTROL 3D | 3D Canvas detectado. Camara lista.");
+    logger.debug("3D", "3D Canvas detected; camera ready");
   });
 
   Hooks.on("canvasReady", () => {
@@ -98,10 +101,10 @@ export function initMtrol3D() {
     refreshFollowTarget(token);
   });
 
-  Hooks.on("updateToken", (tokenDocument, changes) => {
+  updateTokenDispatcher.subscribe("3d.follow-token", (tokenDocument, changes) => {
     if (!game.mtrol3d?.camera?.getState()?.followEnabled) return;
     if (!("x" in changes) && !("y" in changes) && !("elevation" in changes)) return;
 
     refreshFollowTarget(tokenDocument?.object ?? null);
-  });
+  }, { priority: 300, critical: false });
 }

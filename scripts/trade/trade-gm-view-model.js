@@ -120,6 +120,9 @@ export async function buildGMTradeMonitorView({
       participantKey: entry.participantKey
     })),
     timeline: [...timeline],
+    paused: session.state === "PAUSED",
+    canPause: ["NEGOTIATING", "READY"].includes(session.state),
+    canResume: session.state === "PAUSED",
     canCancel: !["EXECUTING", "COMPLETED", "CANCELLED", "INVALID"].includes(session.state),
     cancelDisabledReason: session.state === "EXECUTING"
       ? "Una transferencia en ejecución no puede interrumpirse."

@@ -8,6 +8,12 @@ import {
   requestPrimaryGM
 } from "../core/socket-requests.js";
 
+import {
+  getActorResourceTransaction,
+  resetActorResourceServiceForTests,
+  runActorResourceTransaction
+} from "../actors/actor-resource-service.js";
+
 const consumedTransactions = new Map();
 const actorConsumptionQueues = new Map();
 
@@ -135,6 +141,13 @@ export async function consumeDharmaSpendAuthoritative(
       throw new Error("El usuario no puede gastar Dharma de este Actor.");
     }
 
+    const persisted = getActorResourceTransaction(normalized.actorUuid, normalized.transactionId);
+    if (persisted) {
+      assertReceiptMatches(persisted, normalized);
+      consumedTransactions.set(key, persisted);
+      return { ...persisted, replayed: true };
+    }
+
     const balanceBefore =
       Number(actor.system?.recursos?.dharma);
 
@@ -155,20 +168,21 @@ export async function consumeDharmaSpendAuthoritative(
     const balanceAfter =
       balanceBefore - normalized.cost;
 
-    await actor.update({
-      "system.recursos.dharma": balanceAfter
-    });
-
-    const receipt = {
-      authorized: true,
-      replayed: false,
-      actorUuid: normalized.actorUuid,
+    const receipt = await runActorResourceTransaction(actor, {
       transactionId: normalized.transactionId,
-      selectedIds: normalized.selectedIds,
-      cost: normalized.cost,
-      balanceBefore,
-      balanceAfter
-    };
+      origin: "dharma-spend",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
+      await beforeWrite();
+      await canonicalActor.update({ "system.recursos.dharma": balanceAfter });
+      return {
+        authorized: true,
+        selectedIds: normalized.selectedIds,
+        cost: normalized.cost,
+        balanceBefore,
+        balanceAfter
+      };
+    });
 
     consumedTransactions.set(key, receipt);
     return receipt;
@@ -200,9 +214,9 @@ export async function consumeDharmaSpend(actor, context) {
   const response =
     await requestPrimaryGM("mtrolConsumeDharma", payload);
 
-  if (!response.ok) {
+  if (!response.ok || response.result?.commandResult?.ok === false) {
     throw new Error(
-      response.error ?? "No se pudo consumir Dharma."
+      response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo consumir Dharma."
     );
   }
 
@@ -212,4 +226,5 @@ export async function consumeDharmaSpend(actor, context) {
 export function resetDharmaConsumptionStateForTests() {
   consumedTransactions.clear();
   actorConsumptionQueues.clear();
+  resetActorResourceServiceForTests();
 }

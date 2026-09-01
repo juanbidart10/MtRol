@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger.js";
+
 const unresolvedFamilyAudit = new Set();
 
 export const MTROL_CARD_ASSETS = Object.freeze({
@@ -58,9 +60,12 @@ function warnUnclassifiedFamily(value) {
   if (unresolvedFamilyAudit.has(unresolved)) return;
 
   unresolvedFamilyAudit.add(unresolved);
-  console.warn(
-    `MTROL | Familia de card no clasificada: ${unresolved}. Se usa attack como fallback visual.`
-  );
+  logger.warn("CHAT_CARD", "unclassified card family uses visual fallback", {
+    command: "chat-card.asset.resolve",
+    family: unresolved,
+    status: "fallback",
+    reasonCode: "CHAT_CARD_FAMILY_UNCLASSIFIED"
+  });
 }
 
 export function normalizeMtrolCardFamily(family) {

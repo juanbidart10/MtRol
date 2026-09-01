@@ -1,6 +1,19 @@
 const activeTradeApps = new Map();
 const TERMINAL_STATES = new Set(["CANCELLED", "COMPLETED", "INVALID"]);
 let hooksRegistered = false;
+let tradeApi = null;
+
+export function configureTradeRuntimeApi(api) {
+  if (!api || typeof api !== "object") {
+    throw new TypeError("Trade Runtime requiere la API canónica de Trade.");
+  }
+  tradeApi = api;
+}
+
+function api() {
+  if (!tradeApi) throw new Error("Trade Runtime no fue configurado durante setup.");
+  return tradeApi;
+}
 
 function participantKeyForCurrentUser(session) {
   return Object.entries(session?.participants ?? {})
@@ -60,13 +73,14 @@ export async function openTradeApp(sessionId) {
     return existing;
   }
 
-  const session = game.mtrol?.trade?.getSession?.(id);
+  const session = api().getSession(id);
   if (!session || !participantKeyForCurrentUser(session) || TERMINAL_STATES.has(session.state)) {
     return null;
   }
 
   const { MtrolTradeApp } = await import("../ui/trade-app.js");
   const app = new MtrolTradeApp(id, {
+    api: api(),
     onClosed: () => activeTradeApps.delete(id)
   });
   activeTradeApps.set(id, app);
@@ -106,7 +120,7 @@ export async function requestTradeFromTarget({ sourceActor, targetToken }) {
   }
 
   try {
-    const session = await game.mtrol.trade.createSession({
+    const session = await api().createSession({
       participantAActorUuid: sourceActor.uuid,
       participantATokenUuid: sourceToken.uuid,
       participantBActorUuid: targetActor.uuid,

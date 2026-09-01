@@ -4,6 +4,7 @@ export const MTROL_PREPARATION_FLAG = "preparation";
 export const MTROL_PREPARATION_RESERVATION_FLAG = "preparationReservation";
 export const MTROL_TURN_ADVANCE_FLAG = "turnAdvance";
 export const MTROL_TURN_RESOLUTION_FLAG = "turnResolution";
+export const MTROL_GRANTED_MOVEMENT_FLAG = "grantedMovement";
 export const MTROL_PREPARATION_MAX = 5;
 
 const OFFENSIVE_ACTION_TYPES = new Set([
@@ -35,7 +36,11 @@ export function createTurnState({
     baseMovementRemaining: 1,
     extraMovementRemaining: 0,
     movementSpent: 0,
-    actionConsumed: false
+    actionConsumed: false,
+    movementSource: null,
+    attributeMovementFollowUp: "none",
+    followUpAttackAvailable: false,
+    followUpAttackConsumed: false
   };
 }
 
@@ -47,7 +52,15 @@ export function normalizeTurnState(state = {}) {
     baseMovementRemaining: nonNegativeInteger(state?.baseMovementRemaining),
     extraMovementRemaining: nonNegativeInteger(state?.extraMovementRemaining),
     movementSpent: nonNegativeInteger(state?.movementSpent),
-    actionConsumed: state?.actionConsumed === true
+    actionConsumed: state?.actionConsumed === true,
+    movementSource: ["attribute", "spell", "movement-action", "orb"].includes(state?.movementSource)
+      ? state.movementSource
+      : null,
+    attributeMovementFollowUp: state?.attributeMovementFollowUp === "attack-if-in-range"
+      ? "attack-if-in-range"
+      : "none",
+    followUpAttackAvailable: state?.followUpAttackAvailable === true,
+    followUpAttackConsumed: state?.followUpAttackConsumed === true
   };
 }
 
@@ -97,7 +110,9 @@ export function movementFromFinalResult(resolution = {}) {
 }
 
 export function grantExtraMovement(state, resolution = {}, {
-  fullAction = false
+  fullAction = false,
+  source = null,
+  attributeMovementFollowUp = "none"
 } = {}) {
   const current = normalizeTurnState(state);
   const granted = movementFromFinalResult(resolution);
@@ -106,9 +121,16 @@ export function grantExtraMovement(state, resolution = {}, {
     granted,
     state: {
       ...current,
-      baseMovementRemaining: fullAction ? 0 : current.baseMovementRemaining,
       extraMovementRemaining: current.extraMovementRemaining + granted,
-      actionConsumed: fullAction ? true : current.actionConsumed
+      actionConsumed: fullAction || source === "attribute" ? true : current.actionConsumed,
+      movementSource: ["attribute", "spell", "movement-action", "orb"].includes(source)
+        ? source
+        : current.movementSource,
+      attributeMovementFollowUp: source === "attribute" && attributeMovementFollowUp === "attack-if-in-range"
+        ? "attack-if-in-range"
+        : source === "attribute" ? "none" : current.attributeMovementFollowUp,
+      followUpAttackAvailable: source === "attribute" ? false : current.followUpAttackAvailable,
+      followUpAttackConsumed: source === "attribute" ? false : current.followUpAttackConsumed
     }
   };
 }
@@ -118,7 +140,9 @@ export function consumeOffensiveAction(state = {}) {
     ...normalizeTurnState(state),
     baseMovementRemaining: 0,
     extraMovementRemaining: 0,
-    actionConsumed: true
+    actionConsumed: true,
+    followUpAttackAvailable: false,
+    followUpAttackConsumed: true
   };
 }
 

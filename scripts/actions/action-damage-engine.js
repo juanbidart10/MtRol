@@ -26,14 +26,6 @@ import {
 } from "../rolls/chat-rolls.js";
 
 import {
-  broadcastPendingAction,
-  getPendingAction,
-  receivePendingActionSync,
-  updateResolutionMessage,
-  userCanControlActor
-} from "./action-engine.js";
-
-import {
   requestPrimaryGM
 } from "../core/socket-requests.js";
 
@@ -55,6 +47,7 @@ import {
 import {
   completeResolvedTurnAction
 } from "../combat/turn-system.js";
+import { logger } from "../utils/logger.js";
 
 const RESOLVED_DAMAGE_ACTION =
   "mtrol-resolved-damage";
@@ -64,6 +57,32 @@ let chatHandlerRegistered =
 
 const executingResolvedDamageActions =
   new Set();
+
+let actionDependencies = null;
+
+export function configureActionDamageDependencies(dependencies = {}) {
+  const required = [
+    "broadcastPendingAction",
+    "getPendingAction",
+    "persistPendingActionRuntime",
+    "receivePendingActionSync",
+    "updateResolutionMessage",
+    "userCanControlActor"
+  ];
+  for (const name of required) {
+    if (typeof dependencies[name] !== "function") {
+      throw new TypeError(`Action Damage requiere la dependencia ${name}.`);
+    }
+  }
+  actionDependencies = Object.freeze({ ...dependencies });
+}
+
+function actions() {
+  if (!actionDependencies) {
+    throw new Error("Action Damage no fue integrado con Action Engine durante init.");
+  }
+  return actionDependencies;
+}
 
 function toNumber(value, fallback = 0) {
   const number =
@@ -121,7 +140,7 @@ function assertCanExecuteResolvedDamage(pendingAction) {
 }
 
 function validateUserCanExecuteDamage(actor, userId) {
-  if (userCanControlActor(actor, userId)) return;
+  if (actions().userCanControlActor(actor, userId)) return;
 
   throw new Error("No tenes permisos para ejecutar este dano.");
 }
@@ -133,15 +152,19 @@ async function publishPendingDamageState(pendingAction) {
       Number(pendingAction.updatedAt ?? 0) + 1
     );
 
-  broadcastPendingAction(pendingAction);
+  await actions().persistPendingActionRuntime(pendingAction);
+  actions().broadcastPendingAction(pendingAction);
 
   try {
-    await updateResolutionMessage(pendingAction);
+    await actions().updateResolutionMessage(pendingAction);
   } catch (error) {
-    console.warn(
-      "MTROL | No se pudo actualizar la tarjeta de dano resuelto.",
-      error
-    );
+    logger.warn("DAMAGE", "resolved damage presentation update failed", {
+      pendingActionId: pendingAction.id,
+      transactionId: pendingAction.damage?.transactionId ?? null,
+      status: pendingAction.damage?.status ?? null,
+      reasonCode: "PRESENTATION_UPDATE_FAILED",
+      error: error.message
+    });
   }
 }
 
@@ -272,10 +295,12 @@ export async function executeCompetenciaDamage({
         rollData
       });
   } catch (error) {
-    console.error("MTROL | Formula de dano invalida.", {
+    logger.error("DAMAGE", "damage formula evaluation failed", {
+      actorUuid: actor?.uuid ?? null,
       formula,
       flatValue,
-      error
+      reasonCode: "DAMAGE_FORMULA_INVALID",
+      error: error.message
     });
 
     throw new Error(`Formula de dano invalida: ${formula || flatValue}`);
@@ -371,10 +396,12 @@ export async function executeCompetenciaDamage({
       totalFinalDanio
     });
   } catch (error) {
-    console.warn(
-      "MTROL | El dano fue aplicado, pero no se pudo crear la combat card.",
-      error
-    );
+    logger.warn("DAMAGE", "damage presentation creation failed", {
+      actorUuid: actor?.uuid ?? null,
+      targetActorUuid: targetActor?.uuid ?? null,
+      reasonCode: "PRESENTATION_CREATE_FAILED",
+      error: error.message
+    });
   }
 
   return {
@@ -443,7 +470,7 @@ export async function executeResolvedDamageAuthoritative(
   }
 
   const pendingAction =
-    getPendingAction(pendingActionId);
+    actions().getPendingAction(pendingActionId);
 
   assertCanExecuteResolvedDamage(pendingAction);
 
@@ -556,7 +583,13 @@ export async function executeResolvedDamageAuthoritative(
         completionId: `damage:${pendingAction.id}`
       });
     } catch (turnError) {
-      console.error("MTROL | No se pudo avanzar tras cerrar el daño.", turnError);
+      logger.error("TURN", "turn advance after resolved damage failed", {
+        transactionId: damage.transactionId ?? null,
+        pendingActionId,
+        actorUuid: damage.sourceActorUuid ?? null,
+        reasonCode: turnError.reasonCode ?? "TURN_ADVANCE_FAILED",
+        error: turnError.message
+      });
     }
 
     return result;
@@ -596,7 +629,13 @@ export async function executeResolvedDamageAuthoritative(
             completionId: `damage-failed:${pendingAction.id}`
           });
         } catch (turnError) {
-          console.error("MTROL | No se pudo avanzar tras fallar el daño.", turnError);
+          logger.error("TURN", "turn advance after failed damage failed", {
+            transactionId: damage.transactionId ?? null,
+            pendingActionId,
+            actorUuid: damage.sourceActorUuid ?? null,
+            reasonCode: turnError.reasonCode ?? "TURN_ADVANCE_FAILED",
+            error: turnError.message
+          });
         }
       }
     }
@@ -632,7 +671,7 @@ export async function executeResolvedDamage(pendingActionId, options = {}) {
     );
   }
 
-  receivePendingActionSync(
+  actions().receivePendingActionSync(
     response.result?.pendingAction
   );
 
@@ -659,11 +698,16 @@ async function onResolvedDamageClick(event) {
   try {
     await executeResolvedDamage(pendingActionId);
   } catch (error) {
-    console.warn("MTROL | No se pudo ejecutar dano resuelto.", error);
+    logger.warn("DAMAGE", "resolved damage request rejected", {
+      pendingActionId,
+      status: "rejected",
+      reasonCode: error.reasonCode ?? "DAMAGE_REQUEST_REJECTED",
+      error: error.message
+    });
     ui.notifications.warn(error.message ?? "No se pudo ejecutar el dano.");
 
     const pendingAction =
-      getPendingAction(pendingActionId);
+      actions().getPendingAction(pendingActionId);
 
     if (pendingAction?.damage?.status === "available") {
       button.disabled =

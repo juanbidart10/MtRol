@@ -1,3 +1,5 @@
+import { authorityService } from "./authority-service.js";
+
 const pendingSocketRequests = new Map();
 
 const DEFAULT_SOCKET_TIMEOUT_MS = 30000;
@@ -6,13 +8,11 @@ export const MTROL_GM_REQUIRED_MESSAGE =
   "Se requiere un GM conectado para resolver esta acción.";
 
 export function getPrimaryActiveGM() {
-  return Array.from(game.users ?? [])
-    .filter(user => user.isGM && user.active)
-    .sort((a, b) => a.id.localeCompare(b.id))[0] ?? null;
+  return authorityService.resolvePrimaryGM();
 }
 
 export function isPrimaryActiveGM() {
-  return getPrimaryActiveGM()?.id === game.user?.id;
+  return authorityService.isPrimaryGM();
 }
 
 function notifyGMRequired() {
@@ -20,7 +20,9 @@ function notifyGMRequired() {
 }
 
 export function requestPrimaryGM(action, payload = {}, {
-  timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS
+  timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS,
+  transactionId = payload?.transactionId ?? foundry.utils.randomID(),
+  combatId = payload?.combatId ?? game.combat?.id ?? null
 } = {}) {
   const primaryGM =
     getPrimaryActiveGM();
@@ -62,6 +64,8 @@ export function requestPrimaryGM(action, payload = {}, {
     game.socket.emit("system.mtrol", {
       action,
       requestId,
+      transactionId,
+      combatId,
       requestingUserId: game.user.id,
       targetGMId: primaryGM.id,
       payload
@@ -69,9 +73,10 @@ export function requestPrimaryGM(action, payload = {}, {
   });
 }
 
-export function handleSocketResponse(data = {}) {
+export function handleSocketResponse(data = {}, { senderUserId = null } = {}) {
   if (data.action !== "mtrolSocketResponse") return false;
   if (data.targetUserId !== game.user?.id) return true;
+  if (senderUserId && !authorityService.isPrimaryGMSender(senderUserId)) return true;
 
   const pending =
     pendingSocketRequests.get(data.requestId);
@@ -84,6 +89,7 @@ export function handleSocketResponse(data = {}) {
   pending.resolve({
     ok: data.ok === true,
     error: data.error ?? null,
+    ...(data.reasonCode ? { reasonCode: data.reasonCode } : {}),
     result: data.result ?? null
   });
 
@@ -93,7 +99,8 @@ export function handleSocketResponse(data = {}) {
 export function respondToSocketRequest(request, {
   ok,
   result = null,
-  error = null
+  error = null,
+  reasonCode = null
 } = {}) {
   if (!request?.requestId || !request?.requestingUserId) return false;
 
@@ -102,6 +109,7 @@ export function respondToSocketRequest(request, {
     requestId: request.requestId,
     targetUserId: request.requestingUserId,
     ok: ok === true,
+    ...(reasonCode ? { reasonCode } : {}),
     result,
     error
   });

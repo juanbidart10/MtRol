@@ -62,6 +62,8 @@
 
     <footer class="trade-gm-actions">
       <button type="button" data-action="history"><i class="fas fa-book"></i> Historial</button>
+      {{#if view.canPause}}<button type="button" data-action="pause"><i class="fas fa-pause"></i> Pausar</button>{{/if}}
+      {{#if view.canResume}}<button type="button" data-action="resume"><i class="fas fa-play"></i> Reanudar</button>{{/if}}
       <button type="button" class="trade-gm-cancel" data-action="cancel" {{#unless view.canCancel}}disabled{{/unless}} title="{{view.cancelDisabledReason}}"><i class="fas fa-ban"></i> Cancelar comercio</button>
     </footer>
   </section>

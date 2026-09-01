@@ -19,6 +19,7 @@ import {
   MTROL_ORB_IDS,
   MTROL_ORB_REGISTRY
 } from "../../progression/orb-registry.js";
+import { logger } from "../../utils/logger.js";
 
 const { ItemSheet } =
   foundry.appv1.sheets;
@@ -28,10 +29,12 @@ const MTROL_FALLBACK_ITEM_IMG = "icons/svg/item-bag.svg";
 function getSafeImageSrc(src, fallback = MTROL_FALLBACK_ITEM_IMG) {
   if (typeof src === "string" && src.trim()) return src.trim();
 
-  console.warn("MTROL | Imagen invalida en CompetenciaSheet. Usando fallback.", {
-    src,
+  logger.warnOnce("SHEET", "invalid competencia image replaced", {
+    command: "competencia-sheet.image.resolve",
+    status: "fallback",
+    reasonCode: "COMPETENCIA_IMAGE_INVALID",
     fallback
-  });
+  }, { key: "competencia-sheet:image-invalid" });
 
   return fallback;
 }
@@ -120,6 +123,24 @@ export class CompetenciaSheet extends ItemSheet {
     context.showOppositionType = this.item.system?.requiresOpposition === true;
     context.showDamageConfiguration = damageConfig.executesDamage;
     context.showOrbAssociation = this.item.system?.categoria === "hechizo";
+    const selectedCapabilities = new Set(this.item.system?.capabilities ?? []);
+    const selectedResponses = new Set(this.item.system?.allowedResponses ?? []);
+    context.actionIdentityOptions = [
+      ["spell", "Hechizo"],
+      ["competence", "Competencia"],
+      ["combat", "Combate"],
+      ["special", "Especial"],
+      ["basic", "Básico"]
+    ].map(([value, label]) => ({
+      value,
+      label,
+      selected: this.item.system?.actionIdentity === value
+    }));
+    context.capabilityOptions = [
+      "OFFENSIVE", "DEFENSE", "DODGE", "COUNTERATTACK", "REACTION", "MOVEMENT"
+    ].map(value => ({ value, selected: selectedCapabilities.has(value) }));
+    context.allowedResponseOptions = ["DEFENSE", "DODGE", "COUNTERATTACK"]
+      .map(value => ({ value, selected: selectedResponses.has(value) }));
     context.orbOptions = Object.values(MTROL_ORB_REGISTRY).map(definition => ({
       value: definition.id,
       label: definition.name,
@@ -150,11 +171,13 @@ export class CompetenciaSheet extends ItemSheet {
         const img = event.currentTarget;
         if (img.src?.endsWith(MTROL_FALLBACK_ITEM_IMG)) return;
 
-        console.warn("MTROL | Imagen fallida en CompetenciaSheet. Usando fallback.", {
-          item: this.item?.name,
-          src: img.getAttribute("src"),
+        logger.warnOnce("SHEET", "competencia image load failed", {
+          command: "competencia-sheet.image.load",
+          itemUuid: this.item?.uuid ?? null,
+          status: "fallback",
+          reasonCode: "COMPETENCIA_IMAGE_LOAD_FAILED",
           fallback: MTROL_FALLBACK_ITEM_IMG
-        });
+        }, { key: `competencia-sheet:image-load:${this.item?.uuid ?? "unknown"}` });
 
         img.src = MTROL_FALLBACK_ITEM_IMG;
       });

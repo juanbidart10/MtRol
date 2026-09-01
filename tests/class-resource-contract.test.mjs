@@ -132,6 +132,17 @@ test("todas las clases mágicas o híbridas resuelven exclusivamente al perfil 5
   }
 });
 
+test("política de follow-up por atributo deriva exclusivamente del registry de Clase", async () => {
+  const { getAttributeMovementFollowUpForClass } = await loadRegistry();
+  for (const id of PHYSICAL_IDS) {
+    assert.equal(getAttributeMovementFollowUpForClass(id), "attack-if-in-range", id);
+  }
+  for (const id of MAGIC_HYBRID_IDS) {
+    assert.equal(getAttributeMovementFollowUpForClass(id), "none", id);
+  }
+  assert.equal(getAttributeMovementFollowUpForClass("desconocida"), "none");
+});
+
 test("una clase vacía o desconocida no recibe silenciosamente ningún perfil", async () => {
   const { getClassDefinition, getResourceProfileForClass } = await loadRegistry();
 

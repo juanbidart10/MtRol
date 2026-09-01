@@ -18,28 +18,41 @@ import { registerMtrolSockets }
 import { initMtrol3D }
   from "./3d/mtrol-3d-init.js";
 
+import { mtrolLifecycle }
+  from "./core/lifecycle.js";
+
+import { logger } from "./utils/logger.js";
+
 // =========================
 // INIT
 // =========================
 
-Hooks.once("init", async () => {
-
-  initMtrol3D();
-
-  await initMtrol();
-
+Hooks.once("init", () => {
+  void mtrolLifecycle.run("INIT", async () => {
+    initMtrol3D();
+    await initMtrol();
+  }).catch(error => logger.error("LIFECYCLE", "init phase failed", {
+    command: "lifecycle.init",
+    status: "failed",
+    reasonCode: error.reasonCode ?? "INIT_FAILED",
+    error
+  }));
 });
 
 // =========================
 // READY
 // =========================
 
-Hooks.once("ready", async () => {
-
-  registerMtrolSockets();
-
-  await readyMtrol();
-
+Hooks.once("ready", () => {
+  void mtrolLifecycle.run("READY", async () => {
+    registerMtrolSockets();
+    await readyMtrol();
+  }).catch(error => logger.error("LIFECYCLE", "ready phase failed", {
+    command: "lifecycle.ready",
+    status: "failed",
+    reasonCode: error.reasonCode ?? "READY_FAILED",
+    error
+  }));
 });
 
 // =========================
@@ -47,7 +60,11 @@ Hooks.once("ready", async () => {
 // =========================
 
 Hooks.once("setup", () => {
-
-  registerHooks();
-
+  void mtrolLifecycle.run("REGISTER", async () => registerHooks())
+    .catch(error => logger.error("LIFECYCLE", "hook registration failed", {
+      command: "lifecycle.register",
+      status: "failed",
+      reasonCode: error.reasonCode ?? "REGISTER_FAILED",
+      error
+    }));
 });

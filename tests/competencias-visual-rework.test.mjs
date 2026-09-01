@@ -19,6 +19,14 @@ const sheet = await readFile(
   new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url),
   "utf8"
 );
+const imageController = await readFile(
+  new URL("../scripts/sheets/actors/personaje-image-controller.js", import.meta.url),
+  "utf8"
+);
+const sheetViewModel = await readFile(
+  new URL("../scripts/sheets/actors/personaje-sheet-view-model.js", import.meta.url),
+  "utf8"
+);
 const frame = await readFile(
   new URL("../assets/ui/competencias/competencia-frame.png", import.meta.url)
 );
@@ -72,7 +80,7 @@ test("template conserva cards y respeta la jerarquía visual acordada", () => {
 
 test("la fila muestra el próximo costo calculado por el mismo view-model del engine", () => {
   assert.match(competenceTab, /class="competencia-mp-cost"[\s\S]*?MP \{\{this\.mtrolMpCost\}\}/);
-  assert.match(sheet, /mtrolMpCost:\s*mpCost\.costoTotal/);
+  assert.match(sheetViewModel, /mtrolMpCost:\s*mpCost\.costoTotal/);
   assert.match(style, /\.competencia-mp-cost\s*\{/);
 });
 
@@ -109,7 +117,7 @@ test("edición de imagen y administración permanecen dentro de permisos GM", ()
   assert.match(competenceTab, /{{#if \.\.\/esGM}}[\s\S]*?competencia-admin-controls[\s\S]*?item-edit[\s\S]*?item-delete/);
   assert.match(sheet, /_onChangeCompetenciaImage[\s\S]*?if \(!game\.user\.isGM\)/);
   assert.match(sheet, /new foundry\.applications\.apps\.FilePicker\.implementation\([\s\S]*?document: item/);
-  assert.match(sheet, /await item\.update\(\{ img: selectedPath \}\)/);
+  assert.match(imageController, /await item\.update\(\{ img: selectedPath \}\)/);
   assert.match(sheet, /item\.type === "competencia" && !game\.user\.isGM/);
 });
 

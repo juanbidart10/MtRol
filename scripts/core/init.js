@@ -48,7 +48,7 @@ import {
 // =========================
 
 import {
-  aplicarDanioAutorizado,
+  aplicarDanioCanonicoAutorizado,
   aplicarDanioLocalizadoAutorizado
 } from "../combat/damage-authorized.js";
 
@@ -57,10 +57,16 @@ import {
 } from "./debug.js";
 
 import {
+  configureAmbientFxApp,
   installMtrolAmbientFxApi
 } from "../scene-fx/ambient-fx-manager.js";
 
+import { MtrolAmbientFxApp } from "../scene-fx/ambient-fx-app.js";
+
 import {
+  completeReactionMovementAuthoritative,
+  getPendingOppositionForActor,
+  getReactionMovementForActor,
   installMtrolActionsApi,
   registerOppositionChatHandler
 } from "../actions/action-engine.js";
@@ -94,12 +100,32 @@ import {
 } from "../trade/trade-api.js";
 
 import {
+  configureTurnActionIntegration,
   installMtrolTurnApi
 } from "../combat/turn-system.js";
 
 import {
   installSpecialAbilityApi
 } from "../combat/special-ability-service.js";
+
+import {
+  installMtrolLoggerApi
+} from "../utils/logger.js";
+
+import {
+  registerOppositionCommands
+} from "../runtime/opposition-commands.js";
+
+import { registerTransactionCommands } from "../runtime/transaction-commands.js";
+import { registerTradeCommands } from "../runtime/trade-commands.js";
+import { registerStateCommands } from "../runtime/state-commands.js";
+import { registerProgressionCommands } from "../runtime/progression-commands.js";
+import { registerActionCommands } from "../runtime/action-commands.js";
+import { registerOrbCommands } from "../runtime/orb-commands.js";
+import { mtrolRoll } from "../rolls/mtrol-rolls.js";
+import { authorityService } from "./authority-service.js";
+import { integrationObservability } from "./integration-observability.js";
+import { registerTradeRuntimeSetting } from "../trade/trade-runtime-repository.js";
 
 // =========================
 // INIT MTROL
@@ -199,8 +225,19 @@ export async function initMtrol() {
   game.mtrol =
     game.mtrol || {};
 
+  registerTradeRuntimeSetting();
+
+  installMtrolLoggerApi();
+
+  game.mtrol.roll ??= mtrolRoll;
+  game.mtrol.integration ??= {};
+  game.mtrol.integration.getPrimaryGMId ??= () => authorityService.resolvePrimaryGM()?.id ?? null;
+  game.mtrol.integration.getMetrics ??= () => integrationObservability.snapshot();
+  game.mtrol.integration.configureMetrics ??= options => integrationObservability.configure(options);
+  game.mtrol.integration.resetMetrics ??= () => integrationObservability.reset();
+
   game.mtrol.aplicarDanioAutorizado =
-    aplicarDanioAutorizado;
+    aplicarDanioCanonicoAutorizado;
 
   game.mtrol.aplicarDanioLocalizadoAutorizado =
     aplicarDanioLocalizadoAutorizado;
@@ -210,12 +247,25 @@ export async function initMtrol() {
   installSpecialAbilityApi();
 
   registerMtrolDebugSetting();
+  configureAmbientFxApp(MtrolAmbientFxApp);
   installMtrolAmbientFxApi();
   installMtrolStatesApi();
   installMtrolDeathApi();
   installMtrolOrbAuthorityHooks();
   installMtrolClassResourceAuthorityHooks();
+  configureTurnActionIntegration({
+    getPendingOppositionForActor,
+    getReactionMovementForActor,
+    completeReactionMovementAuthoritative
+  });
   installMtrolActionsApi();
+  registerOppositionCommands();
+  registerTransactionCommands();
+  registerTradeCommands();
+  registerStateCommands();
+  registerProgressionCommands();
+  registerActionCommands();
+  registerOrbCommands();
   registerOppositionChatHandler();
   registerResolvedDamageChatHandler();
   registerMtrolPremiumRollCards();
@@ -229,9 +279,11 @@ export async function initMtrol() {
 
     if (actor.type) return true;
 
-    console.warn(
-      "MTROL | Actor sin type detectado. Aplicando type por defecto: personaje"
-    );
+    logger.warn("ADAPTER", "Actor sin type; se aplica el tipo por defecto", {
+      adapter: "preCreateActor",
+      actorUuid: actor.uuid ?? null,
+      defaultType: "personaje"
+    });
 
     actor.updateSource({
       type: "personaje"
@@ -250,9 +302,11 @@ export async function initMtrol() {
 
     if (item.type) return true;
 
-    console.warn(
-      "MTROL | Item sin type detectado. Aplicando type por defecto: objeto"
-    );
+    logger.warn("ADAPTER", "Item sin type; se aplica el tipo por defecto", {
+      adapter: "preCreateItem",
+      itemUuid: item.uuid ?? null,
+      defaultType: "objeto"
+    });
 
     item.updateSource({
       type: "objeto"

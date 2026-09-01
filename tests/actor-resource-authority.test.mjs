@@ -219,7 +219,11 @@ test("reembolso devuelve exactamente el coste aplicado y es idempotente", async 
 test("Meditar restaura el doble del coste, respeta máximo y no restaura en fallo", async () => {
   const actor = createActor({ mp: 10 });
   actor.system.vitales.mp.value = 9;
-  addItem(actor, { id: "meditar", name: "Meditar", categoria: "basico", nivel: 1 });
+  const meditateItem = addItem(actor, { id: "meditar", name: "Concentración", categoria: "basico", nivel: 1 });
+  meditateItem.system.executionModes = [
+    { modeId: "RECOVER_MP", label: "Recuperar MP", strategy: "recover-mp" },
+    { modeId: "ASTRAL_PROJECTION", label: "Proyección astral", strategy: "narrative" }
+  ];
   await aplicarConsumoMPAuthoritative({
     actorUuid: actor.uuid,
     transactionId: "meditate-success-cost",
@@ -231,7 +235,8 @@ test("Meditar restaura el doble del coste, respeta máximo y no restaura en fall
     originalTransactionId: "meditate-success-cost",
     transactionId: "meditate-success-cost:meditate",
     total: 6,
-    fumble: false
+    fumble: false,
+    modeId: "RECOVER_MP"
   }, { requestingUserId: "player" });
 
   assert.equal(success.restoration, 2);
@@ -250,7 +255,8 @@ test("Meditar restaura el doble del coste, respeta máximo y no restaura en fall
     originalTransactionId: "meditate-fail-cost",
     transactionId: "meditate-fail-cost:meditate",
     total: 5,
-    fumble: false
+    fumble: false,
+    modeId: "RECOVER_MP"
   }, { requestingUserId: "player" });
 
   assert.equal(failure.success, false);

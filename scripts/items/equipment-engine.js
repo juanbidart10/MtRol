@@ -10,6 +10,7 @@ import {
   isMtrolObject,
   toDocumentArray
 } from "./item-invariants.js";
+import { logger } from "../utils/logger.js";
 
 export const MTROL_HAND_SLOTS = [
   "manoIzq",
@@ -121,15 +122,14 @@ async function applyEquipmentTransition(
       }
     }
 
-    console.error(`MTROL | Fallo al ${operation}; se intento restaurar el estado anterior.`, {
-      actor: actor?.uuid ?? actor?.id,
+    logger.error("EQUIPMENT", "equipment transition failed", {
+      command: operation,
+      actorUuid: actor?.uuid ?? actor?.id,
+      status: rollbackErrors.length ? "recovery-required" : "rolled-back",
+      reasonCode: rollbackErrors.length ? "EQUIPMENT_ROLLBACK_INCOMPLETE" : "EQUIPMENT_UPDATE_FAILED",
       slotOverrides,
-      priorReferences: priorState.entries.map(entry => ({
-        slot: entry.slot,
-        reference: entry.reference
-      })),
-      error,
-      rollbackErrors
+      error: error.message,
+      rollbackErrors: rollbackErrors.map(candidate => candidate.message)
     });
 
     notifyError(

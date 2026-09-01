@@ -1,6 +1,9 @@
+import { logger } from "../utils/logger.js";
+
 export function registerItemPilesHooks() {
   Hooks.on("updateActor", async (actor, changes) => {
-    if (!game.user.isGM) return;
+    try {
+      if (!game.user.isGM) return;
 
     const cambioItemPiles =
       changes?.flags?.["item-piles"] ||
@@ -25,8 +28,19 @@ export function registerItemPilesHooks() {
       competencias.map(item => item.id)
     );
 
-    console.log(
-      `MtRol | ${competencias.length} competencias eliminadas del botín ${actor.name}.`
-    );
+      logger.info("ITEM_PILES", "loot actor sanitized", {
+        actorUuid: actor.uuid ?? null,
+        removedCount: competencias.length,
+        status: "completed",
+        reasonCode: "LOOT_COMPETENCIAS_REMOVED"
+      });
+    } catch (error) {
+      logger.error("ITEM_PILES", "loot actor sanitization failed", {
+        actorUuid: actor?.uuid ?? null,
+        status: "failed",
+        reasonCode: "LOOT_SANITIZATION_FAILED",
+        error
+      });
+    }
   });
 }

@@ -1,6 +1,7 @@
 import {
   notifyMtrol3DCamera
 } from "./mtrol-3d-settings.js";
+import { logger } from "../utils/logger.js";
 
 const SYSTEM_ID = "mtrol";
 const ALT_MODIFIER = "Alt";
@@ -11,7 +12,11 @@ function getCameraApi(actionName) {
 
   if (!cameraApi) {
     notifyMtrol3DCamera("MTROL 3D | API de camara no disponible.", "warn");
-    console.warn("MTROL 3D | API de camara no disponible.");
+    logger.warnOnce("3D_CAMERA", "camera API unavailable", {
+      command: `3d.camera.${actionName}`,
+      status: "rejected",
+      reasonCode: "CAMERA_3D_API_UNAVAILABLE"
+    }, { key: "3d-camera:api-unavailable" });
     return null;
   }
 

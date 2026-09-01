@@ -17,6 +17,8 @@ const RESOURCE_ORIGINS = new Set([
   "class-resource-update",
   "permanent-resource-update",
   "gm-resource-set",
+  "destiny-adjust",
+  "dharma-spend",
   "consumable"
 ]);
 
@@ -27,11 +29,18 @@ const MANUAL_SPIRITUAL_RESOURCES = new Set(["karma", "dharma"]);
 const completedTransactions = new Map();
 const actorResourceQueues = new Map();
 
-function normalizeTransaction(actor, { transactionId, origin } = {}) {
-  const actorUuid = String(actor?.uuid ?? "").trim();
+import {
+  actorRuntimeRepository,
+  transactionCoordinator
+} from "../runtime/runtime-foundation.js";
+
+function normalizeTransaction(actor, { transactionId, origin, allowOwnerCompatibility = false } = {}) {
+  const actorUuid = String(
+    actor?.uuid ?? (allowOwnerCompatibility && !game.users ? `compat:${actor?.name ?? "actor"}` : "")
+  ).trim();
   const normalizedTransactionId = String(transactionId ?? "").trim();
 
-  if (!game.user?.isGM) {
+  if (!game.user?.isGM && !(allowOwnerCompatibility && !game.users && actor?.isOwner)) {
     throw new Error("Solo un GM puede escribir recursos mecánicos autoritativamente.");
   }
   if (!actorUuid) throw new TypeError("Falta el Actor autoritativo.");
@@ -72,32 +81,66 @@ export async function runActorResourceTransaction(
   const normalized = normalizeTransaction(actor, transaction);
 
   return withActorResourceLock(normalized.actorUuid, async () => {
-    const existing = completedTransactions.get(normalized.key);
-
-    if (existing) {
-      if (existing.origin !== normalized.origin) {
-        throw new Error("El transactionId ya fue utilizado por otra operación.");
-      }
-
-      return { ...existing, replayed: true };
+    const scope = game.combat ? { combat: game.combat, actor } : { actor };
+    const persisted = transactionCoordinator.get(scope, normalized.transactionId);
+    if (persisted?.command && persisted.command !== `resource.${normalized.origin}`) {
+      throw new Error("El transactionId ya fue utilizado por otra operación.");
     }
-
-    const result = await operation(actor);
-    const receipt = {
-      ...(result ?? {}),
-      actorUuid: normalized.actorUuid,
+    const wasCompleted = persisted?.status === "completed";
+    const receipt = await transactionCoordinator.execute(scope, {
       transactionId: normalized.transactionId,
-      origin: normalized.origin,
-      replayed: false
-    };
-
-    completedTransactions.set(normalized.key, receipt);
-    return receipt;
+      command: `resource.${normalized.origin}`,
+      metadata: { actorUuid: normalized.actorUuid, origin: normalized.origin },
+      apply: async ({ checkpoint }) => {
+        let mutationStarted = false;
+        const beforeWrite = async () => {
+          if (mutationStarted) return;
+          mutationStarted = true;
+          await checkpoint("resource-write-intent", { actorUuid: normalized.actorUuid });
+        };
+        let result;
+        try { result = await operation(actor, { beforeWrite }); }
+        catch (error) {
+          // Only audited internal callers opt in; never infer safety from a
+          // missing checkpoint in an arbitrary operation callback.
+          if (transaction.tracksWrites === true && !mutationStarted) error.transactionNoEffects = true;
+          throw error;
+        }
+        await checkpoint("resource-applied", result ?? {});
+        return {
+          ...(result ?? {}),
+          actorUuid: normalized.actorUuid,
+          transactionId: normalized.transactionId,
+          origin: normalized.origin,
+          replayed: false
+        };
+      },
+      reconcile: async persistedReceipt => {
+        const applied = persistedReceipt.checkpoints?.["resource-applied"];
+        if (!applied) return { resolved: false };
+        return { resolved: true, result: persistedReceipt.result ?? {
+          ...applied,
+          actorUuid: normalized.actorUuid,
+          transactionId: normalized.transactionId,
+          origin: normalized.origin,
+          replayed: true
+        } };
+      }
+    });
+    const normalizedReceipt = { ...receipt, replayed: wasCompleted };
+    completedTransactions.set(normalized.key, normalizedReceipt);
+    return normalizedReceipt;
   });
 }
 
 export function getActorResourceTransaction(actorUuid, transactionId) {
-  return completedTransactions.get(`${actorUuid}:${transactionId}`) ?? null;
+  const cached = completedTransactions.get(`${actorUuid}:${transactionId}`);
+  if (cached) return cached;
+  const actorId = String(actorUuid ?? "").split(".").at(-1);
+  const actor = game.actors?.get?.(actorId) ?? null;
+  if (!actor) return null;
+  const scope = game.combat ? { combat: game.combat } : { actor };
+  return transactionCoordinator.get(scope, transactionId)?.result ?? null;
 }
 
 export async function applyDamageToHpAuthoritative(actor, damage, {
@@ -111,10 +154,13 @@ export async function applyDamageToHpAuthoritative(actor, damage, {
 
   return runActorResourceTransaction(actor, {
     transactionId,
-    origin: "damage"
-  }, async canonicalActor => {
+    origin: "damage",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const hpBefore = Number(canonicalActor.system?.vitales?.hp?.value ?? 0);
     const hpAfter = Math.max(0, hpBefore - amount);
+
+    await beforeWrite();
 
     await canonicalActor.update({
       "system.vitales.hp.value": hpAfter
@@ -148,8 +194,9 @@ export async function restoreActorResourceAuthoritative(actor, resource, amount,
 
   return runActorResourceTransaction(actor, {
     transactionId,
-    origin: "consumable"
-  }, async canonicalActor => {
+    origin: "consumable",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const resourceData = canonicalActor.system?.vitales?.[normalizedResource];
     const before = Number(resourceData?.value);
     const max = Number(resourceData?.max);
@@ -172,9 +219,13 @@ export async function restoreActorResourceAuthoritative(actor, resource, amount,
       overflow
     };
 
-    await canonicalActor.update({
-      [resourcePath]: after
-    }, updateOptions);
+    if (restored <= 0) {
+      return { ...result, changed: false, consumed: false };
+    }
+
+    await beforeWrite();
+
+    await canonicalActor.update({ [resourcePath]: after }, updateOptions);
 
     try {
       const commitResult = commit ? await commit(result) : null;
@@ -183,6 +234,9 @@ export async function restoreActorResourceAuthoritative(actor, resource, amount,
         ...(commitResult ?? {})
       };
     } catch (error) {
+      // A failed inventory ACK is not proof that the item was untouched. Only
+      // certified pre-write rejection permits compensation of our HP/MP write.
+      if (error.transactionNoEffects !== true || Number(canonicalActor.system?.vitales?.[normalizedResource]?.value) !== after) throw error;
       try {
         await canonicalActor.update({
           [resourcePath]: before
@@ -190,6 +244,7 @@ export async function restoreActorResourceAuthoritative(actor, resource, amount,
           ...updateOptions,
           mtrolConsumableRollback: true
         });
+        error.transactionRolledBack = Number(canonicalActor.system?.vitales?.[normalizedResource]?.value) === before;
       } catch (rollbackError) {
         error.rollbackError = rollbackError;
       }
@@ -242,9 +297,12 @@ export async function setActorSpiritualResourceAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "gm-resource-set"
-  }, async canonicalActor => {
+    origin: "gm-resource-set",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const valueBefore = Number(canonicalActor.system?.recursos?.[resource] ?? 0);
+
+    await beforeWrite();
 
     await canonicalActor.update({
       [`system.recursos.${resource}`]: value
@@ -278,4 +336,5 @@ export async function setActorSpiritualResource(actor, resource, value) {
 export function resetActorResourceServiceForTests() {
   completedTransactions.clear();
   actorResourceQueues.clear();
+  actorRuntimeRepository.resetForTests();
 }

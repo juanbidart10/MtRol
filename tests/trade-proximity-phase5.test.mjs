@@ -13,10 +13,12 @@ globalThis.ui = { notifications: { warn() {} } };
 globalThis.Hooks = { on() {}, callAll() {} };
 
 const {
+  configureTradeProximityApi,
   TradeMovementLockService,
   measureSquareGridTokenDistance,
   validateTradeTokenProximity
 } = await import("../scripts/trade/trade-proximity-service.js");
+configureTradeProximityApi(game.mtrol.trade);
 const {
   enforceTradeTokenMovementAuthoritative,
   preventLockedTradeTokenMovement
@@ -127,6 +129,11 @@ test("5-17 bypass ordinario se revierte por autoridad", async () => {
   tradeMovementLocks.clear(); const a = token("a17", "Actor.a"); const b = token("b17", "Actor.b", { x: 100 });
   tradeMovementLocks.lockSession(session("NEGOTIATING", a, b), { participantA: a, participantB: b }); game.user = gm; a.x = 300;
   assert.equal(await enforceTradeTokenMovementAuthoritative(a, { x: 300 }, {}, userA.id), true); assert.equal(a.x, 0);
+});
+
+test("5-17b updateToken sin lock deja continuar a subscribers posteriores", async () => {
+  tradeMovementLocks.clear(); game.user = gm;
+  assert.equal(await enforceTradeTokenMovementAuthoritative(token("free", "Actor.free"), { x: 100 }, {}, userA.id), false);
 });
 
 test("5-18 Token grande calcula proximidad desde su superficie", () => {

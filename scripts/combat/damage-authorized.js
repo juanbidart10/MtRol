@@ -19,6 +19,9 @@ import {
   applyDamageToHpAuthoritative
 } from "../actors/actor-resource-service.js";
 
+import { transactionCoordinator } from "../runtime/runtime-foundation.js";
+import { logger } from "../utils/logger.js";
+
 // =========================
 // MTROL - DAMAGE AUTHORIZED
 // =========================
@@ -51,7 +54,7 @@ function createDamageTransactionId(prefix) {
 // LEGACY - DAÑO SIMPLE
 // =========================
 
-export async function aplicarDanioAutorizado({
+async function aplicarDanioAutorizadoLegacy({
   attackerActor,
   targetActor,
   targetTokenDocument,
@@ -66,7 +69,13 @@ export async function aplicarDanioAutorizado({
     payload?.slot ?? null;
 
   if (!targetActor || !Number.isFinite(danio) || danio <= 0) {
-    console.warn("MTROL | Daño autorizado inválido:", payload);
+    logger.warn("DAMAGE", "authorized damage rejected", {
+      actorUuid: attackerActor?.uuid ?? null,
+      targetActorUuid: targetActor?.uuid ?? null,
+      tokenUuid: targetTokenDocument?.uuid ?? null,
+      status: "rejected",
+      reasonCode: "DAMAGE_PAYLOAD_INVALID"
+    });
     return;
   }
 
@@ -188,7 +197,7 @@ export async function aplicarDanioAutorizado({
 // NUEVO - DAÑO LOCALIZADO AUTORITATIVO
 // =========================
 
-export async function aplicarDanioLocalizadoAutorizado({
+async function aplicarDanioLocalizadoAutorizadoLegacy({
   attackerActor = null,
   targetActor = null,
   targetTokenDocument = null,
@@ -197,10 +206,12 @@ export async function aplicarDanioLocalizadoAutorizado({
   if (!game.user.isGM) return null;
 
   if (!attackerActor || !targetActor) {
-    console.warn("MTROL | Daño localizado autorizado inválido:", {
-      attackerActor,
-      targetActor,
-      payload
+    logger.warn("DAMAGE", "localized damage rejected", {
+      actorUuid: attackerActor?.uuid ?? null,
+      targetActorUuid: targetActor?.uuid ?? null,
+      tokenUuid: targetTokenDocument?.uuid ?? null,
+      status: "rejected",
+      reasonCode: "DAMAGE_ACTOR_INVALID"
     });
     return null;
   }
@@ -222,7 +233,13 @@ export async function aplicarDanioLocalizadoAutorizado({
     slotObjetivo;
 
   if (danioFinal <= 0) {
-    console.warn("MTROL | Daño localizado autorizado sin daño válido:", payload);
+    logger.warn("DAMAGE", "localized damage rejected", {
+      actorUuid: attackerActor.uuid,
+      targetActorUuid: targetActor.uuid,
+      tokenUuid: targetTokenDocument?.uuid ?? null,
+      status: "rejected",
+      reasonCode: "DAMAGE_VALUE_INVALID"
+    });
     return null;
   }
 
@@ -319,4 +336,162 @@ export async function aplicarDanioLocalizadoAutorizado({
   }
 
   return resultado;
+}
+
+function commandResult(transactionId, result, reasonCode = null) {
+  return {
+    ok: reasonCode === null,
+    transactionId,
+    status: "completed",
+    changed: Boolean(result?.hpPerdido || result?.danioAbsorbido),
+    result,
+    reasonCode
+  };
+}
+
+async function rollLocalization() {
+  const roll = await new Roll("1d10").evaluate();
+  return Number(roll.total ?? 5);
+}
+
+/** CANONICAL: única ruta autoritativa de mutación de daño. */
+export async function aplicarDanioCanonicoAutorizado({
+  attackerActor = null,
+  targetActor = null,
+  targetTokenDocument = null,
+  payload = {},
+  transactionId = payload?.transactionId ?? null
+} = {}) {
+  if (!game.user?.isGM) throw new Error("Solo el Primary GM puede aplicar daño.");
+  if (!targetActor) throw new Error("No se encontró el Actor objetivo.");
+  const rawDamage = Math.max(0, toNumber(payload?.danio ?? payload?.damage ?? payload?.total ?? 0));
+  const rootId = String(transactionId || createDamageTransactionId("damage"));
+  const scope = game.combat ? { combat: game.combat, actor: targetActor } : { actor: targetActor };
+
+  return transactionCoordinator.execute(scope, {
+    transactionId: rootId,
+    command: "damage.apply",
+    metadata: {
+      sourceActorUuid: attackerActor?.uuid ?? null,
+      targetActorUuid: targetActor.uuid,
+      sourceItemUuid: payload?.sourceItemUuid ?? null,
+      damageDomain: payload?.damageDomain ?? payload?.damageType ?? null,
+      rawDamage
+    },
+    prepare: async () => {
+      const localizationNumber = payload?.slot
+        ? Number(payload?.numeroLocalizacion ?? 0)
+        : Number(payload?.numeroLocalizacion ?? await rollLocalization());
+      const slot = payload?.slot ?? MTROL_BODY_ROLL_TABLE[localizationNumber] ?? "pecho";
+      const armor = getEquipmentItemForSlot(targetActor, slot);
+      const durabilityBefore = armor?.type === "objeto"
+        ? Math.max(0, toNumber(armor.system?.defensa ?? 0))
+        : 0;
+      const absorbed = Math.min(durabilityBefore, rawDamage);
+      const hpBefore = Number(targetActor.system?.vitales?.hp?.value ?? 0);
+      const hpDamage = Math.max(0, rawDamage - absorbed);
+      return {
+        localization: {
+          roll: localizationNumber || null,
+          slot,
+          label: payload?.zona ?? MTROL_BODY_SLOT_LABELS[slot] ?? slot
+        },
+        armorItemUuid: armor?.uuid ?? null,
+        armorItemId: armor?.id ?? null,
+        armorName: armor?.name ?? null,
+        durabilityBefore,
+        durabilityAfter: Math.max(0, durabilityBefore - rawDamage),
+        absorbed,
+        hpBefore,
+        hpDamage,
+        hpAfter: Math.max(0, hpBefore - hpDamage)
+      };
+    },
+    apply: async ({ prepared, checkpoint }) => {
+      let destroyedItemUuid = null;
+      const armor = prepared.armorItemId ? targetActor.items?.get?.(prepared.armorItemId) : null;
+      if (armor && prepared.durabilityBefore > 0) {
+        if (prepared.durabilityAfter <= 0) {
+          await destroyEquippedItem({
+            actor: targetActor,
+            item: armor,
+            slot: prepared.localization.slot,
+            reason: "damage canonical",
+            createChatMessage: false
+          });
+          destroyedItemUuid = prepared.armorItemUuid;
+        } else {
+          await armor.update({ "system.defensa": prepared.durabilityAfter });
+        }
+        await checkpoint("armor-applied", {
+          armorItemUuid: prepared.armorItemUuid,
+          durabilityAfter: prepared.durabilityAfter,
+          destroyedItemUuid
+        });
+      }
+      if (prepared.hpDamage > 0) {
+        await targetActor.update({
+          "system.vitales.hp.value": prepared.hpAfter
+        }, getDeathUpdateOptions(targetTokenDocument));
+        await checkpoint("hp-applied", { hpAfter: prepared.hpAfter });
+      }
+      const result = {
+        numeroLocalizacion: prepared.localization.roll,
+        slot: prepared.localization.slot,
+        zona: prepared.localization.label,
+        item: prepared.armorName,
+        defensaInicial: prepared.durabilityBefore,
+        defensaFinal: prepared.durabilityAfter,
+        danioOriginal: rawDamage,
+        danioAbsorbido: prepared.absorbed,
+        hpPerdido: prepared.hpDamage,
+        itemDestruido: Boolean(destroyedItemUuid),
+        destroyedItemUuid,
+        hpAnterior: prepared.hpBefore,
+        hpNuevo: prepared.hpAfter
+      };
+      logger.info("DAMAGE", "damage transaction completed", {
+        transactionId: rootId,
+        targetUuid: targetActor.uuid,
+        hpBefore: prepared.hpBefore,
+        hpAfter: prepared.hpAfter
+      });
+      return commandResult(rootId, result);
+    },
+    reconcile: async receipt => {
+      const prepared = receipt.prepared;
+      if (!prepared) return { resolved: false };
+      const hpNow = Number(targetActor.system?.vitales?.hp?.value ?? 0);
+      const armorNow = prepared.armorItemId ? targetActor.items?.get?.(prepared.armorItemId) : null;
+      const armorApplied = prepared.durabilityBefore <= 0 ||
+        (prepared.durabilityAfter <= 0 ? !armorNow : Number(armorNow?.system?.defensa) === prepared.durabilityAfter);
+      const hpApplied = prepared.hpDamage <= 0 || hpNow === prepared.hpAfter;
+      if (!armorApplied || !hpApplied) return { resolved: false };
+      return { resolved: true, result: receipt.result ?? commandResult(rootId, {
+        numeroLocalizacion: prepared.localization.roll,
+        slot: prepared.localization.slot,
+        zona: prepared.localization.label,
+        item: prepared.armorName,
+        defensaInicial: prepared.durabilityBefore,
+        defensaFinal: prepared.durabilityAfter,
+        danioOriginal: rawDamage,
+        danioAbsorbido: prepared.absorbed,
+        hpPerdido: prepared.hpDamage,
+        itemDestruido: prepared.durabilityAfter <= 0 && prepared.durabilityBefore > 0,
+        destroyedItemUuid: prepared.durabilityAfter <= 0 ? prepared.armorItemUuid : null,
+        hpAnterior: prepared.hpBefore,
+        hpNuevo: prepared.hpAfter
+      }) };
+    }
+  });
+}
+
+/** DEPRECATED compatibility wrapper. */
+export async function aplicarDanioAutorizado(args = {}) {
+  return aplicarDanioCanonicoAutorizado(args);
+}
+
+/** DEPRECATED compatibility wrapper. */
+export async function aplicarDanioLocalizadoAutorizado(args = {}) {
+  return aplicarDanioCanonicoAutorizado(args);
 }

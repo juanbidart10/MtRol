@@ -175,10 +175,10 @@ test.beforeEach(() => {
 for (const scenario of [
   { title: "HP 20/50 +10 produce 30/50", resource: "hp", before: 20, max: 50, amount: 10, after: 30, restored: 10, overflow: 0 },
   { title: "HP 45/50 +10 se limita a 50/50", resource: "hp", before: 45, max: 50, amount: 10, after: 50, restored: 5, overflow: 5 },
-  { title: "HP 50/50 +10 se consume sin superar máximo", resource: "hp", before: 50, max: 50, amount: 10, after: 50, restored: 0, overflow: 10 },
+  { title: "HP 50/50 +10 no consume al estar al máximo", resource: "hp", before: 50, max: 50, amount: 10, after: 50, restored: 0, overflow: 10, noConsume: true },
   { title: "MP 20/50 +10 produce 30/50", resource: "mp", before: 20, max: 50, amount: 10, after: 30, restored: 10, overflow: 0 },
   { title: "MP 40/50 +15 se limita a 50/50", resource: "mp", before: 40, max: 50, amount: 15, after: 50, restored: 10, overflow: 5 },
-  { title: "MP 50/50 +10 se consume sin superar máximo", resource: "mp", before: 50, max: 50, amount: 10, after: 50, restored: 0, overflow: 10 }
+  { title: "MP 50/50 +10 no consume al estar al máximo", resource: "mp", before: 50, max: 50, amount: 10, after: 50, restored: 0, overflow: 10, noConsume: true }
 ]) {
   test(scenario.title, async () => {
     const actor = createActor({
@@ -199,7 +199,8 @@ for (const scenario of [
     assert.equal(result.restored, scenario.restored);
     assert.equal(result.overflow, scenario.overflow);
     assert.ok(result.after <= result.max);
-    assert.equal(item.system.cantidad, 4);
+    assert.equal(item.system.cantidad, scenario.noConsume ? 5 : 4);
+    assert.equal(result.reasonCode, scenario.noConsume ? "RESOURCE_AT_MAXIMUM" : null);
     assert.equal(chatMessages.length, 1);
   });
 }
@@ -266,13 +267,13 @@ test("el target siempre es el Actor que contiene el Item y no acepta selección 
   );
 });
 
-test("cada uso crea exactamente una Card, incluso lleno y con última unidad", async () => {
+test("cada intención crea una Card y el uso sin efecto conserva su unidad", async () => {
   const fullActor = createActor({ id: "full", hp: 50 });
   const fullItem = addConsumable(fullActor, { quantity: 2 });
   const fullResult = await authoritativeUse(fullActor, fullItem, "owner", "full-use");
   assert.equal(chatMessages.length, 1);
   assert.match(chatMessages[0].content, /ya se encontraba al máximo/);
-  assert.match(chatMessages[0].content, /Unidades restantes: <strong>1<\/strong>/);
+  assert.match(chatMessages[0].content, /Unidades restantes: <strong>2<\/strong>/);
 
   const lastActor = createActor({ id: "last", hp: 45 });
   const lastItem = addConsumable(lastActor, { quantity: 1, amount: 10 });
@@ -355,29 +356,31 @@ test("configuraciones inválidas y cantidad ausente o cero no modifican el Actor
   }
 });
 
-test("un fallo al descontar cantidad revierte la restauración", async () => {
+test("un fallo ambiguo al descontar cantidad exige recovery sin rollback ciego", async () => {
   const actor = createActor({ hp: 20 });
   const item = addConsumable(actor);
   item.update = async () => { throw new Error("falló cantidad"); };
 
-  await assert.rejects(authoritativeUse(actor, item), /falló cantidad/);
-  assert.equal(actor.system.vitales.hp.value, 20);
+  await assert.rejects(authoritativeUse(actor, item), error => error.reasonCode === "RECOVERY_REQUIRED");
+  assert.equal(actor.system.vitales.hp.value, 30);
   assert.equal(item.system.cantidad, 5);
   assert.equal(chatMessages.length, 0);
 });
 
 test("la integración mantiene UI, socket y schema aditivos", async () => {
-  const [schema, sheet, template, sockets, inspector] = await Promise.all([
+  const [schema, sheet, template, sockets, commands, inspector] = await Promise.all([
     readFile(new URL("../models/objeto-model.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url), "utf8"),
     readFile(new URL("../templates/actors/personaje-sheet.html", import.meta.url), "utf8"),
     readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/runtime/transaction-commands.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/items/inventory-inspector-view-model.js", import.meta.url), "utf8")
   ]);
 
   assert.match(schema, /consumible: new fields\.SchemaField/);
   assert.match(sheet, /\.off\("click"\)[\s\S]*_onUseConsumable/);
   assert.match(template, /mtrol-consumable-use/);
-  assert.match(sockets, /case "mtrolUseConsumable"/);
+  assert.match(sockets, /dispatchTransactionSocketCommand/);
+  assert.match(commands, /mtrolUseConsumable:\s*"consumable\.use"/);
   assert.match(inspector, /canUse: consumable\.valid && canUserUseConsumable/);
 });

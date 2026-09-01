@@ -1,4 +1,5 @@
 import { getClassDefinition } from "../actors/class-registry.js";
+import { preUpdateActorDispatcher, updateActorDispatcher } from "../core/hook-dispatcher.js";
 
 export const MTROL_SPECIAL_ABILITIES_FLAG = "specialAbilities";
 export const MTROL_SPECIAL_ABILITY_SLOTS = Object.freeze([1, 2]);
@@ -225,16 +226,16 @@ function specialAbilityFlagsChanged(changes) {
 }
 
 export function installSpecialAbilityAuthorityHooks() {
-  Hooks.on("preUpdateActor", (_actor, changes, _options, userId) => {
+  preUpdateActorDispatcher.subscribe("special-ability.guard", (_actor, changes, _options, userId) => {
     if (!specialAbilityFlagsChanged(changes)) return true;
     const user = game.users?.get?.(userId) ?? Array.from(game.users ?? []).find(entry => entry.id === userId);
     if (user?.isGM) return true;
     ui.notifications.warn("Sólo un GM puede configurar Habilidades Especiales.");
     return false;
-  });
-  Hooks.on("updateActor", (actor, changes) => {
+  }, { priority: 30, critical: true });
+  updateActorDispatcher.subscribe("special-ability.render", (actor, changes) => {
     if (specialAbilityFlagsChanged(changes) && actor?.sheet?.rendered) actor.sheet.render(false);
-  });
+  }, { priority: 200, critical: false });
 }
 
 export function installSpecialAbilityApi() {

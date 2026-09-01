@@ -24,7 +24,10 @@ export async function rollMtrolTieBreaker() {
     roll
   };
 
-  console.log("MTROL | Tie breaker rolled", result);
+  logger.debug("OPPOSITION", "tie breaker rolled", {
+    total: result.total,
+    winner: result.winner
+  });
 
   return result;
 }
@@ -97,3 +100,4 @@ export async function resolveOpposedAction(pendingAction) {
     tieBreaker
   };
 }
+import { logger } from "../utils/logger.js";

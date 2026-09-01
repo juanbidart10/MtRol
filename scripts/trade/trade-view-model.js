@@ -135,6 +135,8 @@ export function buildPublicTradeSessionView(session) {
     cancelledAt: session.cancelledAt ?? null,
     invalidatedAt: session.invalidatedAt ?? null,
     invalidReason: session.invalidReason ?? null,
+    pauseState: session.pauseState ? { ...session.pauseState } : null,
+    recovery: session.recovery ? { ...session.recovery } : null,
     execution: {
       executionId: safeString(session.execution?.executionId) || null,
       revision: Number.isInteger(session.execution?.revision) ? session.execution.revision : null,

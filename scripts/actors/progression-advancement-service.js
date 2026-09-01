@@ -111,8 +111,9 @@ export async function levelUpActorAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "level-up"
-  }, async canonicalActor => {
+    origin: "level-up",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const evaluation = evaluateProgression(canonicalActor);
     const currentLevel = Number(canonicalActor.system?.recursos?.nivel ?? 1);
 
@@ -167,6 +168,8 @@ export async function levelUpActorAuthoritative(payload = {}, {
       });
     }
 
+    await beforeWrite();
+
     await canonicalActor.update(changes, { mtrolClassResourceTransition: true });
 
     return {
@@ -203,8 +206,9 @@ export async function spendPendingAttributePointAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "pending-attribute"
-  }, async canonicalActor => {
+    origin: "pending-attribute",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const pending = readNonNegativeInteger(canonicalActor.system?.pendingAdvancement?.attributePoints);
     const current = Number(canonicalActor.system?.atributos?.[attributeKey]);
     const cap = getAttributeCap(canonicalActor);
@@ -220,6 +224,8 @@ export async function spendPendingAttributePointAuthoritative(payload = {}, {
       ...(attributeKey === "resistencia" ? { resistance: current + 1 } : {}),
       ...(attributeKey === "inteligencia" ? { intelligence: current + 1 } : {})
     });
+
+    await beforeWrite();
 
     await canonicalActor.update({
       ...getMigrationStableFields(canonicalActor),
@@ -255,8 +261,9 @@ export async function spendPendingCompetencePointAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "pending-competence"
-  }, async canonicalActor => {
+    origin: "pending-competence",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const item = canonicalActor.items?.get?.(itemId) ?? null;
     if (!item) {
       throw new Error("La competencia solicitada no pertenece al Actor.");
@@ -275,14 +282,21 @@ export async function spendPendingCompetencePointAuthoritative(payload = {}, {
     if (!Number.isInteger(current)) throw new Error("El nivel actual de la competencia es inválido.");
     if (current >= cap) throw new Error("La competencia ya alcanzó su máximo actual.");
 
+    await beforeWrite();
+
     await item.update({ "system.nivel": current + 1 });
     try {
+      await beforeWrite();
       await canonicalActor.update({
         ...getMigrationStableFields(canonicalActor),
         "system.pendingAdvancement.competencePoints": pending - 1
       });
     } catch (error) {
-      await item.update({ "system.nivel": current });
+      // No blind compensation after an ambiguous Actor write.
+      if (error.transactionNoEffects === true && Number(item.system?.nivel) === current + 1) {
+        await item.update({ "system.nivel": current });
+        error.transactionRolledBack = Number(item.system?.nivel) === current;
+      }
       throw error;
     }
 

@@ -35,11 +35,16 @@ game.mtrol.actions.getReactionMovementForActor = actor =>
   reactionMovement?.actorUuid === actor?.uuid ? reactionMovement : null;
 
 const {
+  canMove,
   canPrepare,
   completeResolvedTurnAction,
+  configureTurnActionIntegration,
   consumePreparation,
   getActionGuard,
+  getAttributeFollowUpTargetGuard,
+  getAvailableMovement,
   getCombatantTurnState,
+  getGrantedMovement,
   getPreparation,
   getPrepareGuard,
   getTurnResolutionState,
@@ -49,6 +54,11 @@ const {
   turnSocketOperations,
   validateTurnMovement
 } = await import("../scripts/combat/turn-system.js");
+
+configureTurnActionIntegration({
+  getPendingOppositionForActor: game.mtrol.actions.getPendingOppositionForActor,
+  getReactionMovementForActor: game.mtrol.actions.getReactionMovementForActor
+});
 
 class Combatants extends Array {
   get(id) { return this.find(value => value.id === id) ?? null; }
@@ -252,10 +262,10 @@ test("refresh y reconexión sólo releen el estado persistido del Combatant", ()
   first.flags.mtrol.turnState.extraMovementRemaining = 2;
   first.flags.mtrol.turnState.movementSpent = 1;
   first.flags.mtrol.turnState.actionConsumed = true;
-  const before = structuredClone(first.flags.mtrol.turnState);
-  assert.deepEqual(getCombatantTurnState(first), before);
-  assert.deepEqual(getCombatantTurnState(first), before);
-  assert.deepEqual(first.flags.mtrol.turnState, before);
+  const persistedBefore = structuredClone(first.flags.mtrol.turnState);
+  const normalized = getCombatantTurnState(first);
+  assert.deepEqual(getCombatantTurnState(first), normalized);
+  assert.deepEqual(first.flags.mtrol.turnState, persistedBefore);
 });
 
 test("Habilidad Especial contextual se valida en GM y Movimiento usa el resultado final", async () => {
@@ -273,7 +283,7 @@ test("Habilidad Especial contextual se valida en GM y Movimiento usa el resultad
   }, { requestingUserId: "owner-a" });
   const state = getCombatantTurnState(first);
   assert.equal(state.actionConsumed, true);
-  assert.equal(state.baseMovementRemaining, 0);
+  assert.equal(state.baseMovementRemaining, 1);
   assert.equal(state.extraMovementRemaining, 2);
   assert.deepEqual(orb.flags.mtrol.cooldown, {
     combatId: "combat",
@@ -370,6 +380,14 @@ test("preUpdateToken bloquea exceso y actor ajeno; GM tiene bypass sin consumo",
   assert.equal(getCombatantTurnState(first).baseMovementRemaining, 1);
 });
 
+test("canMove refleja el bypass GM sin alterar la lectura normal del Tracker", () => {
+  const { attacker, defender } = scenario();
+  game.user = users.get("gm");
+  assert.equal(canMove(defender), true);
+  assert.equal(getAvailableMovement(defender).kind, "none");
+  assert.equal(getAvailableMovement(attacker).kind, "turn");
+});
+
 test("preUpdateToken consulta la colisión real de Foundry antes de autorizar", () => {
   const { attacker } = scenario();
   const token = {
@@ -391,6 +409,23 @@ test("preUpdateToken consulta la colisión real de Foundry antes de autorizar", 
   };
   assert.equal(validateTurnMovement(token, { x: 100 }, {}, "owner-a"), false);
   assert.match(warnings.at(-1), /pared o columna/);
+});
+
+test("un único intento reentrante de movimiento rechazado emite un solo aviso", () => {
+  const { attacker, first } = scenario();
+  first.flags.mtrol.turnState.baseMovementRemaining = 0;
+  const token = {
+    id: "dedupe-token",
+    uuid: "Scene.scene.Token.dedupe",
+    actor: attacker,
+    parent: { grid: { size: 100, distance: 1 } },
+    x: 0,
+    y: 0
+  };
+  const before = warnings.length;
+  assert.equal(validateTurnMovement(token, { x: 100 }, {}, "owner-a"), false);
+  assert.equal(validateTurnMovement(token, { x: 100 }, {}, "owner-a"), false);
+  assert.equal(warnings.length - before, 1);
 });
 
 test("movimiento de Esquiva acepta una diagonal, limita a un cuadro y no toca el turno futuro", () => {
@@ -417,13 +452,372 @@ test("movimiento de Esquiva acepta una diagonal, limita a un cuadro y no toca el
   const diagonal = {};
   assert.equal(validateTurnMovement(token, { x: 100, y: 100 }, diagonal, "owner-b"), true);
   assert.deepEqual(diagonal.mtrolReactionMovement, {
+    transactionId: diagonal.mtrolReactionMovement.transactionId,
+    source: "REACTION",
+    combatId: "combat",
     pendingActionId: "dodge-resolution",
     actorUuid: defender.uuid,
     tokenUuid: token.uuid,
+    from: { x: 0, y: 0 },
+    to: { x: 100, y: 100 },
     cost: 1
   });
+  assert.match(diagonal.mtrolReactionMovement.transactionId, /^movement:/);
   assert.equal(validateTurnMovement(token, { x: 200 }, {}, "owner-b"), false);
   assert.deepEqual(getCombatantTurnState(second), futureBefore);
+});
+
+test("buff de movilidad sobre tercero crea GRANTED MOVEMENT sin tocar iniciativa ni su turno futuro", async () => {
+  const { attacker, defender, first, second, combat } = scenario();
+  const spell = item(attacker, "moss-step", "movement");
+  Object.assign(spell.system, {
+    categoria: "hechizo",
+    rol: "mobility",
+    effect: "buff"
+  });
+  const targetToken = {
+    id: "target-token",
+    uuid: "Scene.scene.Token.target",
+    actor: defender,
+    parent: { grid: { size: 100, distance: 1 } },
+    x: 0,
+    y: 0,
+    object: { center: { x: 50, y: 50 }, checkCollision: () => false }
+  };
+  documents.set(targetToken.uuid, targetToken);
+  const futureBefore = structuredClone(getCombatantTurnState(second));
+
+  const receipt = await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: attacker.uuid,
+    itemId: spell.id,
+    resolution: { finalResult: 34 },
+    targetActorUuid: defender.uuid,
+    targetTokenUuid: targetToken.uuid
+  }, { requestingUserId: "owner-a" });
+
+  assert.equal(receipt.grantType, "granted");
+  assert.equal(receipt.granted, 3);
+  assert.equal(combat.nextTurnCalls, 0);
+  assert.equal(getCombatantTurnState(first).actionConsumed, true);
+  assert.deepEqual(getCombatantTurnState(second), futureBefore);
+  assert.equal(getGrantedMovement(defender).remaining, 3);
+  assert.equal(canMove(defender), true);
+
+  const moveOptions = {};
+  assert.equal(validateTurnMovement(targetToken, { x: 100, y: 100 }, moveOptions, "owner-b"), true);
+  assert.equal(moveOptions.mtrolGrantedMovement.cost, 1);
+  await turnSocketOperations.commitGrantedMovementAuthoritative({
+    tokenUuid: targetToken.uuid,
+    movement: moveOptions.mtrolGrantedMovement
+  }, { requestingUserId: "owner-b" });
+  assert.equal(getGrantedMovement(defender).remaining, 2);
+  assert.equal(combat.nextTurnCalls, 0);
+
+  await turnSocketOperations.completeGrantedMovementAuthoritative({
+    movementId: getGrantedMovement(defender).id,
+    reason: "skipped"
+  }, { requestingUserId: "owner-b" });
+  assert.equal(getGrantedMovement(defender), null);
+  assert.equal(combat.nextTurnCalls, 1);
+  assert.deepEqual(getCombatantTurnState(second), futureBefore);
+});
+
+test("GRANTED MOVEMENT agotado avanza una sola vez y resultado menor a 10 no crea concesión", async () => {
+  const { attacker, defender, second, combat } = scenario();
+  const spell = item(attacker, "mobility-buff", "movement");
+  Object.assign(spell.system, {
+    categoria: "hechizo",
+    rol: "mobility",
+    effect: "buff"
+  });
+  const targetToken = {
+    id: "granted-token",
+    uuid: "Scene.scene.Token.granted",
+    actor: defender,
+    parent: { grid: { size: 100, distance: 1 } },
+    x: 0,
+    y: 0
+  };
+  documents.set(targetToken.uuid, targetToken);
+  const futureBefore = structuredClone(getCombatantTurnState(second));
+  await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: attacker.uuid,
+    itemId: spell.id,
+    resolution: { finalResult: 30 },
+    targetActorUuid: defender.uuid,
+    targetTokenUuid: targetToken.uuid
+  }, { requestingUserId: "owner-a" });
+  const grant = getGrantedMovement(defender);
+  await turnSocketOperations.commitGrantedMovementAuthoritative({
+    tokenUuid: targetToken.uuid,
+    movement: {
+      id: grant.id,
+      combatId: "combat",
+      sourceCombatantId: game.combat.combatant.id,
+      round: 1,
+      turn: 0,
+      cost: 3
+    }
+  }, { requestingUserId: "owner-b" });
+  assert.equal(combat.nextTurnCalls, 1);
+  assert.equal(getGrantedMovement(defender), null);
+  assert.deepEqual(getCombatantTurnState(second), futureBefore);
+
+  const next = scenario();
+  const emptySpell = item(next.attacker, "empty-mobility", "movement");
+  Object.assign(emptySpell.system, {
+    categoria: "hechizo",
+    rol: "mobility",
+    effect: "buff"
+  });
+  await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: next.attacker.uuid,
+    itemId: emptySpell.id,
+    resolution: { finalResult: 9 },
+    targetActorUuid: next.defender.uuid
+  }, { requestingUserId: "owner-a" });
+  assert.equal(next.combat.nextTurnCalls, 1);
+  assert.equal(getGrantedMovement(next.defender), null);
+});
+
+test("el cierre genérico no adelanta una acción movement con cuadros pendientes", async () => {
+  const { attacker, first, combat } = scenario();
+  const movement = item(attacker, "self-movement", "movement");
+  await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: attacker.uuid,
+    itemId: movement.id,
+    resolution: { finalResult: 11 }
+  }, { requestingUserId: "owner-a" });
+  assert.deepEqual(
+    [getCombatantTurnState(first).baseMovementRemaining, getCombatantTurnState(first).extraMovementRemaining],
+    [1, 1]
+  );
+  const completion = await turnSocketOperations.completeResolvedTurnActionAuthoritative({
+    actorUuid: attacker.uuid,
+    completionId: "stray-sheet-completion"
+  }, { requestingUserId: "owner-a" });
+  assert.equal(completion.reason, "turn-movement-pending");
+  assert.equal(combat.nextTurnCalls, 0);
+});
+
+function installCombatScene({ combat, first, attacker, enemies = [] }) {
+  const tokens = [];
+  tokens.get = id => tokens.find(token => token.id === id) ?? null;
+  const scene = {
+    uuid: "Scene.follow-up",
+    grid: { type: 1, size: 100, distance: 1 },
+    tokens
+  };
+  const source = {
+    id: "source-token",
+    uuid: "Scene.follow-up.Token.source",
+    actor: attacker,
+    parent: scene,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    disposition: 1
+  };
+  tokens.push(source);
+  enemies.forEach((enemy, index) => tokens.push({
+    id: `enemy-token-${index}`,
+    uuid: `Scene.follow-up.Token.enemy-${index}`,
+    actor: enemy.actor,
+    parent: scene,
+    x: enemy.x,
+    y: enemy.y ?? 0,
+    width: 1,
+    height: 1,
+    disposition: -1
+  }));
+  combat.scene = scene;
+  first.token = source;
+  first.tokenId = source.id;
+  for (const token of tokens) documents.set(token.uuid, token);
+  return { scene, source, enemyTokens: tokens.slice(1) };
+}
+
+test("clase física agota ATTRIBUTE MOVEMENT a rango y obtiene exactamente un ataque", async () => {
+  const { attacker, first, combat } = scenario();
+  const enemyA = actor(`enemy-a-${Math.random()}`, "owner-b");
+  const enemyB = actor(`enemy-b-${Math.random()}`, "owner-b");
+  const { source, enemyTokens } = installCombatScene({
+    combat,
+    first,
+    attacker,
+    enemies: [
+      { actor: enemyA, x: 400 },
+      { actor: enemyB, x: 400, y: 100 }
+    ]
+  });
+  const granted = await turnSocketOperations.grantMovementAuthoritative({
+    actorUuid: attacker.uuid,
+    resolution: { finalResult: 20 }
+  }, { requestingUserId: "owner-a" });
+  assert.equal(granted.attributeMovementFollowUp, "attack-if-in-range");
+  assert.deepEqual(
+    [getAvailableMovement(attacker, source).kind, getAvailableMovement(attacker, source).remaining],
+    ["turn", 3]
+  );
+  const movementOptions = {};
+  assert.equal(validateTurnMovement(source, { x: 300 }, movementOptions, "owner-a"), true);
+  source.x = 300;
+  const terminal = await turnSocketOperations.commitTurnMovementAuthoritative({
+    tokenUuid: source.uuid,
+    movement: movementOptions.mtrolTurnMovement
+  }, { requestingUserId: "owner-a" });
+  assert.equal(terminal.followUpAttackAvailable, true);
+  assert.equal(combat.nextTurnCalls, 0);
+  assert.equal(getCombatantTurnState(first).followUpAttackAvailable, true);
+
+  const attack = item(attacker, "attribute-follow-up", "attack");
+  assert.equal(getActionGuard(attacker, attack).attributeFollowUp, true);
+  const spellAttack = item(attacker, "forbidden-spell-follow-up", "attack");
+  spellAttack.system.categoria = "hechizo";
+  assert.equal(getActionGuard(attacker, spellAttack).allowed, false);
+  const orbAttack = item(attacker, "forbidden-orb-follow-up", "utility");
+  assert.equal(getActionGuard(attacker, orbAttack, { kindOverride: "offensive" }).allowed, false);
+  assert.equal(getAttributeFollowUpTargetGuard(attacker, enemyTokens[0]).allowed, true);
+  assert.equal(getAttributeFollowUpTargetGuard(attacker, enemyTokens[1]).allowed, true);
+
+  await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: attacker.uuid,
+    itemId: attack.id,
+    resolution: { finalResult: 18 }
+  }, { requestingUserId: "owner-a" });
+  assert.equal(getCombatantTurnState(first).followUpAttackConsumed, true);
+  assert.equal(getActionGuard(attacker, attack).allowed, false);
+  await turnSocketOperations.completeResolvedTurnActionAuthoritative({
+    actorUuid: attacker.uuid,
+    completionId: "attribute-follow-up-attack"
+  }, { requestingUserId: "owner-a" });
+  assert.equal(combat.nextTurnCalls, 1);
+});
+
+test("clase física sin enemigo a rango y clase mágica finalizan ATTRIBUTE MOVEMENT", async () => {
+  const physical = scenario();
+  const farEnemy = actor(`far-enemy-${Math.random()}`, "owner-b");
+  const physicalScene = installCombatScene({
+    combat: physical.combat,
+    first: physical.first,
+    attacker: physical.attacker,
+    enemies: [{ actor: farEnemy, x: 500 }]
+  });
+  await turnSocketOperations.grantMovementAuthoritative({
+    actorUuid: physical.attacker.uuid,
+    resolution: { finalResult: 20 }
+  }, { requestingUserId: "owner-a" });
+  const physicalOptions = {};
+  validateTurnMovement(physicalScene.source, { x: 300 }, physicalOptions, "owner-a");
+  physicalScene.source.x = 300;
+  await turnSocketOperations.commitTurnMovementAuthoritative({
+    tokenUuid: physicalScene.source.uuid,
+    movement: physicalOptions.mtrolTurnMovement
+  }, { requestingUserId: "owner-a" });
+  assert.equal(physical.combat.nextTurnCalls, 1);
+
+  const magical = scenario();
+  magical.attacker.system.identidad.classId = "mago";
+  const nearEnemy = actor(`near-enemy-${Math.random()}`, "owner-b");
+  const magicalScene = installCombatScene({
+    combat: magical.combat,
+    first: magical.first,
+    attacker: magical.attacker,
+    enemies: [{ actor: nearEnemy, x: 400 }]
+  });
+  const magicGrant = await turnSocketOperations.grantMovementAuthoritative({
+    actorUuid: magical.attacker.uuid,
+    resolution: { finalResult: 20 }
+  }, { requestingUserId: "owner-a" });
+  assert.equal(magicGrant.attributeMovementFollowUp, "none");
+  const magicalOptions = {};
+  validateTurnMovement(magicalScene.source, { x: 300 }, magicalOptions, "owner-a");
+  magicalScene.source.x = 300;
+  await turnSocketOperations.commitTurnMovementAuthoritative({
+    tokenUuid: magicalScene.source.uuid,
+    movement: magicalOptions.mtrolTurnMovement
+  }, { requestingUserId: "owner-a" });
+  assert.equal(magical.combat.nextTurnCalls, 1);
+  assert.equal(getCombatantTurnState(magical.first).followUpAttackAvailable, false);
+});
+
+test("ATTRIBUTE MOVEMENT que concede cero consume la acción y finaliza una sola vez", async () => {
+  const { attacker, first, combat } = scenario();
+  const result = await turnSocketOperations.grantMovementAuthoritative({
+    actorUuid: attacker.uuid,
+    resolution: { finalResult: 9 }
+  }, { requestingUserId: "owner-a" });
+  const state = getCombatantTurnState(first);
+  assert.equal(result.granted, 0);
+  assert.equal(result.ended, true);
+  assert.equal(state.actionConsumed, true);
+  assert.equal(state.baseMovementRemaining, 0);
+  assert.equal(state.extraMovementRemaining, 0);
+  assert.equal(state.followUpAttackAvailable, false);
+  assert.equal(combat.nextTurnCalls, 1);
+});
+
+test("follow-up físico rechaza un target lejano aunque exista otro enemigo válido a rango", async () => {
+  const { attacker, first, combat } = scenario();
+  const nearEnemy = actor(`valid-enemy-${Math.random()}`, "owner-b");
+  const farEnemy = actor(`invalid-enemy-${Math.random()}`, "owner-b");
+  const { source, enemyTokens } = installCombatScene({
+    combat,
+    first,
+    attacker,
+    enemies: [
+      { actor: nearEnemy, x: 100 },
+      { actor: farEnemy, x: 500 }
+    ]
+  });
+  first.flags.mtrol.turnState = {
+    ...getCombatantTurnState(first),
+    baseMovementRemaining: 0,
+    extraMovementRemaining: 0,
+    actionConsumed: true,
+    movementSource: "attribute",
+    attributeMovementFollowUp: "attack-if-in-range",
+    followUpAttackAvailable: true
+  };
+  assert.equal(getAttributeFollowUpTargetGuard(attacker, enemyTokens[0]).allowed, true);
+  assert.equal(getAttributeFollowUpTargetGuard(attacker, enemyTokens[1]).allowed, false);
+  assert.equal(source.x, 0);
+  assert.equal(combat.nextTurnCalls, 0);
+});
+
+test("físico puede cerrar movimiento parcial, obtener follow-up y renunciar con Finalizar turno", async () => {
+  const { attacker, first, combat } = scenario();
+  const enemy = actor(`partial-enemy-${Math.random()}`, "owner-b");
+  const { source } = installCombatScene({
+    combat,
+    first,
+    attacker,
+    enemies: [{ actor: enemy, x: 200 }]
+  });
+  await turnSocketOperations.grantMovementAuthoritative({
+    actorUuid: attacker.uuid,
+    resolution: { finalResult: 20 }
+  }, { requestingUserId: "owner-a" });
+  const partialOptions = {};
+  validateTurnMovement(source, { x: 100 }, partialOptions, "owner-a");
+  source.x = 100;
+  await turnSocketOperations.commitTurnMovementAuthoritative({
+    tokenUuid: source.uuid,
+    movement: partialOptions.mtrolTurnMovement
+  }, { requestingUserId: "owner-a" });
+  assert.equal(getAvailableMovement(attacker, source).remaining, 2);
+  const finished = await turnSocketOperations.completeAttributeMovementAuthoritative({
+    actorUuid: attacker.uuid,
+    tokenUuid: source.uuid
+  }, { requestingUserId: "owner-a" });
+  assert.equal(finished.followUpAttackAvailable, true);
+  assert.equal(getAvailableMovement(attacker, source).remaining, 0);
+  assert.equal(combat.nextTurnCalls, 0);
+  await turnSocketOperations.endTurnAuthoritative({ combatId: "combat" }, {
+    requestingUserId: "owner-a"
+  });
+  assert.equal(combat.nextTurnCalls, 1);
 });
 
 test("Prepararse suma uno, consume movimiento/acción y finaliza el turno", async () => {

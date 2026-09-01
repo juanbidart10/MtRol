@@ -15,6 +15,9 @@ import {
   applyDamageToHpAuthoritative
 } from "../actors/actor-resource-service.js";
 
+import { aplicarDanioCanonicoAutorizado } from "./damage-authorized.js";
+import { logger } from "../utils/logger.js";
+
 // =========================
 // MTROL - DAMAGE LOCALIZED ENGINE
 // =========================
@@ -202,18 +205,29 @@ function delegateApplyDamageToGM({
   costoTotal,
   evaluacionDanio,
   totalBaseDanio,
-  totalFinalDanio
+  totalFinalDanio,
+  transactionId
 }) {
   const gmActivo =
     game.users.some(user => user.isGM && user.active);
 
   if (!gmActivo) {
-    console.warn("MTROL | No GM available; manual application required");
+    logger.warn("DAMAGE", "damage delegation unavailable", {
+      actorUuid: actor?.uuid ?? null,
+      targetActorUuid: actorObjetivo?.uuid ?? null,
+      tokenUuid: targetTokenDocument?.uuid ?? null,
+      status: "rejected",
+      reasonCode: "PRIMARY_GM_UNAVAILABLE"
+    });
     ui.notifications.warn("No hay GM conectado para aplicar automáticamente el daño. Aplicar manualmente.");
     return false;
   }
 
-  console.log("MTROL | Delegating damage application to GM");
+  logger.debug("DAMAGE", "delegating damage application", {
+    actorUuid: actor?.uuid ?? null,
+    targetActorUuid: actorObjetivo?.uuid ?? null,
+    tokenUuid: targetTokenDocument?.uuid ?? null
+  });
 
   game.socket.emit("system.mtrol", {
     action: "mtrolAplicarDanioLocalizado",
@@ -221,6 +235,7 @@ function delegateApplyDamageToGM({
     targetActorUuid: actorObjetivo?.uuid ?? null,
     targetTokenUuid: targetTokenDocument?.uuid ?? null,
     payload: {
+      transactionId,
       danio: danioFinal,
       numeroLocalizacion,
       slot: slotObjetivo,
@@ -248,7 +263,11 @@ export async function aplicarDanioLocalizado({
   totalBaseDanio = null,
   totalFinalDanio = null
 } = {}) {
-  console.log("MTROL | Damage request started");
+  logger.debug("DAMAGE", "damage request started", {
+    actorUuid: actor?.uuid ?? null,
+    targetActorUuid: targetActor?.uuid ?? null,
+    tokenUuid: targetTokenDocument?.uuid ?? null
+  });
 
   const actorObjetivo =
     targetActor ?? actor;
@@ -263,6 +282,8 @@ export async function aplicarDanioLocalizado({
 
   const danioFinal =
     Math.max(0, toNumber(danioBase));
+
+  const transactionId = createDamageTransactionId("damage-localized");
 
   const localizacionRoll =
     await new Roll("1d10").evaluate();
@@ -305,15 +326,26 @@ export async function aplicarDanioLocalizado({
   };
 
   if (game.user.isGM) {
-    console.log("MTROL | Applying damage directly");
-
-    await applyDamageToTarget({
-      actorObjetivo,
-      targetTokenDocument,
-      slotObjetivo,
-      danioFinal,
-      resultado
+    logger.debug("DAMAGE", "applying damage directly", {
+      actorUuid: actor?.uuid ?? null,
+      targetActorUuid: actorObjetivo?.uuid ?? null,
+      tokenUuid: targetTokenDocument?.uuid ?? null
     });
+
+    const commandResult = await aplicarDanioCanonicoAutorizado({
+      attackerActor: actor,
+      targetActor: actorObjetivo,
+      targetTokenDocument,
+      transactionId,
+      payload: {
+        transactionId,
+        danio: danioFinal,
+        numeroLocalizacion,
+        slot: slotObjetivo,
+        zona: labelLocalizacion
+      }
+    });
+    Object.assign(resultado, commandResult?.result ?? commandResult ?? {});
 
     resultado.aplicacion =
       "directa";
@@ -343,6 +375,7 @@ export async function aplicarDanioLocalizado({
       evaluacionDanio,
       totalBaseDanio,
       totalFinalDanio
+      ,transactionId
     });
 
   resultado.aplicacion =

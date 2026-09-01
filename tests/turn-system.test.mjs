@@ -23,7 +23,11 @@ test("fase 1: cada turno nace con un cuadro base y una acción limpia", () => {
     baseMovementRemaining: 1,
     extraMovementRemaining: 0,
     movementSpent: 0,
-    actionConsumed: false
+    actionConsumed: false,
+    movementSource: null,
+    attributeMovementFollowUp: "none",
+    followUpAttackAvailable: false,
+    followUpAttackConsumed: false
   });
 });
 
@@ -112,7 +116,7 @@ test("fase 3: hechizo de movimiento es acción completa pero conserva el extra o
   const result = grantExtraMovement(createTurnState(), { finalResult: 34 }, { fullAction: true });
   assert.equal(result.granted, 3);
   assert.equal(result.state.actionConsumed, true);
-  assert.equal(result.state.baseMovementRemaining, 0);
+  assert.equal(result.state.baseMovementRemaining, 1);
   assert.equal(result.state.extraMovementRemaining, 3);
 });
 
@@ -124,7 +128,7 @@ test("fase 3: hechizo de movimiento fallido consume la acción sin otorgar cuadr
   );
   assert.equal(result.granted, 0);
   assert.equal(result.state.actionConsumed, true);
-  assert.equal(movementRemaining(result.state), 0);
+  assert.equal(movementRemaining(result.state), 1);
 });
 
 test("fase 4: CD 1 usado en R3 bloquea R4 y habilita R5", () => {
@@ -150,41 +154,52 @@ test("fase 4: cooldown pertenece al Combat y soporta saltos o retrocesos de rond
 });
 
 test("integración: hooks semánticos, movimiento preventivo y sockets autoritativos están registrados", async () => {
-  const [turnSource, hooksSource, socketSource] = await Promise.all([
+  const [turnSource, hooksSource, socketSource, transactionSource, dispatcherSource] = await Promise.all([
     readFile(new URL("../scripts/combat/turn-system.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/core/hooks.js", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8")
+    readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/runtime/transaction-commands.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/core/hook-dispatcher.js", import.meta.url), "utf8")
   ]);
-  for (const hook of ["createCombat", "preUpdateCombat", "updateCombat", "deleteCombat", "preUpdateToken", "updateToken"]) {
+  for (const hook of ["createCombat", "preUpdateCombat", "updateCombat", "deleteCombat"]) {
     assert.match(turnSource, new RegExp(`Hooks\\.on\\(\"${hook}\"`));
   }
+  assert.match(turnSource, /preUpdateTokenDispatcher\.subscribe\("turn\.movement-guard"/);
+  assert.match(turnSource, /updateTokenDispatcher\.subscribe\("turn\.movement-commit"/);
+  assert.match(dispatcherSource, /Hooks\.on\("preUpdateToken"/);
+  assert.match(dispatcherSource, /Hooks\.on\("updateToken"/);
   for (const event of ["TurnStart", "TurnEnd", "RoundStart", "RoundEnd"]) {
     assert.match(turnSource, new RegExp(`emitSemanticEvent\\(\"${event}\"`));
   }
   assert.match(hooksSource, /registerMtrolTurnHooks\(\)/);
-  for (const operation of ["mtrolEndTurn", "mtrolGrantTurnMovement", "mtrolCommitTurnMovement", "mtrolFinalizeTurnUse", "mtrolCompleteTurnAction"]) {
-    assert.match(socketSource, new RegExp(operation));
+  for (const operation of ["mtrolEndTurn", "mtrolGrantTurnMovement", "mtrolFinalizeTurnUse", "mtrolCompleteTurnAction"]) {
+    assert.match(transactionSource, new RegExp(operation));
   }
+  assert.match(transactionSource, /mtrolCommitTurnMovement:\s*"movement\.commit"/);
 });
 
 test("V1: tracker conserva un único finalizador, marca turno y expone panel GM", async () => {
-  const source = await readFile(new URL("../scripts/combat/turn-system.js", import.meta.url), "utf8");
-  assert.match(source, /TURNO ACTIVO/);
-  assert.match(source, /Movimiento: \$\{movementRemaining/);
-  assert.match(source, /mtrol-gm-combat-state/);
-  assert.match(source, /data-mtrol-gm-special-lock/);
-  assert.match(source, /data-mtrol-gm-preparation/);
-  assert.equal((source.match(/dataset\.mtrolEndTurn\s*=/g) ?? []).length, 1);
-  assert.equal((source.match(/\.nextTurn\(\)/g) ?? []).length, 1);
+  const [turnSource, trackerSource] = await Promise.all([
+    readFile(new URL("../scripts/combat/turn-system.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/combat/turn-tracker-adapter.js", import.meta.url), "utf8")
+  ]);
+  assert.match(trackerSource, /TURNO ACTIVO/);
+  assert.match(trackerSource, /Movimiento: \$\{api\.getAvailableMovement/);
+  assert.match(trackerSource, /mtrol-gm-combat-state/);
+  assert.match(trackerSource, /data-mtrol-gm-special-lock/);
+  assert.match(trackerSource, /data-mtrol-gm-preparation/);
+  assert.equal((trackerSource.match(/dataset\.mtrolEndTurn\s*=/g) ?? []).length, 1);
+  const advanceSource = await readFile(new URL("../scripts/combat/turn-advance-service.js", import.meta.url), "utf8");
+  assert.equal((`${turnSource}\n${advanceSource}`.match(/\.nextTurn\(\)/g) ?? []).length, 1);
 });
 
 test("Preparación se integra una vez en mtrolRoll e iniciativa y las tres vistas leen el mismo contexto", async () => {
-  const [rollSource, initiativeSource, sheetSource, templateSource, socketSource] = await Promise.all([
+  const [rollSource, initiativeSource, sheetSource, templateSource, transactionSource] = await Promise.all([
     readFile(new URL("../scripts/rolls/mtrol-rolls.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/combat/initiative-engine.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url), "utf8"),
     readFile(new URL("../templates/actors/personaje-sheet.html", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8")
+    readFile(new URL("../scripts/runtime/transaction-commands.js", import.meta.url), "utf8")
   ]);
   assert.equal((rollSource.match(/consumePreparation\(actor/g) ?? []).length, 1);
   assert.equal((initiativeSource.match(/consumePreparation\(actor/g) ?? []).length, 1);
@@ -199,5 +214,18 @@ test("Preparación se integra una vez en mtrolRoll e iniciativa y las tres vista
     "mtrolReservePreparation",
     "mtrolCompletePreparation",
     "mtrolCancelPreparationReservation"
-  ]) assert.match(socketSource, new RegExp(operation));
+  ]) assert.match(transactionSource, new RegExp(operation));
+});
+
+test("hotfix movilidad conecta sólo los cuatro atributos y registra adapters de GRANTED MOVEMENT", async () => {
+  const [sheetSource, socketSource, transactionSource] = await Promise.all([
+    readFile(new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/runtime/transaction-commands.js", import.meta.url), "utf8")
+  ]);
+  assert.match(sheetSource, /new Set\(\["destreza", "fuerza", "aura", "suerte"\]\)/);
+  assert.match(sheetSource, /item\.system\?\.actionType === "movement"/);
+  assert.match(transactionSource, /mtrolCommitGrantedMovement:\s*"movement\.commit"/);
+  assert.match(transactionSource, /mtrolCompleteGrantedMovement:\s*"movement\.renounce"/);
+  assert.match(transactionSource, /mtrolCompleteAttributeMovement/);
 });

@@ -140,6 +140,16 @@ const defenderOwner = {
   active: true
 };
 
+const combat = {
+  id: "combat-flow",
+  flags: {},
+  async update(changes) {
+    this.flags.mtrol ??= {};
+    this.flags.mtrol.runtime = deepClone(changes["flags.mtrol.runtime"]);
+    return this;
+  }
+};
+
 globalThis.game = {
   user: gmUser,
   users: new MockUsers([
@@ -159,6 +169,8 @@ globalThis.game = {
     }
   },
   dice3d: null,
+  combat,
+  combats: new Map([[combat.id, combat]]),
   messages: {
     get: id => chatMessages.find(message => message.id === id) ?? null
   },
@@ -260,6 +272,7 @@ function createItem({
   damageResolution,
   damageMode,
   damageCostType,
+  damageType = null,
   equipado = false,
   slot = "",
   defensa = 0
@@ -285,6 +298,7 @@ function createItem({
       ...(damageResolution ? { damageResolution } : {}),
       ...(damageMode ? { damageMode } : {}),
       ...(damageCostType ? { damageCostType } : {}),
+      damageType,
       equipado,
       slot,
       defensa,
@@ -320,6 +334,7 @@ function createActor({
     type: "personaje",
     ownerIds: new Set(ownerIds),
     system: {
+      identidad: { classId: "guerrero" },
       atributos: {
         fuerza: 3
       },
@@ -413,6 +428,7 @@ function createAttackSkill(id, {
     name: `Ataque ${id}`,
     categoria,
     actionType: "attack",
+    damageType: "physical",
     effect: "damage",
     requiresOpposition: true,
     danio,
@@ -463,6 +479,9 @@ const mpModule =
 
 const socketModule =
   await import("../scripts/core/sockets.js");
+
+const runtimeFoundation =
+  await import("../scripts/runtime/runtime-foundation.js");
 
 game.mtrol.actions = {
   getPendingAction: actionModule.getPendingAction,
@@ -651,6 +670,82 @@ test("Esquiva ganadora crea un permiso reactivo independiente de un cuadro", asy
   assert.equal(context.pending.reactionMovement.status, "available");
 });
 
+test("Esquiva perdedora no concede movimiento reactivo", async () => {
+  const context = await createPending({
+    suffix: "dodge-loses",
+    attackerTotal: 9
+  });
+  await defend({
+    pending: context.pending,
+    defender: context.defender,
+    total: 4
+  });
+  assert.equal(context.pending.reactionMovement, null);
+  assert.equal(actionModule.getReactionMovementForActor(context.defender), null);
+});
+
+test("declaración de respuesta persiste antes de tirar y recovery conserva su preset", async () => {
+  const context = await createPending({
+    suffix: "declared-before-roll",
+    attackerTotal: 7
+  });
+  const responseItem = context.defender.items.find(candidate =>
+    candidate.system?.defenseType === "dodge"
+  );
+  await actionModule.declareOppositionResponseAuthoritative({
+    pendingActionId: context.pending.id,
+    defenderActorUuid: context.defender.uuid,
+    responseItemId: responseItem.id,
+    selectedCapability: "DODGE",
+    mode: "auric",
+    requestingUserId: defenderOwner.id,
+    transactionId: "declare-before-roll"
+  });
+  assert.equal(context.pending.status, "waiting-defense");
+  assert.equal(context.pending.defenderRoll, null);
+  assert.equal(context.pending.responseDeclaration.selectedCapability, "DODGE");
+  assert.equal(context.pending.responseDeclaration.mode, "auric");
+
+  actionModule.receivePendingActionCleared(context.pending.id);
+  const runtime = runtimeFoundation.runtimeRepository.read(game.combat);
+  await actionModule.hydratePendingActionsFromRuntime(runtime, game.combat);
+  const recovered = actionModule.getPendingAction(context.pending.id);
+  assert.equal(recovered.responseDeclaration.itemUuid, responseItem.uuid);
+  assert.equal(recovered.responseDeclaration.selectedCapability, "DODGE");
+  assert.equal(recovered.responseDeclaration.mode, "auric");
+});
+
+test("acción ofensiva sin dominio mecánico se rechaza sin fallback", async () => {
+  const attackSkill = createItem({
+    id: "attack-without-domain",
+    name: "Ataque sin dominio",
+    actionType: "attack",
+    effect: "damage",
+    requiresOpposition: true,
+    danio: "1d6"
+  });
+  const attacker = createActor({
+    id: "attacker-without-domain",
+    ownerIds: [attackerOwner.id],
+    items: [attackSkill]
+  });
+  const defender = createActor({
+    id: "defender-without-domain",
+    ownerIds: [defenderOwner.id]
+  });
+  await assert.rejects(
+    actionModule.createPendingActionAuthoritative({
+      sourceActorId: attacker.id,
+      sourceActorUuid: attacker.uuid,
+      sourceItemId: attackSkill.id,
+      targetActorId: defender.id,
+      targetActorUuid: defender.uuid,
+      attackerRoll: { total: 8 }
+    }, { requestingUserId: attackerOwner.id }),
+    /actionDomain válido/
+  );
+});
+
 test("Contraataque ganador ejecuta su daño existente contra el atacante", async () => {
   const counterattack = createItem({
     id: "counterattack-response",
@@ -661,7 +756,8 @@ test("Contraataque ganador ejecuta su daño existente contra el atacante", async
     danio: "1d6",
     ejecutaDanio: true,
     damageResolution: "immediate",
-    damageMode: "automatic"
+    damageMode: "automatic",
+    damageType: "physical"
   });
   const defender = createActor({
     id: "counterattack-defender",
@@ -1170,7 +1266,7 @@ test("Owner atacante inicia por socket y el GM ejecuta el dano autoritativo", as
     payload: {
       pendingActionId: context.pending.id
     }
-  });
+  }, attackerOwner.id);
 
   const response = socketEvents.findLast(event =>
     event.data?.action === "mtrolSocketResponse" &&
@@ -1248,6 +1344,84 @@ test("registrar y rerenderizar chat no duplica handlers", () => {
 
   assert.equal(activeHandlers.size, 1);
   assert.equal(activeHandlers.has("click.mtrolResolvedDamage"), true);
+});
+
+test("F5 simulado recupera waiting-defense desde Combat y resuelve la misma pendingAction", async () => {
+  const context = await createPending({
+    suffix: "recovery-f5",
+    attackerTotal: 9
+  });
+  const pendingActionId = context.pending.id;
+  const pendingCardsBefore = chatMessages.filter(message =>
+    message.flags?.mtrol?.pendingActionId === pendingActionId &&
+    message.flags?.mtrol?.presentationType === "opposition-pending"
+  ).length;
+
+  await actionModule.hydratePendingActionsFromRuntime({ pendingActions: {} }, combat);
+  assert.equal(actionModule.getPendingAction(pendingActionId), null);
+
+  runtimeFoundation.recoveryCoordinator.configure({
+    hydrateCache: actionModule.hydratePendingActionsFromRuntime,
+    recoverPresentation: actionModule.recoverPendingActionPresentation
+  });
+  const recovered = await runtimeFoundation.recoveryCoordinator.recover(combat, {
+    authorityUserId: gmUser.id,
+    isPrimaryGM: true,
+    notify: message => warnings.push(message)
+  });
+  const pendingAfterF5 = actionModule.getPendingAction(pendingActionId);
+
+  assert.equal(recovered.waitingIds.includes(pendingActionId), true);
+  assert.equal(pendingAfterF5.id, pendingActionId);
+  assert.equal(pendingAfterF5.status, "waiting-defense");
+  assert.equal(chatMessages.filter(message =>
+    message.flags?.mtrol?.pendingActionId === pendingActionId &&
+    message.flags?.mtrol?.presentationType === "opposition-pending"
+  ).length, pendingCardsBefore);
+
+  const result = await defend({
+    pending: pendingAfterF5,
+    defender: context.defender,
+    total: 4
+  });
+
+  assert.equal(result.resolutionResult.success, true);
+  assert.equal(actionModule.getPendingAction(pendingActionId).status, "resolved");
+  assert.equal(
+    combat.flags.mtrol.runtime.pendingActions[pendingActionId].status,
+    "resolved"
+  );
+});
+
+test("recovery recrea solo la presentacion si falta la Chat Card", async () => {
+  const context = await createPending({
+    suffix: "recovery-card-missing",
+    attackerTotal: 8
+  });
+  const id = context.pending.id;
+  const oldMessageId = context.pending.pendingMessageId;
+  const oldIndex = chatMessages.findIndex(message => message.id === oldMessageId);
+  assert.notEqual(oldIndex, -1);
+  chatMessages.splice(oldIndex, 1);
+
+  await actionModule.hydratePendingActionsFromRuntime({ pendingActions: {} }, combat);
+  runtimeFoundation.recoveryCoordinator.configure({
+    hydrateCache: actionModule.hydratePendingActionsFromRuntime,
+    recoverPresentation: actionModule.recoverPendingActionPresentation
+  });
+  await runtimeFoundation.recoveryCoordinator.recover(combat, {
+    authorityUserId: gmUser.id,
+    isPrimaryGM: true,
+    notify: message => warnings.push(message)
+  });
+
+  const recovered = actionModule.getPendingAction(id);
+  assert.equal(recovered.status, "waiting-defense");
+  assert.notEqual(recovered.pendingMessageId, oldMessageId);
+  assert.equal(chatMessages.filter(message =>
+    message.flags?.mtrol?.pendingActionId === id &&
+    message.flags?.mtrol?.presentationType === "opposition-pending"
+  ).length, 1);
 });
 
 test.after(() => {

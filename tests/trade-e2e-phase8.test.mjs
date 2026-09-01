@@ -6,6 +6,9 @@ globalThis.foundry = { utils: { deepClone: structuredClone, duplicate: structure
 const { TradeSessionStore } = await import("../scripts/trade/trade-session-service.js");
 const { TradeTransferCoordinator, prepareTradeTransferPlan } = await import("../scripts/trade/trade-transfer-service.js");
 const { buildGMTradeView, buildPublicTradeSessionView } = await import("../scripts/trade/trade-view-model.js");
+const { tradeRuntimeRepository } = await import("../scripts/trade/trade-runtime-repository.js");
+
+test.beforeEach(() => tradeRuntimeRepository.resetForTests());
 
 let createdId = 0; let operation = 0;
 function actor(id, specs = []) {
@@ -63,4 +66,4 @@ test("8-10 payload público sólo contiene oferta publicada", async () => { cons
 test("8-11 terminal limpia reserva, índice y confirmaciones", async () => { const f = fixture(); const s = await negotiate(f); const end = await f.store.finishForLifecycle({ sessionId: s.id, authorityUserId: "gm", state: "INVALID", reason: "audit", operationId: `clean-${++operation}` }); assert.equal(end.reservations.length, 0); assert.equal(f.store.getActiveSessionIdForActor(f.a.uuid), null); assert.equal(end.confirmations.participantA.confirmed, false); });
 test("8-12 vista GM observa ofertas sin inventarios", async () => { const f = fixture(); const gmView = buildGMTradeView(await negotiate(f)); assert.equal(gmView.observer, "GM"); assert.equal("privateInventory" in gmView, false); });
 test("8-13 flujo normal no importa legacy", async () => { const files = ["../scripts/trade/trade-runtime.js", "../scripts/trade/trade-authority.js", "../scripts/trade/trade-api.js", "../scripts/ui/trade-app.js", "../scripts/sheets/actors/personaje-sheet.js"]; for (const file of files) { const source = await readFile(new URL(file, import.meta.url), "utf8"); assert.doesNotMatch(source, /trade-dialog|trade-engine|mtrolEjecutarComercio|abrirDialogoComercioMtrol/); } });
-test("8-14 legacy permanece aislado por un test explícito, no por runtime", async () => { const source = await readFile(new URL("../tests/trade-equipment-sync.test.mjs", import.meta.url), "utf8"); assert.match(source, /trade-engine\.js/); const runtime = await readFile(new URL("../scripts/trade/trade-runtime.js", import.meta.url), "utf8"); assert.doesNotMatch(runtime, /trade-engine/); });
+test("8-14 el runtime no conserva el motor ni el diálogo legacy retirados", async () => { const runtime = await readFile(new URL("../scripts/trade/trade-runtime.js", import.meta.url), "utf8"); assert.doesNotMatch(runtime, /trade-engine|trade-dialog|mtrolEjecutarComercio/); });

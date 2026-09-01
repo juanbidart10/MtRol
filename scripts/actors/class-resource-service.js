@@ -10,6 +10,7 @@ import {
 import {
   runActorResourceTransaction
 } from "./actor-resource-service.js";
+import { preUpdateActorDispatcher } from "../core/hook-dispatcher.js";
 
 const INTERNAL_UPDATE_OPTION = "mtrolClassResourceTransition";
 
@@ -244,8 +245,9 @@ export async function updateActorPermanentResourcesAuthoritative(payload = {}, {
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "permanent-resource-update"
-  }, async canonicalActor => {
+    origin: "permanent-resource-update",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const current = extractActorClassResourceState(canonicalActor);
     assertExpectedState(current, payload.expected);
     const intended = buildIntendedState(current, payload.changes);
@@ -263,6 +265,8 @@ export async function updateActorPermanentResourcesAuthoritative(payload = {}, {
       update["system.atributos.inteligencia"] = intended.intelligence;
     }
     Object.assign(update, vitalChanges);
+
+    await beforeWrite();
 
     await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
     return { authorized: true, transition };
@@ -286,8 +290,9 @@ export async function updateActorResourceConfigurationAuthoritative(payload = {}
 
   return runActorResourceTransaction(actor, {
     transactionId: payload.transactionId,
-    origin: "class-resource-update"
-  }, async canonicalActor => {
+    origin: "class-resource-update",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const current = extractActorClassResourceState(canonicalActor);
     if (String(current.classId ?? "") !== String(payload.expectedClassId ?? "")) {
       throw new Error("La Clase del Actor cambió; se canceló la operación duplicada.");
@@ -348,6 +353,8 @@ export async function updateActorResourceConfigurationAuthoritative(payload = {}
       Object.assign(update, result.changes);
     }
 
+    await beforeWrite();
+
     await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
     return { authorized: true, transition };
   });
@@ -391,9 +398,9 @@ let authorityHookInstalled = false;
 
 export function installMtrolClassResourceAuthorityHooks() {
   if (authorityHookInstalled) return;
-  Hooks.on("preUpdateActor", (actor, changes, options, userId) =>
-    guardActorClassResourceUpdate(actor, changes, options, userId)
-  );
+  preUpdateActorDispatcher.subscribe("class-resource.guard", (actor, changes, options, userId) =>
+    guardActorClassResourceUpdate(actor, changes, options, userId),
+  { priority: 10, critical: true });
   authorityHookInstalled = true;
 }
 
@@ -412,8 +419,9 @@ export async function updateActorFromSheetAuthoritative(actor, formData) {
 
   return runActorResourceTransaction(actor, {
     transactionId: createTransactionId("sheet-permanent"),
-    origin: "permanent-resource-update"
-  }, async canonicalActor => {
+    origin: "permanent-resource-update",
+    tracksWrites: true
+  }, async (canonicalActor, { beforeWrite }) => {
     const current = extractActorClassResourceState(canonicalActor);
     const update = { ...formData };
     deletePath(update, "system.identidad.classId");
@@ -438,6 +446,7 @@ export async function updateActorFromSheetAuthoritative(actor, formData) {
     }
 
     Object.assign(update, changes);
+    await beforeWrite();
     await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
     return { authorized: true, transition };
   });

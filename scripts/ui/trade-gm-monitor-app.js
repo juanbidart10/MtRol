@@ -2,9 +2,11 @@ const { ApplicationV2, HandlebarsApplicationMixin, DialogV2 } = foundry.applicat
 const ApplicationClass = HandlebarsApplicationMixin(ApplicationV2);
 
 export class MtrolTradeGMMonitorApp extends ApplicationClass {
-  constructor(sessionId, { onClosed = null, ...options } = {}) {
+  constructor(sessionId, { api, onClosed = null, ...options } = {}) {
     super({ ...options, id: `mtrol-trade-gm-${String(sessionId).replace(/[^A-Za-z0-9_-]/g, "-")}` });
     this.sessionId = String(sessionId);
+    if (!api) throw new TypeError("MtrolTradeGMMonitorApp requiere la API canónica de Trade.");
+    this.api = api;
     this.onClosed = onClosed;
     this.terminalSnapshot = null;
     this.busy = false;
@@ -24,7 +26,7 @@ export class MtrolTradeGMMonitorApp extends ApplicationClass {
     const base = await super._prepareContext(options);
     if (!game.user?.isGM) return { ...base, forbidden: true };
     try {
-      const view = await game.mtrol.trade.getGMMonitorView(this.sessionId);
+      const view = await this.api.getGMMonitorView(this.sessionId);
       return { ...base, view, busy: this.busy };
     } catch (error) {
       return { ...base, unavailable: true, terminal: this.terminalSnapshot, error: error.message };
@@ -51,7 +53,20 @@ export class MtrolTradeGMMonitorApp extends ApplicationClass {
   async #onAction(event) {
     event.preventDefault();
     const action = event.currentTarget.dataset.action;
-    if (action === "history") return game.mtrol.trade.openAuditHistory();
+    if (action === "history") return this.api.openAuditHistory();
+    if (["pause", "resume"].includes(action) && !this.busy) {
+      try {
+        this.busy = true;
+        this.render();
+        await this.api[action]({ sessionId: this.sessionId });
+      } catch (error) {
+        ui.notifications.error(error.message ?? "No se pudo actualizar la pausa del comercio.");
+      } finally {
+        this.busy = false;
+        this.render();
+      }
+      return;
+    }
     if (action !== "cancel" || this.busy) return;
     const confirmed = await DialogV2.confirm({
       window: { title: "Cancelar comercio" },
@@ -62,7 +77,7 @@ export class MtrolTradeGMMonitorApp extends ApplicationClass {
     try {
       this.busy = true;
       this.render();
-      await game.mtrol.trade.cancelByGM({
+      await this.api.cancelByGM({
         sessionId: this.sessionId,
         reason: "Cancelado por GM desde supervisión"
       });

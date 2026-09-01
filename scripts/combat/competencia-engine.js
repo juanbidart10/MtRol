@@ -24,6 +24,7 @@ import {
 import {
   getActionGuard
 } from "./turn-system.js";
+import { logger } from "../utils/logger.js";
 
 // =========================
 // HELPERS
@@ -94,12 +95,24 @@ export async function resolverCompetencia({
 } = {}) {
 
   if (!actor || !item) {
-    console.warn("MTROL | resolverCompetencia cancelado: falta actor o item.");
+    logger.warn("COMPETENCIA", "competencia resolution rejected", {
+      command: "competencia.resolve",
+      actorUuid: actor?.uuid ?? null,
+      status: "rejected",
+      reasonCode: "COMPETENCIA_INPUT_MISSING"
+    });
     return null;
   }
 
   if (item.type !== "competencia") {
-    console.warn("MTROL | resolverCompetencia cancelado: el item no es competencia.", item);
+    logger.warn("COMPETENCIA", "competencia resolution rejected", {
+      command: "competencia.resolve",
+      actorUuid: actor.uuid ?? null,
+      itemUuid: item.uuid ?? null,
+      itemType: item.type ?? null,
+      status: "rejected",
+      reasonCode: "COMPETENCIA_ITEM_TYPE_INVALID"
+    });
     return null;
   }
 

@@ -5,6 +5,8 @@ import {
   isMtrolObject,
   normalizeEquippedFlag
 } from "../items/item-invariants.js";
+import { transactionCoordinator } from "../runtime/runtime-foundation.js";
+import { tradeReceiptScope } from "./trade-runtime-repository.js";
 
 const PARTICIPANT_KEYS = Object.freeze(["participantA", "participantB"]);
 
@@ -85,6 +87,54 @@ function planFingerprint(plan) {
       sourceQuantity: entry.sourceQuantity
     }))
   });
+}
+
+function serializePlan(plan) {
+  return {
+    sessionId: plan.sessionId,
+    executionId: plan.executionId,
+    revision: plan.revision,
+    entries: plan.entries.map((entry, index) => ({
+      entryKey: `${index}:${entry.participantKey}:${entry.item.uuid}`,
+      participantKey: entry.participantKey,
+      sourceActorUuid: entry.sourceActor.uuid,
+      targetActorUuid: entry.targetActor.uuid,
+      itemId: entry.item.id,
+      itemUuid: entry.item.uuid,
+      quantity: entry.quantity,
+      sourceQuantity: entry.sourceQuantity,
+      remainingQuantity: entry.remainingQuantity,
+      snapshot: clone(entry.snapshot),
+      incomingData: clone(entry.incomingData)
+    }))
+  };
+}
+
+async function hydratePlan(serialized) {
+  const actors = {};
+  const entries = [];
+  for (const raw of serialized?.entries ?? []) {
+    const sourceActor = await fromUuid(raw.sourceActorUuid);
+    const targetActor = await fromUuid(raw.targetActorUuid);
+    if (!sourceActor || !targetActor) throw new Error("No se pudieron recuperar los Actors del comercio.");
+    const item = sourceActor.items?.get?.(raw.itemId) ?? {
+      id: raw.itemId,
+      uuid: raw.itemUuid,
+      system: clone(raw.snapshot?.system ?? {})
+    };
+    actors[raw.participantKey] = sourceActor;
+    entries.push({ ...clone(raw), sourceActor, targetActor, item });
+  }
+  return { ...clone(serialized), entries, actors };
+}
+
+function transferredItem(actor, executionId, entryKey, itemId = null) {
+  return Array.from(actor?.items ?? []).find(item =>
+    (itemId && item.id === itemId) || (
+      item.flags?.mtrol?.tradeTransfer?.executionId === executionId &&
+      item.flags?.mtrol?.tradeTransfer?.entryKey === entryKey
+    )
+  ) ?? null;
 }
 
 export async function prepareTradeTransferPlan({
@@ -245,93 +295,175 @@ async function verifyCommittedPlan(plan, mutations) {
   }
 }
 
+async function verifyPlanState(plan, checkpoints = {}, createdForEntry = new Map()) {
+  for (const [index, entry] of plan.entries.entries()) {
+    const entryKey = entry.entryKey ?? `${index}:${entry.participantKey}:${entry.item.uuid}`;
+    const source = entry.sourceActor.items?.get?.(entry.item.id) ?? null;
+    if (entry.remainingQuantity === 0 && source) {
+      throw new Error("La transferencia total no eliminó el Item origen.");
+    }
+    if (entry.remainingQuantity > 0 && getItemQuantity(source) !== entry.remainingQuantity) {
+      throw new Error("La cantidad final del Item origen no coincide con el plan.");
+    }
+    const credit = createdForEntry.get(entryKey) ?? transferredItem(
+      entry.targetActor,
+      plan.executionId,
+      entryKey,
+      checkpoints[`credit:${entryKey}`]?.itemId
+    );
+    if (!credit || getItemQuantity(credit) !== entry.quantity) {
+      throw new Error("La cantidad final del Item destino no coincide con el plan.");
+    }
+  }
+}
+
 export class TradeTransferCoordinator {
-  constructor() {
-    this.receipts = new Map();
-    this.inFlight = new Map();
+  constructor({ coordinator = transactionCoordinator, receiptScope = tradeReceiptScope } = {}) {
+    this.coordinator = coordinator;
+    this.receiptScope = receiptScope;
   }
 
   getReceipt(executionId) {
-    const receipt = this.receipts.get(String(executionId ?? ""));
-    return receipt ? clone(receipt.result) : null;
+    return clone(this.coordinator.get({ receiptScope: this.receiptScope }, String(executionId ?? ""))?.result ?? null);
   }
 
   async executePlan(plan) {
     const executionId = requiredString(plan?.executionId, "executionId");
     const fingerprint = planFingerprint(plan);
-    const previous = this.receipts.get(executionId);
-    if (previous) {
-      if (previous.fingerprint !== fingerprint) {
-        throw new Error("El executionId ya fue utilizado con otro plan.");
-      }
-      return clone(previous.result);
+    const scope = { receiptScope: this.receiptScope };
+    const previous = this.coordinator.get(scope, executionId);
+    if (previous?.prepared?.fingerprint && previous.prepared.fingerprint !== fingerprint) {
+      throw new Error("El executionId ya fue utilizado con otro plan.");
     }
-
-    const running = this.inFlight.get(executionId);
-    if (running) {
-      if (running.fingerprint !== fingerprint) {
-        throw new Error("El executionId está ejecutando otro plan.");
-      }
-      return clone(await running.promise);
-    }
-
-    const promise = this.#commit(plan, fingerprint);
-    this.inFlight.set(executionId, { fingerprint, promise });
-    try {
-      return clone(await promise);
-    } finally {
-      this.inFlight.delete(executionId);
-    }
+    const serialized = serializePlan(plan);
+    return this.coordinator.execute(scope, {
+      transactionId: executionId,
+      command: "trade.commit",
+      serializationKey: `trade:${plan.sessionId}`,
+      prepare: async () => ({ fingerprint, plan: serialized }),
+      apply: ({ checkpoint }) => this.#commit(plan, checkpoint),
+      reconcile: receipt => this.#reconcile(receipt)
+    });
   }
 
-  async #commit(plan, fingerprint) {
+  async recoverExecution(executionId) {
+    const transactionId = requiredString(executionId, "executionId");
+    const receipt = this.coordinator.get({ receiptScope: this.receiptScope }, transactionId);
+    if (!receipt) throw new Error("No existe receipt persistente para recuperar el comercio.");
+    if (receipt.status === "completed") return clone(receipt.result);
+    return this.coordinator.execute({ receiptScope: this.receiptScope }, {
+      transactionId,
+      command: "trade.commit",
+      serializationKey: `trade:${receipt.prepared?.plan?.sessionId ?? "unknown"}`,
+      apply: async () => {
+        throw new Error("Recovery Trade no puede iniciar una aplicación nueva sin plan preparado.");
+      },
+      reconcile: current => this.#reconcile(current)
+    });
+  }
+
+  async #reconcile(receipt) {
+    if (receipt.status === "applied" && receipt.result) {
+      return { resolved: true, result: receipt.result };
+    }
+    if (!receipt.prepared?.plan) return { resolved: false };
+    const plan = await hydratePlan(receipt.prepared.plan);
+    const result = await this.#commit(plan, async () => undefined, receipt.checkpoints ?? {});
+    return { resolved: true, result: { ...result, recovered: true } };
+  }
+
+  async #commit(plan, checkpoint, existingCheckpoints = {}) {
     const mutations = {
       created: [],
       createdByActor: new Map(),
       sources: []
     };
+    const createdForEntry = new Map();
 
     try {
-      for (const entry of plan.entries) {
-        const [created] = await entry.targetActor.createEmbeddedDocuments(
-          "Item",
-          [entry.incomingData],
-          { render: false, mtrolTradeExecutionId: plan.executionId }
+      for (const [index, entry] of plan.entries.entries()) {
+        const entryKey = entry.entryKey ?? `${index}:${entry.participantKey}:${entry.item.uuid}`;
+        const checkpointName = `credit:${entryKey}`;
+        let created = transferredItem(
+          entry.targetActor,
+          plan.executionId,
+          entryKey,
+          existingCheckpoints[checkpointName]?.itemId
         );
-        if (!created?.id) throw new Error("Foundry no devolvió el Item destino creado.");
-        mutations.created.push({ actor: entry.targetActor, item: created, entry });
-        const ids = mutations.createdByActor.get(entry.targetActor) ?? [];
-        ids.push(created.id);
-        mutations.createdByActor.set(entry.targetActor, ids);
-      }
-
-      for (const entry of plan.entries) {
-        if (entry.remainingQuantity === 0) {
-          await entry.sourceActor.deleteEmbeddedDocuments(
+        const existedBefore = Boolean(created);
+        if (!created) {
+          const incomingData = clone(entry.incomingData);
+          incomingData.flags ??= {};
+          incomingData.flags.mtrol ??= {};
+          incomingData.flags.mtrol.tradeTransfer = {
+            executionId: plan.executionId,
+            sessionId: plan.sessionId,
+            entryKey,
+            sourceItemUuid: entry.item.uuid,
+            quantity: entry.quantity
+          };
+          [created] = await entry.targetActor.createEmbeddedDocuments(
             "Item",
-            [entry.item.id],
+            [incomingData],
             { render: false, mtrolTradeExecutionId: plan.executionId }
           );
-          mutations.sources.push({ kind: "deleted", entry });
-        } else {
-          await entry.sourceActor.updateEmbeddedDocuments("Item", [{
-            _id: entry.item.id,
-            "system.cantidad": entry.remainingQuantity
-          }], { render: false, mtrolTradeExecutionId: plan.executionId });
-          mutations.sources.push({ kind: "updated", entry });
+        }
+        if (!created?.id) throw new Error("Foundry no devolvió el Item destino creado.");
+        createdForEntry.set(entryKey, created);
+        if (!existedBefore) {
+          mutations.created.push({ actor: entry.targetActor, item: created, entry });
+          const ids = mutations.createdByActor.get(entry.targetActor) ?? [];
+          ids.push(created.id);
+          mutations.createdByActor.set(entry.targetActor, ids);
+        }
+        if (!existingCheckpoints[checkpointName]) {
+          await checkpoint(checkpointName, { itemId: created.id, entryKey });
         }
       }
 
-      await verifyCommittedPlan(plan, mutations);
+      for (const [index, entry] of plan.entries.entries()) {
+        const entryKey = entry.entryKey ?? `${index}:${entry.participantKey}:${entry.item.uuid}`;
+        const checkpointName = `debit:${entryKey}`;
+        if (!existingCheckpoints[checkpointName]) {
+          const current = entry.sourceActor.items?.get?.(entry.item.id) ?? null;
+          const currentQuantity = current ? getItemQuantity(current) : 0;
+          if (currentQuantity === entry.sourceQuantity) {
+            if (entry.remainingQuantity === 0) {
+              await entry.sourceActor.deleteEmbeddedDocuments(
+                "Item",
+                [entry.item.id],
+                { render: false, mtrolTradeExecutionId: plan.executionId }
+              );
+              mutations.sources.push({ kind: "deleted", entry });
+            } else {
+              await entry.sourceActor.updateEmbeddedDocuments("Item", [{
+                _id: entry.item.id,
+                "system.cantidad": entry.remainingQuantity
+              }], { render: false, mtrolTradeExecutionId: plan.executionId });
+              mutations.sources.push({ kind: "updated", entry });
+            }
+          } else if (currentQuantity !== entry.remainingQuantity) {
+            const error = new Error("El estado del Item origen es ambiguo durante recovery.");
+            error.reasonCode = "TRADE_STATE_AMBIGUOUS";
+            throw error;
+          }
+          await checkpoint(checkpointName, { entryKey, remainingQuantity: entry.remainingQuantity });
+        }
+      }
+
+      await verifyPlanState(plan, existingCheckpoints, createdForEntry);
       const result = {
         ok: true,
+        transactionId: plan.executionId,
+        status: "completed",
+        changed: true,
+        reasonCode: null,
         sessionId: plan.sessionId,
         executionId: plan.executionId,
         revision: plan.revision,
         transferredEntries: plan.entries.length,
         createdItemIds: mutations.created.map(created => created.item.id)
       };
-      this.receipts.set(plan.executionId, { fingerprint, result: clone(result) });
       return result;
     } catch (cause) {
       let rollbackError = null;
@@ -348,6 +480,7 @@ export class TradeTransferCoordinator {
       failure.cause = cause;
       failure.rollbackSucceeded = !rollbackError;
       failure.rollbackError = rollbackError;
+      failure.transactionRolledBack = !rollbackError;
       throw failure;
     }
   }

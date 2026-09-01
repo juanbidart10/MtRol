@@ -1,3 +1,6 @@
+import { preUpdateActorDispatcher, updateActorDispatcher } from "../core/hook-dispatcher.js";
+import { logger } from "../utils/logger.js";
+
 const DEATH_TRANSITION_DATA = new Map();
 const DEATH_STATUS_CANDIDATES = [
   "dead",
@@ -113,7 +116,11 @@ export function resolveDeathStatusId() {
     if (labelMatch) return getStatusId(labelMatch);
   }
 
-  console.warn("MTROL | No se encontro un estado nativo de muerte/derrota.");
+  logger.warnOnce("DEATH", "native death status not found", {
+    command: "death.status.resolve",
+    status: "skipped",
+    reasonCode: "DEATH_STATUS_MISSING"
+  }, { key: "death:status-missing" });
   return null;
 }
 
@@ -144,7 +151,13 @@ async function resolveTargetToken(tokenUuid) {
   try {
     return await fromUuid(tokenUuid);
   } catch (error) {
-    console.warn("MTROL | No se pudo resolver token objetivo para muerte.", error);
+    logger.warn("DEATH", "death target token resolution failed", {
+      command: "death.token.resolve",
+      tokenUuid,
+      status: "isolated",
+      reasonCode: "DEATH_TOKEN_RESOLUTION_FAILED",
+      error
+    });
     return null;
   }
 }
@@ -174,7 +187,13 @@ function databaseHasEntry(database, entry) {
     if (typeof database.exists === "function") return database.exists(entry);
     if (typeof database.getEntry === "function") return Boolean(database.getEntry(entry));
     if (typeof database.get === "function") return Boolean(database.get(entry));
-  } catch (_error) {
+  } catch (error) {
+    logger.debug("DEATH", "Sequencer database capability probe failed", {
+      command: "death.fx.resource-probe",
+      status: "fallback",
+      reasonCode: "DEATH_FX_DATABASE_PROBE_FAILED",
+      error
+    });
     return false;
   }
 
@@ -206,7 +225,11 @@ export async function playDeathFx(token) {
 
     if (!resource) {
       if (game.user?.isGM) {
-        console.warn("MTROL | FX de muerte omitido: no se encontro recurso Sequencer disponible.");
+        logger.warnOnce("DEATH", "death FX resource unavailable", {
+          command: "death.fx.play",
+          status: "skipped",
+          reasonCode: "DEATH_FX_RESOURCE_MISSING"
+        }, { key: "death:fx-resource-missing" });
       }
       return false;
     }
@@ -223,7 +246,14 @@ export async function playDeathFx(token) {
 
     return true;
   } catch (error) {
-    console.warn("MTROL | FX de muerte omitido por error controlado.", error);
+    logger.warn("DEATH", "death FX failed and was isolated", {
+      command: "death.fx.play",
+      actorUuid: token?.actor?.uuid ?? token?.document?.actor?.uuid ?? null,
+      tokenUuid: token?.document?.uuid ?? null,
+      status: "isolated",
+      reasonCode: "DEATH_FX_FAILED",
+      error
+    });
     return false;
   }
 }
@@ -363,13 +393,13 @@ export function installMtrolDeathApi() {
 
   if (deathHooksRegistered) return;
 
-  Hooks.on("preUpdateActor", (actor, changes, options = {}) => {
+  preUpdateActorDispatcher.subscribe("death.capture-transition", (actor, changes, options = {}) => {
     if (!canManageActorDeath(actor)) return;
     if (syncingActors.has(actor.uuid)) return;
     rememberPreviousHp(actor, changes, options);
-  });
+  }, { priority: 100, critical: false });
 
-  Hooks.on("updateActor", (actor, _changes, options = {}) => {
+  updateActorDispatcher.subscribe("death.sync-state", (actor, _changes, options = {}) => {
     if (!canManageActorDeath(actor)) return;
     if (syncingActors.has(actor.uuid)) return;
 
@@ -386,9 +416,16 @@ export function installMtrolDeathApi() {
         options.mtrolDeathTargetTokenUuid ??
         null
     }).catch(error => {
-      console.warn("MTROL | No se pudo sincronizar muerte automatica.", error);
+      logger.error("DEATH", "automatic death synchronization failed", {
+        command: "death.synchronize",
+        actorUuid: actor?.uuid ?? null,
+        tokenUuid: data.mtrolDeathTargetTokenUuid ?? options.mtrolDeathTargetTokenUuid ?? null,
+        status: "failed",
+        reasonCode: "DEATH_SYNCHRONIZATION_FAILED",
+        error
+      });
     });
-  });
+  }, { priority: 100, critical: false });
 
   deathHooksRegistered = true;
 }

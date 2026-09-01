@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const sheetSource = await readFile(new URL("../scripts/sheets/actors/personaje-sheet.js", import.meta.url), "utf8");
+const sheetViewModelSource = await readFile(new URL("../scripts/sheets/actors/personaje-sheet-view-model.js", import.meta.url), "utf8");
 const templateSource = await readFile(new URL("../templates/actors/personaje-sheet.html", import.meta.url), "utf8");
 const styleSource = await readFile(new URL("../styles/sheets/progresion.css", import.meta.url), "utf8");
 const variablesSource = await readFile(new URL("../styles/ui/variables.css", import.meta.url), "utf8");
@@ -12,10 +13,10 @@ test("descriptor visual conserva todas las claves y prepara un detalle seleccion
     "mvp", "exp", "missionsCompleted", "dungeonsCompleted", "attributesAtFive",
     "competencesAtLeastThree", "competencesAtFive", "meritCredits",
     "defeatedLevel5Enemy", "dmApproval"
-  ]) assert.match(sheetSource, new RegExp(`${key}:[\\s\\S]*?description:`));
+  ]) assert.match(sheetViewModelSource, new RegExp(`${key}:[\\s\\S]*?description:`));
 
-  assert.match(sheetSource, /selectedRequirement = requirements\.find/);
-  assert.match(sheetSource, /selected:\s*requirement\.key === selectedRequirement/);
+  assert.match(sheetViewModelSource, /selectedRequirement = requirements\.find/);
+  assert.match(sheetViewModelSource, /selected:\s*requirement\.key === selectedRequirement/);
 });
 
 test("elimina Ruta de ascenso y toda la representación interna de Estado espiritual", () => {

@@ -51,11 +51,17 @@ const {
 } = await import("../scripts/trade/trade-app-view-model.js");
 const {
   closeAllTradeApps,
+  configureTradeRuntimeApi,
   countOpenTradeApps,
   handleTradeSessionRuntimeUpdate,
   openTradeApp,
   requestTradeFromTarget
 } = await import("../scripts/trade/trade-runtime.js");
+
+function setTradeApi(api) {
+  game.mtrol.trade = api;
+  configureTradeRuntimeApi(api);
+}
 
 function actor(id, owner, specs) {
   const items = [];
@@ -178,10 +184,10 @@ async function setOffer(store, session, key, user, entries) {
 test("3B-01 iniciar solicitud usa el nuevo API createSession", async () => {
   let payload = null;
   game.user = userA;
-  game.mtrol.trade = {
+  setTradeApi({
     createSession: async value => { payload = value; return { id: "request-runtime" }; },
     getSession: () => null
-  };
+  });
   await requestTradeFromTarget({ sourceActor: actorA, targetToken: { actor: actorB, uuid: "Token.b" } });
   assert.equal(payload.participantAActorUuid, actorA.uuid);
   assert.equal(payload.participantBActorUuid, actorB.uuid);
@@ -349,7 +355,7 @@ test("3B-28 cancelación A termina la sesión para ambos", async () => {
   const store = fixture(); let session = await negotiating(store);
   const active = buildPublicTradeSessionView(session);
   game.user = userA;
-  game.mtrol.trade = { getSession: () => active, getMyTradeView: async () => participantView(active, "A") };
+  setTradeApi({ getSession: () => active, getMyTradeView: async () => participantView(active, "A") });
   await openTradeApp(active.id);
   session = await store.cancelSession({ sessionId: session.id, participantKey: "participantA", requestingUserId: userA.id, operationId: `cancel-${++operation}` });
   assert.equal(buildPublicTradeSessionView(session).state, "CANCELLED");
@@ -362,7 +368,7 @@ test("3B-29 cancelación B termina la sesión para ambos", async () => {
   const store = fixture(); let session = await negotiating(store);
   const active = buildPublicTradeSessionView(session);
   game.user = userB;
-  game.mtrol.trade = { getSession: () => active, getMyTradeView: async () => participantView(active, "B") };
+  setTradeApi({ getSession: () => active, getMyTradeView: async () => participantView(active, "B") });
   await openTradeApp(active.id);
   session = await store.cancelSession({ sessionId: session.id, participantKey: "participantB", requestingUserId: userB.id, operationId: `cancel-${++operation}` });
   assert.equal(buildPublicTradeSessionView(session).state, "CANCELLED");
@@ -406,10 +412,10 @@ test("3B-35 una sesión no abre ventanas duplicadas", async () => {
   await closeAllTradeApps();
   game.user = userA;
   const session = buildPublicTradeSessionView(await negotiating(fixture()));
-  game.mtrol.trade = {
+  setTradeApi({
     getSession: () => session,
     getMyTradeView: async () => participantView(session, "A")
-  };
+  });
   const first = await openTradeApp(session.id);
   const second = await openTradeApp(session.id);
   assert.equal(first, second); assert.equal(countOpenTradeApps(), 1);

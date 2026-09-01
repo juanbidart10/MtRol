@@ -2,8 +2,12 @@ import {
   getOrbDefinition,
   MTROL_ORB_IDS
 } from "./orb-registry.js";
+import { authorityService, AuthorityBoundaryError } from "../core/authority-service.js";
+import { requestPrimaryGM } from "../core/socket-requests.js";
+import { actorRuntimeRepository, transactionCoordinator } from "../runtime/runtime-foundation.js";
 
-const completedTransactions = new Map();
+// In-flight serialization only; completed results live in Actor receipts.
+// Key Actor UUID, released in finally; safe to rebuild after F5.
 const actorQueues = new Map();
 
 function assertExactKeys(payload, allowed) {
@@ -12,20 +16,21 @@ function assertExactKeys(payload, allowed) {
   }
 }
 
-function getRequestingUser(userId) {
-  return game.users?.get?.(userId) ??
-    Array.from(game.users ?? []).find(user => user.id === userId) ??
-    null;
-}
-
 function assertGM(requestingUserId) {
-  const user = getRequestingUser(requestingUserId);
-  if (!user?.isGM) throw new Error("Sólo un GM puede administrar Orbes.");
+  const user = authorityService.resolveUser(requestingUserId);
+  if (!user?.isGM) throw new AuthorityBoundaryError("Sólo un GM puede administrar Orbes.", "ORB_GM_REQUIRED");
+  if (!authorityService.isPrimaryGM()) {
+    throw new AuthorityBoundaryError("Sólo el Primary GM puede ejecutar cambios de Orbes.", "NOT_PRIMARY_GM");
+  }
 }
 
 async function getCanonicalActor(payload, trustedActor) {
-  if (trustedActor?.uuid === payload.actorUuid) return trustedActor;
-  return payload.actorUuid ? fromUuid(payload.actorUuid) : null;
+  const actor = trustedActor?.uuid === payload.actorUuid ? trustedActor :
+    payload.actorUuid ? await fromUuid(payload.actorUuid) : null;
+  if (actor?.documentName && actor.documentName !== "Actor") {
+    throw new AuthorityBoundaryError("El documento objetivo no es un Actor.", "ORB_ACTOR_INVALID");
+  }
+  return actor;
 }
 
 function assertOrbType(type) {
@@ -68,27 +73,40 @@ async function withActorLock(actorUuid, operation) {
 async function runOrbTransaction(actor, payload, operationName, operation) {
   const transactionId = String(payload.transactionId ?? "").trim();
   if (!transactionId) throw new Error("Falta transactionId para administrar Orbes.");
-  const key = `${actor.uuid}:${transactionId}`;
+  const scope = { actor };
+  const orbIntent = JSON.stringify(Object.entries(payload).sort(([a], [b]) => a.localeCompare(b)));
 
   return withActorLock(actor.uuid, async () => {
-    const previous = completedTransactions.get(key);
+    const previous = transactionCoordinator.get(scope, transactionId);
     if (previous) {
-      if (previous.operation !== operationName) {
-        throw new Error("El transactionId ya fue utilizado por otra operación de Orbes.");
+      if (previous.command !== `orb.${operationName}` || previous.orbIntent !== orbIntent) {
+        throw Object.assign(new Error("El transactionId ya fue utilizado por otra operación de Orbes."), {
+          reasonCode: "ORB_TRANSACTION_CONFLICT"
+        });
       }
-      return { ...previous, replayed: true };
+      if (previous.status === "failed" && previous.failureSafety === "no-effects") {
+        throw Object.assign(new Error(previous.error), { reasonCode: "ORB_VALIDATION_FAILED" });
+      }
     }
 
-    const result = await operation();
-    const receipt = {
-      ...result,
-      operation: operationName,
-      actorUuid: actor.uuid,
+    const result = await transactionCoordinator.execute(scope, {
       transactionId,
-      replayed: false
-    };
-    completedTransactions.set(key, receipt);
-    return receipt;
+      command: `orb.${operationName}`,
+      metadata: { actorUuid: actor.uuid, operation: operationName, orbIntent },
+      prepare: operation,
+      apply: async ({ prepared, checkpoint }) => {
+        await checkpoint("orb-write-intent", { actorUuid: actor.uuid });
+        await actor.update({ "system.orbs": prepared.orbs });
+        const receipt = { orb: prepared.orb, operation: operationName, actorUuid: actor.uuid, transactionId, replayed: false };
+        await checkpoint("orb-applied", { result: receipt });
+        return receipt;
+      },
+      reconcile: async receipt => {
+        const result = receipt.checkpoints?.["orb-applied"]?.result;
+        return result ? { resolved: true, result } : { resolved: false };
+      }
+    });
+    return { ...result, replayed: previous != null };
   });
 }
 
@@ -124,8 +142,7 @@ export async function addActorOrbAuthoritative(payload = {}, {
     }
 
     const orb = { id: orbId, type, level };
-    await actor.update({ "system.orbs": [...orbs, orb] });
-    return { orb };
+    return { orbs: [...orbs, orb], orb };
   });
 }
 
@@ -159,8 +176,7 @@ export async function updateActorOrbAuthoritative(payload = {}, {
 
     const orb = { id: orbId, type, level };
     orbs[index] = orb;
-    await actor.update({ "system.orbs": orbs });
-    return { orb };
+    return { orbs, orb };
   });
 }
 
@@ -188,8 +204,7 @@ export async function deleteActorOrbAuthoritative(payload = {}, {
     }
 
     const [orb] = orbs.splice(index, 1);
-    await actor.update({ "system.orbs": orbs });
-    return { orb };
+    return { orbs, orb };
   });
 }
 
@@ -197,20 +212,32 @@ function createTransactionId(prefix) {
   return `${prefix}-${foundry.utils.randomID()}`;
 }
 
+async function requestOrbChange(action, payload, actor, localOperation) {
+  if (!game.user?.isGM) throw new AuthorityBoundaryError("Sólo un GM puede administrar Orbes.", "ORB_GM_REQUIRED");
+  if (authorityService.isPrimaryGM()) {
+    return localOperation(payload, { requestingUserId: game.user.id, trustedActor: actor });
+  }
+  const response = await requestPrimaryGM(action, payload);
+  if (!response.ok) throw Object.assign(new Error(response.error ?? "No se pudo administrar el Orbe."), {
+    reasonCode: response.reasonCode ?? "ORB_REQUEST_FAILED"
+  });
+  return response.result;
+}
+
 export function addActorOrb(actor, { type, level }) {
-  return addActorOrbAuthoritative({
+  return requestOrbChange("mtrolAddActorOrb", {
     actorUuid: actor.uuid,
     transactionId: createTransactionId("orb-add"),
     orbId: foundry.utils.randomID(),
     type,
     level,
     expectedOrbCount: Array.from(actor.system?.orbs ?? []).length
-  }, { requestingUserId: game.user?.id, trustedActor: actor });
+  }, actor, addActorOrbAuthoritative);
 }
 
 export function updateActorOrb(actor, orbId, { type, level }) {
   const current = Array.from(actor.system?.orbs ?? []).find(orb => orb.id === orbId);
-  return updateActorOrbAuthoritative({
+  return requestOrbChange("mtrolUpdateActorOrb", {
     actorUuid: actor.uuid,
     transactionId: createTransactionId("orb-update"),
     orbId,
@@ -218,21 +245,21 @@ export function updateActorOrb(actor, orbId, { type, level }) {
     level,
     expectedType: current?.type,
     expectedLevel: current?.level
-  }, { requestingUserId: game.user?.id, trustedActor: actor });
+  }, actor, updateActorOrbAuthoritative);
 }
 
 export function deleteActorOrb(actor, orbId) {
   const current = Array.from(actor.system?.orbs ?? []).find(orb => orb.id === orbId);
-  return deleteActorOrbAuthoritative({
+  return requestOrbChange("mtrolDeleteActorOrb", {
     actorUuid: actor.uuid,
     transactionId: createTransactionId("orb-delete"),
     orbId,
     expectedType: current?.type,
     expectedLevel: current?.level
-  }, { requestingUserId: game.user?.id, trustedActor: actor });
+  }, actor, deleteActorOrbAuthoritative);
 }
 
 export function resetOrbManagementServiceForTests() {
-  completedTransactions.clear();
   actorQueues.clear();
+  actorRuntimeRepository.resetForTests();
 }

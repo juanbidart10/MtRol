@@ -6,6 +6,7 @@ import {
   mtrolCreateRollMessage,
   mtrolPrepareChatRolls
 } from "../rolls/chat-rolls.js";
+import { logger } from "../utils/logger.js";
 
 export async function crearCombatCard({
   actor,
@@ -19,12 +20,21 @@ export async function crearCombatCard({
   cardContext = {}
 } = {}) {
   if (!actor) {
-    console.warn("MTROL | crearCombatCard cancelado: falta actor.");
+    logger.warn("CHAT_CARD", "combat card creation skipped", {
+      command: "combat-card.create",
+      status: "rejected",
+      reasonCode: "COMBAT_CARD_ACTOR_MISSING"
+    });
     return;
   }
 
   if (!damageRoll || !resultadoDanio) {
-    console.warn("MTROL | crearCombatCard cancelado: faltan datos de danio.");
+    logger.warn("CHAT_CARD", "combat card creation skipped", {
+      command: "combat-card.create",
+      actorUuid: actor.uuid ?? null,
+      status: "rejected",
+      reasonCode: "COMBAT_CARD_DAMAGE_DATA_MISSING"
+    });
     return;
   }
 

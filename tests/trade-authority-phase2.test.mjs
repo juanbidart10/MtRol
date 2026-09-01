@@ -211,19 +211,18 @@ test("el payload sincronizado contiene sólo la TradeSession y no inventarios", 
   assert.equal(serialized.includes("potion"), false);
 });
 
-test("al cambiar el GM primario la autoridad anterior invalida y limpia su sesión", async () => {
+test("al cambiar el GM primario la sesión persistente no se invalida", async () => {
   resetAuthority();
   const session = await createSession();
   gm.active = false;
   gm2.active = true;
 
-  const result = reconcileTradeAuthority();
+  const result = await reconcileTradeAuthority();
 
   assert.equal(result.primary, false);
-  assert.equal(result.invalidated.length, 1);
-  assert.equal(result.invalidated[0].id, session.id);
-  assert.equal(result.invalidated[0].state, "INVALID");
-  assert.equal(tradeSessionStore.getActiveSessionIdForActor(actorA.uuid), null);
+  assert.equal(result.invalidated.length, 0);
+  assert.equal(tradeSessionStore.getSession(session.id).state, "REQUESTED");
+  assert.equal(tradeSessionStore.getActiveSessionIdForActor(actorA.uuid), session.id);
   assert.equal(tradeSessionStore.getReservationsForSession(session.id).length, 0);
 
   gm.active = true;

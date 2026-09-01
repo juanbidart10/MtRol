@@ -265,11 +265,15 @@ test("el borrado usa Dialog de Foundry con Confirmar y Cancelar", async () => {
 });
 
 test("confirmar borrado reutiliza desequipado seguro antes de delete", async () => {
-  const source = await readFile(sheetPath, "utf8");
+  const [source, controller] = await Promise.all([
+    readFile(sheetPath, "utf8"),
+    readFile(new URL("../scripts/sheets/actors/personaje-inventory-controller.js", import.meta.url), "utf8")
+  ]);
   const handler = source.match(/async _onDeleteItem\(event\)[\s\S]*?\n  _confirmInventoryItemDeletion/)?.[0] ?? "";
 
   assert.match(handler, /confirmDelete[\s\S]*?_confirmInventoryItemDeletion/);
-  assert.ok(handler.indexOf("desequiparObjeto") < handler.indexOf("item.delete"));
+  assert.match(handler, /deleteSheetItem/);
+  assert.ok(controller.indexOf("desequiparObjeto") < controller.indexOf("item.delete"));
 });
 
 test("la vista previa DnD contiene sólo icono y nombre y se limpia", async () => {

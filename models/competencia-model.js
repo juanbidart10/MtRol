@@ -36,6 +36,14 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
     source.damageType ??= null;
     source.damageElement ??= null;
     source.spellTags ??= [];
+    if (!Array.isArray(source.executionModes)) {
+      source.executionModes = source.effect === "mpRecovery"
+        ? [
+            { modeId: "RECOVER_MP", label: "Recuperar MP", strategy: "recover-mp" },
+            { modeId: "ASTRAL_PROJECTION", label: "Proyección astral", strategy: "narrative" }
+          ]
+        : [];
+    }
 
     return super.migrateData(source);
   }
@@ -145,9 +153,89 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
           "utility",
           "movement",
           "channel",
-          "defense"
+          "defense",
+          "spell",
+          "competence",
+          "combat",
+          "special",
+          "basic"
         ]
       }),
+
+      actionIdentity: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: ["spell", "competence", "combat", "special", "basic"]
+      }),
+
+      capabilities: new fields.ArrayField(
+        new fields.StringField({
+          required: true,
+          nullable: false,
+          choices: ["OFFENSIVE", "DEFENSE", "DODGE", "COUNTERATTACK", "REACTION", "MOVEMENT"]
+        }),
+        { required: false, nullable: false, initial: [] }
+      ),
+
+      actionDomain: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: ["PHYSICAL", "MAGICAL"]
+      }),
+
+      responseDomain: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: ["PHYSICAL", "MAGICAL"]
+      }),
+
+      allowedResponses: new fields.ArrayField(
+        new fields.StringField({
+          required: true,
+          nullable: false,
+          choices: ["DEFENSE", "DODGE", "COUNTERATTACK"]
+        }),
+        { required: false, nullable: false, initial: [] }
+      ),
+
+      counterattackDomainOverrides: new fields.ArrayField(
+        new fields.StringField({
+          required: true,
+          nullable: false,
+          choices: ["PHYSICAL", "MAGICAL"]
+        }),
+        { required: false, nullable: false, initial: [] }
+      ),
+
+      responseMode: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null
+      }),
+
+      responseCapability: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: ["DEFENSE", "DODGE", "COUNTERATTACK"]
+      }),
+
+      executionModes: new fields.ArrayField(
+        new fields.SchemaField({
+          modeId: new fields.StringField({ required: true, nullable: false }),
+          label: new fields.StringField({ required: true, nullable: false }),
+          strategy: new fields.StringField({
+            required: true,
+            nullable: false,
+            initial: "narrative",
+            choices: ["recover-mp", "narrative"]
+          })
+        }),
+        { required: false, nullable: false, initial: [] }
+      ),
 
       effect: new fields.StringField({
         required: false,

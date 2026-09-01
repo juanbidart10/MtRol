@@ -115,6 +115,16 @@ const ownerB = {
   active: true
 };
 
+const combat = {
+  id: "combat-shield",
+  flags: {},
+  async update(changes) {
+    this.flags.mtrol ??= {};
+    this.flags.mtrol.runtime = deepClone(changes["flags.mtrol.runtime"]);
+    return this;
+  }
+};
+
 globalThis.game = {
   user: gmUser,
   users: new MockUsers([gmUser, ownerA, ownerB]),
@@ -127,6 +137,8 @@ globalThis.game = {
     }
   },
   dice3d: null,
+  combat,
+  combats: new Map([[combat.id, combat]]),
   messages: {
     get: () => null
   }
@@ -224,7 +236,8 @@ function createItem({
   actionType = null,
   defenseType = null,
   effect = null,
-  requiresOpposition = false
+  requiresOpposition = false,
+  damageType = null
 }) {
   const item = {
     id,
@@ -244,6 +257,7 @@ function createItem({
       defenseType,
       effect,
       requiresOpposition,
+      damageType,
       oppositionType: "free",
       effectDuration: 1,
       effectIntensity: 0
@@ -388,6 +402,7 @@ function createAttackSkill(id = "attack-skill") {
     name: "Ataque enfrentado",
     type: "competencia",
     actionType: "attack",
+    damageType: "physical",
     effect: "damage",
     defenseType: "custom",
     requiresOpposition: true
@@ -830,7 +845,8 @@ test("la resolución informa la rotura en una única carta coherente", async () 
 
   assert.equal(
     chatMessages.filter(message =>
-      message.flags?.mtrol?.pendingActionId === pending.id
+      message.flags?.mtrol?.pendingActionId === pending.id &&
+      message.flags?.mtrol?.presentationType === "opposition-resolution"
     ).length,
     1
   );

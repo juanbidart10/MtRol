@@ -25,7 +25,10 @@ function toNumber(value, fallback = 0) {
 export function shouldApplyShieldWear(pendingAction, resolutionResult) {
   return (
     pendingAction?.status === "resolving" &&
-    pendingAction?.defenseActionType === "defense" &&
+    (
+      pendingAction?.responseDeclaration?.selectedCapability === "DEFENSE" ||
+      pendingAction?.defenseActionType === "defense"
+    ) &&
     pendingAction?.defenseType === "shield" &&
     pendingAction?.defenseEffect === "block" &&
     resolutionResult?.success === false &&

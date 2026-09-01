@@ -69,7 +69,7 @@ test("la API cliente conserva sólo sesiones sanitizadas y limpia cache al cambi
 
 test("sockets conecta las cinco mutaciones de Fase 2 mediante respondWithResult", async () => {
   const source = await readFile(
-    new URL("../scripts/core/sockets.js", import.meta.url),
+    new URL("../scripts/runtime/trade-commands.js", import.meta.url),
     "utf8"
   );
 
@@ -80,10 +80,9 @@ test("sockets conecta las cinco mutaciones de Fase 2 mediante respondWithResult"
     "mtrolTradeConfirm",
     "mtrolTradeCancel"
   ]) {
-    assert.match(source, new RegExp(`case "${action}"`));
+    assert.match(source, new RegExp(`${action}: "trade\\.`));
   }
 
-  const cases = source.match(/case "mtrolTrade(?:CreateSession|AcceptSession|SetOffer|Confirm|Cancel)"/g) ?? [];
-  assert.equal(cases.length, 5);
-  assert.match(source, /respondWithResult\(data/);
+  assert.match(source, /commandRegistry\.register\("trade\.create"/);
+  assert.match(source, /receiptTarget: tradeReceiptScope/);
 });

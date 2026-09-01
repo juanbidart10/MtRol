@@ -47,7 +47,12 @@ function getDocumentData(document) {
   try {
     return document.toObject?.() ?? {};
   } catch (error) {
-    console.warn("MTROL Debug | No se pudo serializar documento.", document, error);
+    console.warn("MTROL Debug | No se pudo serializar documento.", {
+      uuid: document?.uuid ?? null,
+      id: document?.id ?? null,
+      documentName: document?.documentName ?? document?.constructor?.name ?? null,
+      error: error?.message ?? String(error)
+    });
     return {};
   }
 }

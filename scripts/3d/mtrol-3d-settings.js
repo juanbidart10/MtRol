@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger.js";
+
 export const MTROL_3D_CAMERA_SETTING_KEYS = {
   defaultView: "default3DCameraView",
   autoFollow: "autoFollow3DCamera",
@@ -30,7 +32,13 @@ function getSetting(key, fallback) {
   try {
     return game.settings.get(SYSTEM_ID, key);
   } catch (error) {
-    console.warn(`MTROL 3D | No se pudo leer setting ${key}.`, error);
+    logger.warn("3D_SETTINGS", "3D setting read failed", {
+      command: "3d.settings.read",
+      settingKey: key,
+      status: "fallback",
+      reasonCode: "SETTING_3D_READ_FAILED",
+      error
+    });
     return fallback;
   }
 }

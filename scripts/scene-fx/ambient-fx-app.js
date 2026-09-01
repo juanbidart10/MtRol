@@ -11,6 +11,7 @@ import {
   stopActiveAmbientFx,
   stopAmbientFx
 } from "./ambient-fx-manager.js";
+import { logger } from "../utils/logger.js";
 
 const ApplicationClass =
   foundry.appv1?.api?.Application ?? Application;
@@ -90,66 +91,85 @@ export class MtrolAmbientFxApp extends ApplicationClass {
       html[0] ?? html;
 
     root.querySelector("[data-action='refresh']")
-      ?.addEventListener("click", async event => {
+      ?.addEventListener("click", event => {
         event.preventDefault();
-        await refreshSceneAmbientFx();
-        this.render(false);
+        void this.#runAction("ambient.refresh", async () => {
+          await refreshSceneAmbientFx();
+          this.render(false);
+        });
       });
 
     root.querySelector("[data-action='stop']")
-      ?.addEventListener("click", async event => {
+      ?.addEventListener("click", event => {
         event.preventDefault();
-        await stopActiveAmbientFx();
+        void this.#runAction("ambient.stop-active", () => stopActiveAmbientFx());
       });
 
     root.querySelector("[data-action='preview']")
-      ?.addEventListener("click", async event => {
+      ?.addEventListener("click", event => {
         event.preventDefault();
-        await previewAmbientFx(this.#readFormData(root));
+        void this.#runAction("ambient.preview", () => previewAmbientFx(this.#readFormData(root)));
       });
 
     root.querySelector("[data-action='save']")
-      ?.addEventListener("click", async event => {
+      ?.addEventListener("click", event => {
         event.preventDefault();
-        const effect =
-          await addAmbientFx(this.#readFormData(root));
-
-        if (effect) {
-          this.render(false);
-        }
+        void this.#runAction("ambient.save", async () => {
+          const effect = await addAmbientFx(this.#readFormData(root));
+          if (effect) this.render(false);
+        });
       });
 
     root.querySelectorAll("[data-action='delete']")
       .forEach(button => {
-        button.addEventListener("click", async event => {
+        button.addEventListener("click", event => {
           event.preventDefault();
           const id =
             event.currentTarget?.dataset?.fxId;
-
-          if (await removeAmbientFx(id)) {
-            this.render(false);
-          }
+          void this.#runAction("ambient.delete", async () => {
+            if (await removeAmbientFx(id)) this.render(false);
+          }, { effectId: id ?? null });
         });
       });
 
     root.querySelectorAll("[data-action='preview-saved']")
       .forEach(button => {
-        button.addEventListener("click", async event => {
+        button.addEventListener("click", event => {
           event.preventDefault();
-          const effect =
-            await this.#getSavedEffect(event.currentTarget?.dataset?.fxId);
-
-          if (effect) await previewAmbientFx(effect);
+          const id = event.currentTarget?.dataset?.fxId;
+          void this.#runAction("ambient.preview-saved", async () => {
+            const effect = await this.#getSavedEffect(id);
+            if (effect) await previewAmbientFx(effect);
+          }, { effectId: id ?? null });
         });
       });
 
     root.querySelectorAll("[data-action='stop-saved']")
       .forEach(button => {
-        button.addEventListener("click", async event => {
+        button.addEventListener("click", event => {
           event.preventDefault();
-          await stopAmbientFx(event.currentTarget?.dataset?.fxId);
+          const id = event.currentTarget?.dataset?.fxId;
+          void this.#runAction("ambient.stop-saved", () => stopAmbientFx(id), {
+            effectId: id ?? null
+          });
         });
       });
+  }
+
+  async #runAction(command, operation, context = {}) {
+    try {
+      return await operation();
+    } catch (error) {
+      logger.warn("AMBIENT_FX_UI", "ambient FX UI action failed", {
+        command,
+        sceneId: canvas?.scene?.id ?? null,
+        status: "failed",
+        reasonCode: "AMBIENT_FX_UI_ACTION_FAILED",
+        error,
+        ...context
+      });
+      return null;
+    }
   }
 
   async #getSavedEffect(id) {

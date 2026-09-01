@@ -18,6 +18,7 @@ import {
 } from "./trade-proximity-service.js";
 
 import { tradeAuditService } from "./trade-audit-service.js";
+import { logger } from "../utils/logger.js";
 
 function isOwnTradeMutation(options) {
   return Boolean(options?.mtrolTradeExecutionId || options?.mtrolTradeRollback);
@@ -101,7 +102,12 @@ async function finishLifecycleSession(session, state, reason, operationId) {
   try {
     await tradeAuditService.persistTerminal(terminal);
   } catch (error) {
-    console.error("MTROL | No se pudo persistir auditoría lifecycle:", error);
+    logger.error("HISTORY", "trade lifecycle audit failed", {
+      tradeId: terminal.id,
+      status: terminal.state,
+      reasonCode: reason,
+      error: error.message
+    });
   }
   return terminal;
 }
