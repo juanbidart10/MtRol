@@ -6,9 +6,10 @@ import {
 
 const ATTRIBUTE_REFERENCE = /@atributos\.([A-Za-z0-9_]+)/g;
 const COMPETENCY_REFERENCE = /@competencias\.([A-Za-z0-9_]+)/g;
+const COMPETENCY_DIE_REFERENCE = /@competenciasDado\b(?:\.([A-Za-z0-9_.]*))?/g;
 const KNOWN_ROOT_REFERENCE = /@([A-Za-z][A-Za-z0-9_]*)/g;
 const KNOWN_ROOTS = Object.freeze([
-  "atributos", "competencias", "armas", "recursos", "vitales",
+  "atributos", "competencias", "competenciasDado", "armas", "recursos", "vitales",
   "mano", "manoDer", "manoIzq"
 ]);
 
@@ -42,9 +43,14 @@ export function validateCanonicalFormula(formula, {
       errors.push(`Atributo desconocido: @atributos.${match[1]}.`);
     }
   }
-  for (const match of text.matchAll(COMPETENCY_REFERENCE)) {
-    if (!/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(match[1])) {
-      errors.push(`Referencia de competencia inválida: @competencias.${match[1]}.`);
+  for (const [namespace, reference] of [
+    ["competencias", COMPETENCY_REFERENCE],
+    ["competenciasDado", COMPETENCY_DIE_REFERENCE]
+  ]) {
+    for (const match of text.matchAll(reference)) {
+      if (!/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(match[1] ?? "")) {
+        errors.push(`Referencia de competencia inválida: @${namespace}.${match[1] ?? ""}.`);
+      }
     }
   }
   for (const match of text.matchAll(KNOWN_ROOT_REFERENCE)) {
@@ -57,10 +63,9 @@ export function validateCanonicalFormula(formula, {
     errors.push("@armas no admite subclaves.");
   }
 
-  const validate = globalThis.Roll?.validate;
-  if (errors.length === 0 && typeof validate === "function") {
+  if (errors.length === 0 && typeof globalThis.Roll?.validate === "function") {
     try {
-      if (!validate(text)) errors.push(`${label} inválida.`);
+      if (!globalThis.Roll.validate(text)) errors.push(`${label} inválida.`);
     } catch (_error) {
       errors.push(`${label} inválida.`);
     }

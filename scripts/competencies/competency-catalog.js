@@ -57,12 +57,12 @@ export const MTROL_COMPETENCY_TECHNICAL_IDS = Object.freeze(
 
 const TECHNICAL_IDS = new Set(MTROL_COMPETENCY_TECHNICAL_IDS);
 
-const LEVEL_FORMULAS = Object.freeze({
-  1: "1d4 + 1",
-  2: "1d6 + 2",
-  3: "1d8 + 3",
-  4: "1d10 + 4",
-  5: "1d12 + 5"
+const LEVEL_DICE = Object.freeze({
+  1: "1d4",
+  2: "1d6",
+  3: "1d8",
+  4: "1d10",
+  5: "1d12"
 });
 
 export function normalizeCanonicalCompetencyName(value) {
@@ -95,7 +95,12 @@ export function getCanonicalTechnicalIdByName(value) {
 }
 
 export function getCompetencyFormula(level) {
+  const die = getCompetencyDieFormula(level);
+  return die ? `${die} + ${Number(level)}` : null;
+}
+
+export function getCompetencyDieFormula(level) {
   const numericLevel = Number(level);
   if (!Number.isInteger(numericLevel)) return null;
-  return LEVEL_FORMULAS[numericLevel] ?? null;
+  return LEVEL_DICE[numericLevel] ?? null;
 }

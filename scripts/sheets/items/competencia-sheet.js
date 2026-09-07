@@ -12,7 +12,8 @@ import {
 
 import {
   getAbilityRoleLabel,
-  getItemAbilityDamageConfig
+  getItemAbilityDamageConfig,
+  MTROL_RESOLUTION_RESULTS
 } from "../../actions/ability-config.js";
 
 import {
@@ -21,11 +22,44 @@ import {
 } from "../../progression/orb-registry.js";
 import { MTROL_EFFECT_ATTRIBUTE_KEYS } from "../../effects/effect-types.js";
 import { logger } from "../../utils/logger.js";
+import { DEFAULT_ALLOWED_RESPONSES, getOppositionActionDefinition, OPPOSITION_CAPABILITIES } from "../../actions/opposition-policy.js";
+import { getItemResolutionResult } from "../../actions/action-definition-resolver.js";
 
 const { ItemSheet } =
   foundry.appv1.sheets;
 
 const MTROL_FALLBACK_ITEM_IMG = "icons/svg/item-bag.svg";
+const CAPABILITY_LABELS = {
+  OFFENSIVE: "Ofensiva", DEFENSE: "Defensa", DODGE: "Esquiva",
+  COUNTERATTACK: "Contraataque", REACTION: "Reacción", MOVEMENT: "Movimiento"
+};
+const RESOLUTION_PRESENTATION = {
+  damage: { label: "Daño", help: "Al ganar, obtiene derecho a Lanzar Daño." },
+  defense: { label: "Defensa", help: "Al ganar, evita la acción enemiga." },
+  movement: { label: "Movimiento", help: "Al ganar, concede movimiento según la regla configurada." },
+  utility: { label: "Utilidad", help: "Al ganar, resuelve un efecto sin daño directo." }
+};
+
+function serializeCheckedChoices(formData, prefix, values, previous) {
+  const selected = values.filter(value => [true, "true", "on"].includes(formData[`${prefix}.${value}`]));
+  for (const value of values) delete formData[`${prefix}.${value}`];
+  return [...previous.filter(value => selected.includes(value)), ...selected.filter(value => !previous.includes(value))];
+}
+
+function responseConfiguration(item) {
+  const definition = getOppositionActionDefinition(item);
+  const candidates = DEFAULT_ALLOWED_RESPONSES.filter(value => definition.capabilities.includes(value));
+  const preset = String(item.system?.responseCapability ?? "").trim().toUpperCase();
+  return {
+    candidates,
+    multiple: candidates.length > 1,
+    singleLabel: candidates.length === 1 ? CAPABILITY_LABELS[candidates[0]] : "",
+    options: DEFAULT_ALLOWED_RESPONSES.map(value => ({
+      value, label: CAPABILITY_LABELS[value], available: candidates.includes(value),
+      selected: candidates.length === 1 ? candidates[0] === value : preset === value && candidates.includes(value)
+    }))
+  };
+}
 
 function getSafeImageSrc(src, fallback = MTROL_FALLBACK_ITEM_IMG) {
   if (typeof src === "string" && src.trim()) return src.trim();
@@ -121,11 +155,14 @@ export class CompetenciaSheet extends ItemSheet {
     };
     context.damageConfig = damageConfig;
     context.rolLabel = getAbilityRoleLabel(this.item.system?.rol);
-    context.showOppositionType = this.item.system?.requiresOpposition === true;
+    context.oppositionRequired = getItemResolutionResult(this.item) === "damage";
+    context.showOppositionType = context.oppositionRequired || this.item.system?.requiresOpposition === true;
+    context.responseConfiguration = responseConfiguration(this.item);
     context.showDamageConfiguration = this.item.system?.resolutionResult === "damage";
     context.showOrbAssociation = this.item.system?.categoria === "hechizo";
-    const selectedCapabilities = new Set(this.item.system?.capabilities ?? []);
-    const selectedResponses = new Set(this.item.system?.allowedResponses ?? []);
+    const definition = getOppositionActionDefinition(this.item);
+    const selectedCapabilities = new Set(this.item.system?.capabilities ?? definition.capabilities);
+    const selectedResponses = new Set(definition.allowedResponses);
     context.actionIdentityOptions = [
       ["spell", "Hechizo"],
       ["competence", "Competencia"],
@@ -137,11 +174,20 @@ export class CompetenciaSheet extends ItemSheet {
       label,
       selected: this.item.system?.actionIdentity === value
     }));
-    context.capabilityOptions = [
-      "OFFENSIVE", "DEFENSE", "DODGE", "COUNTERATTACK", "REACTION", "MOVEMENT"
-    ].map(value => ({ value, selected: selectedCapabilities.has(value) }));
-    context.allowedResponseOptions = ["DEFENSE", "DODGE", "COUNTERATTACK"]
-      .map(value => ({ value, selected: selectedResponses.has(value) }));
+    context.capabilityOptions = Object.values(OPPOSITION_CAPABILITIES)
+      .map(value => ({ value, label: CAPABILITY_LABELS[value], selected: selectedCapabilities.has(value) }));
+    const properties = [OPPOSITION_CAPABILITIES.REACTION, OPPOSITION_CAPABILITIES.MOVEMENT];
+    context.capabilityGroups = [
+      { label: "Tipo", options: context.capabilityOptions.filter(option => !properties.includes(option.value)) },
+      { label: "Propiedades", options: context.capabilityOptions.filter(option => properties.includes(option.value)) }
+    ];
+    const resolutionResult = this.item.system?.resolutionResult ?? getItemResolutionResult(this.item);
+    context.resolutionOptions = MTROL_RESOLUTION_RESULTS.map(value => ({
+      value, ...RESOLUTION_PRESENTATION[value], selected: resolutionResult === value
+    }));
+    context.resolutionHelp = RESOLUTION_PRESENTATION[resolutionResult]?.help ?? "Elegí una consecuencia.";
+    context.allowedResponseOptions = DEFAULT_ALLOWED_RESPONSES
+      .map(value => ({ value, label: CAPABILITY_LABELS[value], selected: selectedResponses.has(value) }));
     context.orbOptions = Object.values(MTROL_ORB_REGISTRY).map(definition => ({
       value: definition.id,
       label: definition.name,
@@ -185,8 +231,18 @@ export class CompetenciaSheet extends ItemSheet {
 
     const refreshContextualFields = () => {
       const root = html[0] ?? html;
-      const requiresOpposition = root.querySelector('[name="system.requiresOpposition"]')?.checked === true;
-      const resolutionResult = root.querySelector('[name="system.resolutionResult"]')?.value;
+      const resolutionResult = root.querySelector('[name="system.resolutionResult"]:checked')?.value;
+      const resolutionHelp = root.querySelector('[data-mtrol-resolution-help]');
+      if (resolutionHelp) resolutionHelp.textContent = RESOLUTION_PRESENTATION[resolutionResult]?.help ?? "Elegí una consecuencia.";
+      const opposition = root.querySelector('[name="system.requiresOpposition"]');
+      const mandatory = resolutionResult === "damage";
+      if (opposition) {
+        opposition.disabled = mandatory;
+        if (mandatory) opposition.checked = true;
+      }
+      const oppositionHelp = root.querySelector('[data-mtrol-opposition-required]');
+      if (oppositionHelp) oppositionHelp.hidden = !mandatory;
+      const requiresOpposition = opposition?.checked === true;
       const oppositionRegion = root.querySelector('[data-mtrol-context="opposition"]');
       const damageRegion = root.querySelector('[data-mtrol-context="damage"]');
       const resolution = root.querySelector('[name="system.damageResolution"]');
@@ -196,10 +252,6 @@ export class CompetenciaSheet extends ItemSheet {
       if (oppositionRegion) oppositionRegion.hidden = !requiresOpposition;
       if (damageRegion) damageRegion.hidden = resolutionResult !== "damage";
 
-      if (resolutionResult === "damage") {
-        const opposition = root.querySelector('[name="system.requiresOpposition"]');
-        if (opposition) opposition.checked = true;
-      }
       if (additionalCost) {
         additionalCost.textContent = costType === "basic"
           ? "+1 MP al ejecutar"
@@ -207,16 +259,78 @@ export class CompetenciaSheet extends ItemSheet {
       }
     };
 
+    const refreshResponseFields = () => {
+      const root = html[0] ?? html;
+      const capabilities = root.querySelectorAll('[data-mtrol-capability]');
+      const region = root.querySelector('[data-mtrol-response-type]');
+      if (!capabilities.length || !region) return;
+      const radios = Array.from(region.querySelectorAll('input[type="radio"]'));
+      const config = responseConfiguration({ system: {
+        ...this.item.system,
+        capabilities: Array.from(capabilities).filter(input => input.checked).map(input => input.dataset.mtrolCapability),
+        responseCapability: radios.find(radio => radio.checked)?.value ?? ""
+      } });
+      region.hidden = config.candidates.length === 0;
+      region.querySelector('[data-mtrol-response-single]').hidden = config.multiple;
+      region.querySelector('[data-mtrol-response-label]').textContent = config.singleLabel;
+      region.querySelector('[data-mtrol-response-multiple]').hidden = !config.multiple;
+      for (const radio of radios) {
+        const option = config.options.find(option => option.value === radio.value);
+        radio.closest('label').hidden = !option.available;
+        radio.disabled = !config.multiple || !option.available;
+        radio.required = config.multiple && option.available;
+        radio.checked = option.selected;
+      }
+    };
+
+    html.find('[data-mtrol-capability]')
+      .on("change.mtrolResponseConfiguration", refreshResponseFields);
+
     html.find('[name="system.requiresOpposition"], [name="system.ejecutaDanio"], [name="system.damageCostType"], [name="system.resolutionResult"]')
       .on("change.mtrolAbilityContext", refreshContextualFields);
 
     refreshContextualFields();
+    refreshResponseFields();
   }
 
   async _updateObject(event, formData) {
     if (!game.user.isGM) {
       ui.notifications.warn("Solo el GM puede modificar Competencias.");
       return false;
+    }
+
+    if (Object.hasOwn(formData, "mtrolCapabilityControls")) {
+      formData["system.capabilities"] = serializeCheckedChoices(
+        formData, "mtrolCapability", Object.values(OPPOSITION_CAPABILITIES),
+        this.item.system?.capabilities ?? getOppositionActionDefinition(this.item).capabilities
+      );
+      delete formData.mtrolCapabilityControls;
+    }
+    if (Object.hasOwn(formData, "system.resolutionResult") && !MTROL_RESOLUTION_RESULTS.includes(formData["system.resolutionResult"])) {
+      throw new Error("Elegí una única consecuencia al ganar.");
+    }
+    if (Object.hasOwn(formData, "mtrolResponseControls")) {
+      formData["system.allowedResponses"] = serializeCheckedChoices(
+        formData, "mtrolAllowedResponse", DEFAULT_ALLOWED_RESPONSES,
+        getOppositionActionDefinition(this.item).allowedResponses
+      );
+      delete formData.mtrolResponseControls;
+    }
+    const submittedSystem = { ...this.item.system };
+    for (const [key, value] of Object.entries(formData)) {
+      if (key.startsWith("system.")) submittedSystem[key.slice(7)] = value;
+    }
+    const response = responseConfiguration({ system: submittedSystem });
+    if (response.candidates.length <= 1) {
+      formData["system.responseCapability"] = response.candidates[0] ?? null;
+    } else {
+      const selected = response.options.find(option => option.selected);
+      if (!selected) {
+        const message = "Elegí el tipo de respuesta de esta habilidad antes de guardar.";
+        ui.notifications.warn(message);
+        throw new Error(message);
+      }
+      formData["system.responseCapability"] = selected.value;
     }
 
     if (
@@ -245,7 +359,7 @@ export class CompetenciaSheet extends ItemSheet {
       throw new Error("El tipo de Orbe del hechizo no pertenece al registro canónico.");
     }
 
-    if (formData["system.resolutionResult"] === "damage") {
+    if (getItemResolutionResult({ system: submittedSystem }) === "damage") {
       formData["system.requiresOpposition"] = true;
       formData["system.ejecutaDanio"] = true;
     }

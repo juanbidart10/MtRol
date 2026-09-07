@@ -4,7 +4,7 @@ Este manual describe la configuración canónica de un Item `competencia`. La re
 
 ## Campos canónicos
 
-- `formula`: tirada inicial de confrontación. Admite dados, críticos, pifias, Karma, Dharma, `@atributos` y `@competencias`. No es daño.
+- `formula`: tirada inicial de confrontación. Admite dados, críticos, pifias, Karma, Dharma, `@atributos`, `@competencias` y `@competenciasDado`. No es daño.
 - `damageFormula`: tirada independiente de daño inicial. Admite el motor completo y además `@armas` y modifiers de daño. Sólo se lanza desde un derecho de daño.
 - `capabilities`: capacidades reales del Item. Vocabulario actual: `OFFENSIVE`, `DEFENSE`, `DODGE`, `COUNTERATTACK`, `REACTION`, `MOVEMENT`.
 - `allowedResponses`: familias que la acción iniciadora acepta: `DEFENSE`, `DODGE` y/o `COUNTERATTACK`. Una acción con resultado `damage` no puede dejar este campo vacío.
@@ -17,11 +17,63 @@ Este manual describe la configuración canónica de un Item `competencia`. La re
 
 Los campos legacy `danio`, `damageResolution`, `damageMode` y `ejecutaDanio` se leen sólo para migración. La configuración nueva usa `damageFormula`, oposición y lanzamiento manual.
 
+## Capacidades y consecuencia al ganar
+
+**Capacidades** responde a “¿qué sabe hacer y cómo puede utilizarse esta habilidad?”. Los botones con casilla se activan y desactivan con un clic o con el teclado. Podés marcar varios o ninguno. **Tipo** reúne Ofensiva, Defensa, Esquiva y Contraataque; **Propiedades** reúne Reacción y Movimiento. La separación es visual: se conserva una sola lista de capacidades y los Items existentes mantienen sus selecciones.
+
+**Consecuencia al ganar** responde a “¿qué ocurre cuando gana esta ejecución?”. Elegí una sola opción entre **Daño**, **Defensa**, **Movimiento** y **Utilidad**. El texto bajo los botones explica la opción activa. La consecuencia principal requiere uno de esos valores; su valor inicial es Utilidad. No es lo mismo que las capacidades y no se cambia automáticamente al marcarlas.
+
+| Ejemplo | Capacidades | Consecuencia |
+| --- | --- | --- |
+| Ataque ofensivo | Ofensiva | Daño: obtiene derecho a Lanzar Daño |
+| Defensa | Defensa, Reacción | Defensa: evita la acción enemiga |
+| Esquiva | Esquiva, Reacción, Movimiento | Movimiento: concede el movimiento configurado |
+| Contraataque | Ofensiva, Contraataque, Reacción | Daño: obtiene derecho a Lanzar Daño |
+| Acción de utilidad | Ofensiva, Reacción | Utilidad: resuelve un efecto sin daño directo |
+
+Son ejemplos de configuración, no restricciones nuevas. Tener Ofensiva no obliga a elegir Daño. La selección de Daño mantiene las validaciones existentes de fórmula de daño, oposición y respuestas permitidas.
+
+## Configurar las respuestas desde la hoja
+
+**Respuestas permitidas** indica qué puede hacer el objetivo contra esta acción. Marcá las casillas visibles **Defensa**, **Esquiva** y **Contraataque** que quieras permitir. Por ejemplo, un ataque puede permitir las tres. El objetivo necesita además una habilidad compatible; marcar una casilla no se la concede. Las casillas guardan el mismo array `allowedResponses`, incluso vacío; las acciones con resultado de daño siguen exigiendo al menos una respuesta en su validación de ejecución.
+
+**Tipo de respuesta de esta habilidad** indica cómo funciona esta misma habilidad cuando se usa como respuesta. No cambia lo que puede hacer el objetivo ni agrega capacidades:
+
+- Sin capacidades de Defensa, Esquiva o Contraataque: la sección se oculta.
+- Con una sola: se muestra su nombre sin selector, determinado automáticamente. Una Esquiva responde como `DODGE`.
+- Con varias: elegí una mediante los botones de opción antes de guardar. Se conserva la elección compatible que ya tenga el Item. Si eliminás esa capacidad y quedan varias, elegí otra; si queda una, se deriva automáticamente.
+
+La antigua opción **Automática** representaba un valor vacío: el motor sólo podía resolverlo cuando había una única respuesta compatible con el ataque. No significaba “permite todas”. Los Items históricos se pueden abrir sin migración; si tienen varias respuestas y ninguna elección válida, la hoja pide elegir una para guardar. No se agrega un diálogo durante el combate.
+
+**Requiere oposición** aparece marcado y bloqueado cuando la consecuencia es **Daño**, conforme a la regla existente. Para las demás consecuencias sigue siendo editable. El guardado y el resolver de acciones mantienen la obligación para daño aunque se intente enviar `false`.
+
+Un ataque con `allowedResponses: [DEFENSE, DODGE, COUNTERATTACK]` permite las tres familias al objetivo. Una habilidad con `capabilities: [DEFENSE, DODGE, REACTION]` y `responseCapability: DODGE` responde como Esquiva: son configuraciones independientes.
+
 ## Referencias de fórmula
 
 `@atributos.fuerza` usa un atributo canónico. Un typo como `@atributos.fuerzzza` es error; no se transforma en cero.
 
 `@competencias.combate_con_armas` conserva la semántica de Inserción 1. Por ejemplo, nivel 3 se resuelve como `(1d8 + 3)` con términos de dado reales. Una competencia inexistente aporta cero.
+
+### Competencia completa o solamente su dado
+
+Usá `@competencias.<technicalId>` para sumar **dado + bonus de nivel**. Usá `@competenciasDado.<technicalId>` cuando el diseño de la habilidad deba sumar **solamente el dado**, sin el bonus de nivel. Ambas referencias están disponibles en `formula` y `damageFormula` para las 46 competencias canónicas.
+
+| Nivel | `@competencias` | `@competenciasDado` |
+| --- | --- | --- |
+| 1 | `(1d4 + 1)` | `1d4` |
+| 2 | `(1d6 + 2)` | `1d6` |
+| 3 | `(1d8 + 3)` | `1d8` |
+| 4 | `(1d10 + 4)` | `1d10` |
+| 5 | `(1d12 + 5)` | `1d12` |
+
+Con Inteligencia 4 y Magia 5, `1d20 + @atributos.inteligencia + @competenciasDado.magia` equivale a `1d20 + 4 + 1d12`. El d12 llega al Roll sin evaluarse previamente y participa del desglose y las reglas generales de dados.
+
+En daño, `1d20 + @atributos.fuerza + @competenciasDado.combate_con_armas + @armas` combina el dado de competencia con Fuerza y el daño de armas existente. También se pueden combinar ambos namespaces: con Magia 5, `@competencias.magia + @competenciasDado.magia` equivale a `(1d12 + 5) + 1d12`, conservando los dos dados.
+
+La referencia usa `system.technicalId`, nunca el nombre visible. Una competencia ausente, con nivel inválido o duplicada aporta `0`. Conforme a la policy existente, un ID desconocido con formato válido también aporta `0`; no hay validación de pertenencia al catálogo en la fórmula. El nuevo namespace rechaza referencias incompletas como `@competenciasDado.` e IDs mal formados. No se migran ni sustituyen fórmulas existentes.
+
+### Armas
 
 `@armas` sólo se admite en `damageFormula`. Al pulsar **Lanzar Daño**, suma el daño plano de los Items únicos con `system.tipoObjeto: arma` referenciados por `manoIzq` y `manoDer`:
 

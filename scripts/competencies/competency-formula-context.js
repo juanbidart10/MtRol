@@ -1,5 +1,6 @@
 import {
   getCompetencyFormula,
+  getCompetencyDieFormula,
   isCanonicalCompetencyTechnicalId,
   MTROL_COMPETENCY_TECHNICAL_IDS
 } from "./competency-catalog.js";
@@ -14,6 +15,7 @@ export function buildCompetencyFormulaContext(items = [], {
   const data = Object.fromEntries(
     MTROL_COMPETENCY_TECHNICAL_IDS.map(technicalId => [technicalId, 0])
   );
+  const diceData = { ...data };
   const labels = {};
 
   for (const item of items ?? []) {
@@ -25,7 +27,9 @@ export function buildCompetencyFormulaContext(items = [], {
     if (indexed.has(technicalId)) {
       duplicates.add(technicalId);
       data[technicalId] = 0;
+      diceData[technicalId] = 0;
       delete labels[`competencias.${technicalId}`];
+      delete labels[`competenciasDado.${technicalId}`];
       continue;
     }
 
@@ -44,7 +48,9 @@ export function buildCompetencyFormulaContext(items = [], {
     }
 
     data[technicalId] = `(${formula})`;
+    diceData[technicalId] = getCompetencyDieFormula(item.system?.nivel);
     labels[`competencias.${technicalId}`] = String(item.name ?? technicalId).toUpperCase();
+    labels[`competenciasDado.${technicalId}`] = `${String(item.name ?? technicalId).toUpperCase()} — DADO DE COMPETENCIA`;
   }
 
   for (const technicalId of duplicates) {
@@ -54,5 +60,5 @@ export function buildCompetencyFormulaContext(items = [], {
     }, { key: `competency-duplicate:${actorUuid ?? "unknown"}:${technicalId}` });
   }
 
-  return { data, labels, indexed, duplicates };
+  return { data, diceData, labels, indexed, duplicates };
 }

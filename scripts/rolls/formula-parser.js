@@ -6,6 +6,7 @@
 // - @recursos
 // - @vitales
 // - @competencias.<technicalId>
+// - @competenciasDado.<technicalId>
 // - @mano
 // - @manoDer
 // - @manoIzq
@@ -42,6 +43,8 @@ export function mtrolPrepararRollData(actor, { includeWeapons = false } = {}) {
 
   data.competencias =
     competencyContext.data;
+  data.competenciasDado =
+    competencyContext.diceData;
 
   const etiquetas = {
     "atributos.aura": "AURA",

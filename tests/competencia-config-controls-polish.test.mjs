@@ -17,14 +17,15 @@ const css = await readFile(
 );
 
 test("los controles conservan nombres, cardinalidad y valores persistentes", () => {
-  assert.match(template, /<select name="system\.capabilities" multiple size="6">/);
-  assert.match(template, /<select name="system\.allowedResponses" multiple size="3">/);
-  assert.match(template, /<select name="system\.responseCapability">/);
-  assert.match(template, /<option value="">Automática<\/option>/);
-
-  for (const capability of ["COUNTERATTACK", "DODGE", "DEFENSE"]) {
-    assert.match(template, new RegExp(`value="${capability}"`));
-  }
+  assert.match(template, /type="checkbox" name="mtrolCapability\.{{value}}"/);
+  assert.match(template, /type="radio" name="system\.resolutionResult" value="{{value}}"/);
+  assert.match(template, /mtrol-toggle-chip/);
+  assert.doesNotMatch(template, /<select name="system\.(capabilities|resolutionResult)"/);
+  assert.match(template, /type="checkbox" name="mtrolAllowedResponse\.{{value}}" {{checked selected}}/);
+  assert.match(template, /type="radio" name="system\.responseCapability" value="{{value}}"/);
+  assert.match(template, /name="mtrolResponseControls"/);
+  assert.doesNotMatch(template, /<select name="system\.(allowedResponses|responseCapability)"/);
+  assert.doesNotMatch(template, /Capability de respuesta preset|>Automática</);
 });
 
 test("selects simples y multiselects comparten una base legible sin overflow horizontal", () => {

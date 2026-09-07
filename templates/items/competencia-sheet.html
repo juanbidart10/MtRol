@@ -139,25 +139,37 @@
               </select>
             </div>
 
-            <div class="mtrol-field wide">
-              <label>Capabilities</label>
-              <select name="system.capabilities" multiple size="6">
-                {{#each capabilityOptions}}
-                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{value}}</option>
+            <fieldset class="mtrol-field wide mtrol-response-group mtrol-mechanics-choices" data-mtrol-capabilities>
+              <legend>Capacidades</legend>
+              <input type="hidden" name="mtrolCapabilityControls" value="true" />
+              {{#each capabilityGroups}}
+              <div class="mtrol-capability-row">
+                <span class="mtrol-choice-heading">{{label}}</span>
+                <div class="mtrol-choice-group" role="group" aria-label="{{label}}">
+                {{#each options}}
+                  <label class="mtrol-response-option mtrol-toggle-chip">
+                    <input type="checkbox" name="mtrolCapability.{{value}}" data-mtrol-capability="{{value}}" {{checked selected}} />
+                    <span>{{label}}</span>
+                  </label>
                 {{/each}}
-              </select>
-            </div>
+                </div>
+              </div>
+              {{/each}}
+            </fieldset>
 
-            <div class="mtrol-field wide">
-              <label>Consecuencia al ganar</label>
-              <select name="system.resolutionResult">
-                <option value="damage" {{#if (eq system.resolutionResult "damage")}}selected{{/if}}>Daño</option>
-                <option value="defense" {{#if (eq system.resolutionResult "defense")}}selected{{/if}}>Defensa</option>
-                <option value="movement" {{#if (eq system.resolutionResult "movement")}}selected{{/if}}>Movimiento</option>
-                <option value="utility" {{#if (eq system.resolutionResult "utility")}}selected{{/if}}>Utilidad</option>
-              </select>
+            <fieldset class="mtrol-field wide mtrol-response-group mtrol-mechanics-choices" data-mtrol-consequence>
+              <legend>Consecuencia al ganar</legend>
+              <div class="mtrol-choice-group">
+                {{#each resolutionOptions}}
+                <label class="mtrol-response-option mtrol-toggle-chip" title="{{help}}">
+                  <input type="radio" name="system.resolutionResult" value="{{value}}" {{checked selected}} required />
+                  <span>{{label}}</span>
+                </label>
+                {{/each}}
+              </div>
               <small>Una ejecución produce una sola consecuencia.</small>
-            </div>
+              <small data-mtrol-resolution-help aria-live="polite">{{resolutionHelp}}</small>
+            </fieldset>
 
             <div class="mtrol-field wide">
               <label>Comportamiento legacy</label>
@@ -217,31 +229,50 @@
               </select>
             </div>
 
-            <div class="mtrol-field wide">
-              <label>Respuestas permitidas</label>
-              <select name="system.allowedResponses" multiple size="3">
+            <fieldset class="mtrol-field wide mtrol-response-group">
+              <legend>Respuestas permitidas</legend>
+              <small>¿Cómo puede reaccionar el objetivo ante esta acción?</small>
+              <input type="hidden" name="mtrolResponseControls" value="true" />
+              <div class="mtrol-response-options">
                 {{#each allowedResponseOptions}}
-                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{value}}</option>
+                <label class="mtrol-response-option">
+                  <input type="checkbox" name="mtrolAllowedResponse.{{value}}" {{checked selected}} />
+                  <span><strong>{{label}}</strong><small>Permite responder mediante habilidades con capacidad de {{label}}.</small></span>
+                </label>
                 {{/each}}
-              </select>
-            </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="mtrol-field wide mtrol-response-group" data-mtrol-response-type {{#unless responseConfiguration.candidates.length}}hidden{{/unless}}>
+              <legend>Tipo de respuesta de esta habilidad</legend>
+              <small>Define cómo se comporta esta habilidad cuando se utiliza como respuesta.</small>
+              <div data-mtrol-response-single {{#if responseConfiguration.multiple}}hidden{{/if}}>
+                <strong class="mtrol-response-badge" data-mtrol-response-label>{{responseConfiguration.singleLabel}}</strong>
+                <small>Determinado automáticamente por las capacidades de la habilidad.</small>
+              </div>
+              <div data-mtrol-response-multiple {{#unless responseConfiguration.multiple}}hidden{{/unless}}>
+                <small>Esta habilidad puede responder de varias maneras. Elegí cuál utilizará.</small>
+                <div class="mtrol-response-options">
+                  {{#each responseConfiguration.options}}
+                  <label class="mtrol-response-option" {{#unless available}}hidden{{/unless}}>
+                    <input type="radio" name="system.responseCapability" value="{{value}}" {{checked selected}}
+                           {{#if ../responseConfiguration.multiple}}{{#if available}}required{{else}}disabled{{/if}}{{else}}disabled{{/if}} />
+                    <span><strong>{{label}}</strong></span>
+                  </label>
+                  {{/each}}
+                </div>
+              </div>
+            </fieldset>
 
             <div class="mtrol-field wide">
-              <label>Capability de respuesta preset</label>
-              <select name="system.responseCapability">
-                <option value="">Automática</option>
-                <option value="DEFENSE" {{#if (eq system.responseCapability "DEFENSE")}}selected{{/if}}>DEFENSE</option>
-                <option value="DODGE" {{#if (eq system.responseCapability "DODGE")}}selected{{/if}}>DODGE</option>
-                <option value="COUNTERATTACK" {{#if (eq system.responseCapability "COUNTERATTACK")}}selected{{/if}}>COUNTERATTACK</option>
-              </select>
+              <label class="mtrol-toggle">
+                <span>Requiere oposición</span>
+                <input type="checkbox"
+                       name="system.requiresOpposition"
+                       {{checked showOppositionType}} {{#if oppositionRequired}}disabled{{/if}} />
+              </label>
+              <small data-mtrol-opposition-required {{#unless oppositionRequired}}hidden{{/unless}}>Obligatorio para acciones ofensivas que conceden daño.</small>
             </div>
-
-            <label class="mtrol-toggle">
-              <span>Requiere oposicion</span>
-              <input type="checkbox"
-                     name="system.requiresOpposition"
-                     {{checked system.requiresOpposition}} />
-            </label>
 
             <div class="mtrol-field wide" data-mtrol-context="opposition" {{#unless showOppositionType}}hidden{{/unless}}>
               <label>Tipo de oposicion</label>

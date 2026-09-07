@@ -321,6 +321,134 @@
   grid-column: 1 / -1;
 }
 
+.mtrol-competencia-sheet .mtrol-field > .mtrol-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mtrol-competencia-sheet .mtrol-response-group {
+  margin: 0;
+  padding: 10px;
+}
+
+.mtrol-competencia-sheet .mtrol-response-group legend {
+  padding: 0 5px;
+  color: #ecd8a0;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mtrol-competencia-sheet .mtrol-response-options {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mtrol-competencia-sheet .mtrol-field .mtrol-response-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(212, 175, 55, .28);
+  border-radius: 6px;
+  color: #f6ebcc;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.mtrol-competencia-sheet .mtrol-response-option:hover,
+.mtrol-competencia-sheet .mtrol-response-option:focus-within {
+  border-color: #d4af37;
+  background: rgba(214, 171, 65, .09);
+}
+
+.mtrol-competencia-sheet .mtrol-response-option input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #d4af37;
+}
+
+.mtrol-competencia-sheet .mtrol-response-option input:focus-visible {
+  outline: 2px solid #ecd8a0;
+  outline-offset: 3px;
+}
+
+.mtrol-competencia-sheet .mtrol-capability-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  margin: 3px 0;
+}
+
+.mtrol-competencia-sheet .mtrol-choice-heading {
+  flex: 0 0 68px;
+  font-size: 10px;
+  color: #ecd8a0;
+}
+
+.mtrol-competencia-sheet .mtrol-choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mtrol-competencia-sheet .mtrol-field .mtrol-toggle-chip {
+  gap: 5px;
+  padding: 5px 7px;
+  min-height: 29px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.mtrol-competencia-sheet .mtrol-toggle-chip:has(input:checked) {
+  border-color: #d4af37;
+  background: rgba(214, 171, 65, .18);
+  color: #fff0bd;
+}
+
+.mtrol-competencia-sheet .mtrol-toggle-chip input {
+  flex-basis: 14px;
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+}
+
+.mtrol-competencia-sheet .mtrol-mechanics-choices > small {
+  margin-top: 4px;
+}
+
+.mtrol-competencia-sheet .mtrol-response-option small {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.mtrol-competencia-sheet .mtrol-response-badge {
+  display: inline-block;
+  margin: 8px 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(212, 175, 55, .45);
+  border-radius: 999px;
+  color: #f6ebcc;
+}
+
+.mtrol-competencia-sheet .mtrol-response-group[hidden],
+.mtrol-competencia-sheet .mtrol-response-group [hidden],
+.mtrol-competencia-sheet .mtrol-field [data-mtrol-opposition-required][hidden] {
+  display: none;
+}
+
 .mtrol-competencia-sheet .mtrol-field label,
 .mtrol-competencia-sheet .mtrol-toggle span {
   margin: 0 0 5px;
