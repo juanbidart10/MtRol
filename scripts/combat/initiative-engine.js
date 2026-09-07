@@ -17,17 +17,25 @@ import {
   consumePreparation
 } from "./turn-system.js";
 
+import {
+  mtrolPrepararRollData
+} from "../rolls/formula-parser.js";
+
+import {
+  resolveGameplayRollEffects,
+  resolveInitiativeEffects
+} from "../effects/effect-pipeline.js";
+
+export { resolveInitiativeEffects } from "../effects/effect-pipeline.js";
+
 export async function rollMtrolInitiative(actor) {
   if (!actor) {
     ui.notifications.warn("MtRol | No hay actor para iniciativa.");
     return null;
   }
 
-  const data =
-    actor.getRollData ? actor.getRollData() : {};
-
-  data.atributos =
-    actor.system?.atributos ?? {};
+  const { data } =
+    mtrolPrepararRollData(actor);
 
   const mainRoll = new Roll(
     "1d10 + @atributos.destreza",
@@ -104,8 +112,11 @@ export async function rollMtrolInitiative(actor) {
   const totalBase =
     mtrolCalcularTotalBaseSinCriticos(mainRoll);
 
+  const primaryRollEffects =
+    resolveGameplayRollEffects(actor, totalBase, { actionType: "initiative" });
+
   const totalPrincipal =
-    totalBase + evaluacion.totalExtra + preparationBonus;
+    primaryRollEffects.value + evaluacion.totalExtra + preparationBonus;
 
   const secondaryRoll =
     await new Roll("1d10").evaluate();
@@ -118,8 +129,13 @@ export async function rollMtrolInitiative(actor) {
       label: "Iniciativa secundaria"
     });
 
-  const totalFinal =
+  const initiativeBeforeEffects =
     totalPrincipal + Number(secondaryRoll.total ?? 0);
+
+  const initiativeEffects =
+    resolveInitiativeEffects(actor, initiativeBeforeEffects);
+
+  const totalFinal = initiativeEffects.value;
 
   await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
@@ -198,6 +214,8 @@ export async function rollMtrolInitiative(actor) {
       ...secondaryChatRolls.rolls
     ],
     evaluacion,
-    preparationBonus
+    preparationBonus,
+    primaryRollEffects,
+    initiativeEffects
   };
 }

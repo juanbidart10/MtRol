@@ -1,7 +1,12 @@
-import { getItemAbilityDamageConfig } from "./ability-config.js";
+import {
+  getItemAbilityDamageConfig,
+  normalizeResolutionResult
+} from "./ability-config.js";
 import { MTROL_CATEGORIES, normalizarCategoria } from "../core/categories.js";
 import { getOppositionActionDefinition } from "./opposition-policy.js";
 import { logger } from "../utils/logger.js";
+import { MTROL_EFFECT_ATTRIBUTE_KEYS } from "../effects/effect-types.js";
+import { getCanonicalDamageFormula } from "./combat-ability-policy.js";
 
 const OPPOSED_DAMAGE_ACTION_TYPES = new Set([
   "attack",
@@ -28,7 +33,18 @@ function isFalse(value) {
 }
 
 export function getItemDamageFormula(item) {
-  return String(item?.system?.danio ?? "").trim();
+  return getCanonicalDamageFormula(item);
+}
+
+export function getItemResolutionResult(item) {
+  const explicit = normalizeResolutionResult(item?.system?.resolutionResult);
+  const persisted = item?._source?.system;
+  if (explicit || (persisted && Object.hasOwn(persisted, "resolutionResult"))) return explicit;
+  const definition = getOppositionActionDefinition(item, { logger });
+  if (definition.capabilities.includes("DODGE")) return "movement";
+  if (definition.capabilities.includes("DEFENSE")) return "defense";
+  if (getItemDamageFormula(item) && definition.capabilities.includes("OFFENSIVE")) return "damage";
+  return "utility";
 }
 
 export function isOpposedDamageAction(item) {
@@ -48,11 +64,13 @@ function hasConfiguredActionDefinition(system = {}) {
   );
 }
 
-export function resolveActionDefinition(item) {
+export function resolveActionDefinition(item, { declaredMode = null } = {}) {
   const system = item?.system ?? {};
   const persistedSystem = item?._source?.system ?? system;
   const hasExplicitOpposition = Object.hasOwn(persistedSystem, "requiresOpposition");
   const oppositionDefinition = getOppositionActionDefinition(item, { logger });
+  const modeDefinition = Array.from(system.executionModes ?? [])
+    .find(mode => mode?.modeId === declaredMode) ?? null;
   const baseDefinition = {
     ...oppositionDefinition,
     actionBehavior: system.actionType ?? "utility",
@@ -60,11 +78,13 @@ export function resolveActionDefinition(item) {
     defenseType: system.defenseType ?? "custom",
     effectDuration: Number(system.effectDuration ?? 1),
     effectIntensity: Number(system.effectIntensity ?? 0),
-    oppositionType: system.oppositionType ?? "free"
+    oppositionType: system.oppositionType ?? "free",
+    resolutionResult: normalizeResolutionResult(modeDefinition?.resolutionResult) ?? getItemResolutionResult(item)
   };
 
   if (
     isTrue(system.requiresOpposition) ||
+    baseDefinition.resolutionResult === "damage" ||
     (!hasExplicitOpposition && isOpposedDamageAction(item))
   ) {
     return { ...baseDefinition, requiresOpposition: true };
@@ -94,21 +114,28 @@ export function resolveCanonicalDamageContext({
   requiresOpposition = true,
   data = {}
 } = {}) {
-  const formula = getItemDamageFormula(sourceItem);
-  const executesDamage = !isFalse(sourceItem?.system?.ejecutaDanio);
+  const formula = getCanonicalDamageFormula(sourceItem, data.declaredMode ?? null);
   const config = getItemAbilityDamageConfig(sourceItem, { requiresOpposition });
   const basicCostIncludedInActivation =
     normalizarCategoria(sourceItem?.system?.categoria) === MTROL_CATEGORIES.COMPETENCIA &&
     config.costType === "basic";
+  const resolutionResult = getItemResolutionResult(sourceItem);
   const available =
-    executesDamage &&
+    resolutionResult === "damage" &&
     formula.length > 0 &&
-    (!requiresOpposition || config.resolution === "onOppositionWin");
+    requiresOpposition && config.resolution === "onOppositionWin";
+  const damageSourceAttribute = MTROL_EFFECT_ATTRIBUTE_KEYS.includes(sourceItem?.system?.damageSourceAttribute)
+    ? sourceItem.system.damageSourceAttribute
+    : null;
 
   return {
     available,
+    id: data.id ?? null,
+    actionItemUuid: sourceItem?.uuid ?? null,
+    damageFormula: available ? formula : "",
     formula: available ? formula : "",
     flatValue: available && Number.isFinite(Number(formula)) ? Number(formula) : null,
+    damageSourceAttribute,
     sourceActorUuid: sourceActor?.uuid ?? null,
     sourceTokenUuid: data.sourceTokenUuid ?? null,
     targetActorUuid: targetActor?.uuid ?? null,
@@ -124,7 +151,12 @@ export function resolveCanonicalDamageContext({
     mode: config.mode,
     costType: config.costType,
     basicCostIncludedInActivation,
-    rollData: {}
+    rollData: {},
+    resolutionResult,
+    declaredMode: data.declaredMode ?? null,
+    createdFromPendingActionId: data.createdFromPendingActionId ?? null,
+    modifiers: Array.isArray(data.modifiers) ? foundry.utils.deepClone(data.modifiers) : [],
+    receiptLinkage: data.receiptLinkage ?? null
   };
 }
 

@@ -3,17 +3,22 @@ import {
   getPendingAction,
   serializePendingAction
 } from "../actions/action-engine.js";
-import { executeResolvedDamageAuthoritative } from "../actions/action-damage-engine.js";
+import {
+  cancelResolvedDamageAuthoritative,
+  executeResolvedDamageAuthoritative
+} from "../actions/action-damage-engine.js";
 import { commandRegistry } from "./runtime-foundation.js";
 import { authorityService } from "../core/authority-service.js";
 
 const SOCKET_COMMANDS = Object.freeze({
   mtrolCreateReadyDamageAction: "action.ready-damage-create",
-  mtrolExecuteResolvedDamage: "action.resolved-damage-execute"
+  mtrolExecuteResolvedDamage: "action.resolved-damage-execute",
+  mtrolCancelResolvedDamage: "action.resolved-damage-cancel"
 });
 const SERVICES = Object.freeze({
   createReady: createReadyDamageActionAuthoritative,
   executeDamage: executeResolvedDamageAuthoritative,
+  cancelDamage: cancelResolvedDamageAuthoritative,
   getPending: getPendingAction,
   serialize: serializePendingAction
 });
@@ -66,6 +71,13 @@ export function registerActionCommands(registry = commandRegistry, services = SE
         damageResult: serializeResolvedDamageResult(result)
       };
     }, options);
+  }
+  if (typeof services.cancelDamage === "function" && !registry.has("action.resolved-damage-cancel")) {
+    registry.register("action.resolved-damage-cancel", async (payload, context) => ({
+      pendingAction: services.serialize(await services.cancelDamage(payload.pendingActionId, {
+        requestingUserId: context.requestingUserId
+      }))
+    }), options);
   }
   return registry;
 }

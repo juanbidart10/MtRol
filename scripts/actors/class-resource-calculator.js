@@ -30,6 +30,7 @@ function readState(input = {}) {
 
   return {
     classId: input?.classId ?? identity.classId,
+    classDomain: input?.classDomain ?? identity.classDomain,
     level: finiteNumber(input?.level ?? resources.nivel),
     resistance: finiteNumber(input?.resistance ?? attributes.resistencia),
     intelligence: finiteNumber(input?.intelligence ?? attributes.inteligencia),
@@ -58,7 +59,7 @@ function calculateActiveMaximums(state, profile) {
 
 export function calculateActorResourceMaximums(input) {
   const state = readState(input);
-  const profile = getResourceProfileForClass(state.classId);
+  const profile = getResourceProfileForClass(state.classId, state.classDomain);
 
   if (!profile) {
     return {

@@ -21,7 +21,8 @@ test("progresión delega payload exacto y conserva respuesta receipt sin otra tr
   const calls = [], registryInstance = registry();
   registerProgressionCommands(registryInstance, {
     spendAttribute: async (...args) => { calls.push(["attribute", ...args]); return { changed: true }; },
-    spendCompetence: async (...args) => { calls.push(["competence", ...args]); return { replayed: true }; }
+    spendCompetence: async (...args) => { calls.push(["competence", ...args]); return { replayed: true }; },
+    grantAwakening: async (...args) => { calls.push(["awakening", ...args]); return { grantId: "gm:x" }; }
   });
   const payload = { actorUuid: "Scene.s.Token.t.Actor.a", transactionId: "domain-tx", expectedValue: 2, expectedPendingPoints: 1 };
   assert.deepEqual(await registryInstance.dispatch(envelope("progression.spend-attribute", payload), context), { receipt: { changed: true } });
@@ -77,7 +78,9 @@ test("proyección localizada mantiene todos los campos legacy y descarta campos 
 
 test("registry niega autoridad/identidad ausente antes de tocar dominio", async () => {
   let calls = 0; const instance = registry();
-  registerProgressionCommands(instance, { spendAttribute: () => calls++, spendCompetence: () => calls++ });
+  registerProgressionCommands(instance, {
+    spendAttribute: () => calls++, spendCompetence: () => calls++, grantAwakening: () => calls++
+  });
   registerActionCommands(instance, { createReady: () => calls++, executeDamage: () => calls++ });
   for (const command of instance.handlers.keys()) {
     await assert.rejects(instance.dispatch(envelope(command), { ...context, isPrimaryGM: false }), /Primary GM/);
@@ -90,7 +93,9 @@ test("errores de ownership, snapshot y recovery se propagan sin serialización n
   const instance = registry(); const failure = Object.assign(new Error("recovery-required"), { reasonCode: "RECOVERY_REQUIRED" });
   let projections = 0;
   const reject = async () => { throw failure; };
-  registerProgressionCommands(instance, { spendAttribute: reject, spendCompetence: reject });
+  registerProgressionCommands(instance, {
+    spendAttribute: reject, spendCompetence: reject, grantAwakening: reject
+  });
   registerActionCommands(instance, { createReady: reject, executeDamage: reject, serialize: () => projections++, getPending: () => projections++ });
   for (const command of instance.handlers.keys()) await assert.rejects(instance.dispatch(envelope(command), context), error => error === failure);
   assert.equal(projections, 0);
@@ -100,14 +105,16 @@ test("registros son idempotentes y no sustituyen handlers instalados", () => {
   const instance = registry(); registerActionCommands(instance); registerProgressionCommands(instance);
   const definitions = [...instance.handlers.values()];
   registerActionCommands(instance); registerProgressionCommands(instance);
-  assert.equal(instance.handlers.size, 4); assert.deepEqual([...instance.handlers.values()], definitions);
+  assert.equal(instance.handlers.size, 6); assert.deepEqual([...instance.handlers.values()], definitions);
 });
 
-test("nombres de transporte existentes convergen en los cuatro commands y rechazan prototype keys", async () => {
+test("nombres de transporte existentes convergen en los commands y rechazan prototype keys", async () => {
   assert.equal(getProgressionCommandForSocketAction("mtrolSpendPendingAttribute"), "progression.spend-attribute");
   assert.equal(getProgressionCommandForSocketAction("mtrolSpendPendingCompetence"), "progression.spend-competence");
+  assert.equal(getProgressionCommandForSocketAction("mtrolGrantAwakening"), "progression.awakening-grant");
   assert.equal(getActionCommandForSocketAction("mtrolCreateReadyDamageAction"), "action.ready-damage-create");
   assert.equal(getActionCommandForSocketAction("mtrolExecuteResolvedDamage"), "action.resolved-damage-execute");
+  assert.equal(getActionCommandForSocketAction("mtrolCancelResolvedDamage"), "action.resolved-damage-cancel");
   for (const name of ["constructor", "toString", "__proto__", "other"]) {
     assert.equal(getActionCommandForSocketAction(name), null); assert.equal(getProgressionCommandForSocketAction(name), null);
   }
@@ -119,7 +126,8 @@ test("adapters mantienen payload, identidad autenticada y requestId legacy como 
   const calls = [];
   registerProgressionCommands(commandRegistry, {
     spendAttribute: async (payload, options) => { calls.push({ payload, options }); return { ok: true }; },
-    spendCompetence: async () => ({ ok: true })
+    spendCompetence: async () => ({ ok: true }),
+    grantAwakening: async () => ({ ok: true })
   });
   registerActionCommands(commandRegistry, {
     createReady: async (payload, options) => { calls.push({ payload, options }); return payload; },

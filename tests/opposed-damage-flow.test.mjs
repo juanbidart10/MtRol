@@ -263,6 +263,8 @@ function createItem({
   categoria,
   tipoObjeto = "general",
   actionType = null,
+  formula = "1d20",
+  resolutionResult = null,
   defenseType = null,
   effect = null,
   requiresOpposition = false,
@@ -286,6 +288,8 @@ function createItem({
       tipoObjeto,
       ...(categoria ? { categoria } : {}),
       actionType,
+      formula,
+      ...(resolutionResult ? { resolutionResult } : {}),
       defenseType,
       effect,
       requiresOpposition,
@@ -293,6 +297,7 @@ function createItem({
       effectDuration: 1,
       effectIntensity: 0,
       danio,
+      damageFormula: danio,
       ejecutaDanio,
       usaDanioLocalizado,
       ...(damageResolution ? { damageResolution } : {}),
@@ -428,6 +433,7 @@ function createAttackSkill(id, {
     name: `Ataque ${id}`,
     categoria,
     actionType: "attack",
+    resolutionResult: "damage",
     damageType: "physical",
     effect: "damage",
     requiresOpposition: true,
@@ -444,6 +450,7 @@ function createDefenseSkill(id) {
     id,
     name: `Defensa ${id}`,
     actionType: "defense",
+    resolutionResult: "movement",
     defenseType: "dodge",
     effect: "none"
   });
@@ -660,7 +667,7 @@ test("Esquiva ganadora crea un permiso reactivo independiente de un cuadro", asy
   await defend({
     pending: context.pending,
     defender: context.defender,
-    total: 9
+    total: 12
   });
   assert.deepEqual(actionModule.getReactionMovementForActor(context.defender), {
     pendingActionId: context.pending.id,
@@ -746,7 +753,7 @@ test("acción ofensiva sin dominio mecánico se rechaza sin fallback", async () 
   );
 });
 
-test("Contraataque ganador ejecuta su daño existente contra el atacante", async () => {
+test("Contraataque ganador crea un derecho manual contra el atacante", async () => {
   const counterattack = createItem({
     id: "counterattack-response",
     name: "Contraataque",
@@ -769,8 +776,6 @@ test("Contraataque ganador ejecuta su daño existente contra el atacante", async
     attackerTotal: 4,
     defender
   });
-  queueRoll("1d6", 6);
-  queueRoll("1d10", 5);
   const result = await defend({
     pending: context.pending,
     defender,
@@ -778,8 +783,17 @@ test("Contraataque ganador ejecuta su daño existente contra el atacante", async
     defenseSkill: counterattack
   });
   assert.equal(result.resolutionResult.success, false);
+  assert.equal(context.attacker.system.vitales.hp.value, 20);
+  assert.equal(context.pending.damage.sourceActorUuid, defender.uuid);
+  assert.equal(context.pending.damage.targetActorUuid, context.attacker.uuid);
+  assert.equal(context.pending.damage.status, "available");
+  queueRoll("1d6", 6);
+  queueRoll("1d10", 5);
+  await damageModule.executeResolvedDamageAuthoritative(context.pending.id, {
+    requestingUserId: defenderOwner.id
+  });
   assert.equal(context.attacker.system.vitales.hp.value, 14);
-  assert.equal(context.pending.responseDamage.status, "rolled");
+  assert.equal(context.pending.damage.status, "rolled");
 });
 
 test("un ataque sin objetivo no crea una accion pendiente", async () => {
@@ -853,7 +867,7 @@ test("dos combates simultaneos conservan su pendingActionId", async () => {
   assert.equal(first.pending.defenderRoll.total, 5);
 });
 
-test("ejecutaDanio false invalida metadatos cliente y nunca muestra boton", async () => {
+test("resolutionResult damage prevalece sobre el flag legacy ejecutaDanio", async () => {
   const context = await createPending({
     suffix: "disabled-damage",
     attackerTotal: 9,
@@ -868,9 +882,9 @@ test("ejecutaDanio false invalida metadatos cliente y nunca muestra boton", asyn
 
   const message = resolutionMessageFor(context.pending.id);
 
-  assert.equal(context.pending.damage.available, false);
-  assert.equal(context.pending.damage.status, "unavailable");
-  assert.doesNotMatch(message.content, /mtrol-resolved-damage/);
+  assert.equal(context.pending.damage.available, true);
+  assert.equal(context.pending.damage.status, "available");
+  assert.match(message.content, /mtrol-resolved-damage/);
 });
 
 test("doble ejecucion aplica dano sin armadura una sola vez", async () => {
@@ -1025,7 +1039,7 @@ test("perder oposición no cobra el costo adicional configurado", async () => {
   await defend({
     pending: context.pending,
     defender: context.defender,
-    total: 8
+    total: 12
   });
 
   assert.equal(context.attacker.system.vitales.mp.value, 9);
@@ -1033,7 +1047,7 @@ test("perder oposición no cobra el costo adicional configurado", async () => {
   assert.equal(context.defender.system.vitales.hp.value, 20);
 });
 
-test("modo automático ejecuta una sola vez al ganar oposición", async () => {
+test("una configuración legacy automática migra a lanzamiento manual", async () => {
   const context = await createPending({
     suffix: "configured-automatic",
     attackerTotal: 9,
@@ -1044,22 +1058,26 @@ test("modo automático ejecuta una sola vez al ganar oposición", async () => {
 
   context.attacker.system.vitales.mp.value = 9;
   context.attacker.system.vitales.mp.max = 10;
-  queueRoll("1d6", 5);
-  queueRoll("1d10", 5);
-
   await defend({
     pending: context.pending,
     defender: context.defender,
     total: 4
   });
 
-  assert.equal(context.pending.damage.status, "rolled");
+  assert.equal(context.pending.damage.status, "available");
+  assert.equal(context.attacker.system.vitales.mp.value, 9);
+  assert.equal(context.defender.system.vitales.hp.value, 20);
+  assert.match(resolutionMessageFor(context.pending.id).content, /mtrol-resolved-damage/);
+  queueRoll("1d6", 5);
+  queueRoll("1d10", 5);
+  await damageModule.executeResolvedDamageAuthoritative(context.pending.id, {
+    requestingUserId: attackerOwner.id
+  });
   assert.equal(context.attacker.system.vitales.mp.value, 8);
   assert.equal(context.defender.system.vitales.hp.value, 15);
-  assert.doesNotMatch(resolutionMessageFor(context.pending.id).content, /mtrol-resolved-damage/);
 });
 
-test("daño inmediato habilitado reutiliza pendingActions y cobra recién al ejecutar", async () => {
+test("daño inmediato queda rechazado antes de crear una resolución", async () => {
   const skill = createItem({
     id: "immediate-enabled-skill",
     name: "Habilidad configurada",
@@ -1082,7 +1100,7 @@ test("daño inmediato habilitado reutiliza pendingActions y cobra recién al eje
     ownerIds: [defenderOwner.id]
   });
 
-  const pending = await actionModule.createReadyDamageActionFromCompetencia({
+  await assert.rejects(actionModule.createReadyDamageActionFromCompetencia({
     actor: attacker,
     item: skill,
     targetToken: {
@@ -1096,22 +1114,49 @@ test("daño inmediato habilitado reutiliza pendingActions y cobra recién al eje
       formula: "1d6",
       costoTotal: 1
     }
-  });
-
-  assert.equal(pending.status, "resolved");
-  assert.equal(pending.damage.status, "available");
+  }), /daño directo está deshabilitado/i);
   assert.equal(attacker.system.vitales.mp.value, 9);
-  assert.match(resolutionMessageFor(pending.id).content, /mtrol-resolved-damage/);
+  assert.equal(defender.system.vitales.hp.value, 20);
+});
 
-  queueRoll("1d6", 4);
-  queueRoll("1d10", 5);
-  await damageModule.executeResolvedDamageAuthoritative(
-    pending.id,
-    { requestingUserId: attackerOwner.id }
+test("Cancelar Daño es sólo GM, no tira dados y deja auditoría", async () => {
+  const context = await createPending({ suffix: "gm-cancel", attackerTotal: 9 });
+  await defend({ pending: context.pending, defender: context.defender, total: 4 });
+  await assert.rejects(
+    damageModule.cancelResolvedDamageAuthoritative(context.pending.id, {
+      requestingUserId: attackerOwner.id
+    }),
+    /Sólo un GM/
   );
+  await damageModule.cancelResolvedDamageAuthoritative(context.pending.id, {
+    requestingUserId: gmUser.id
+  });
+  assert.equal(context.pending.damage.status, "cancelled");
+  assert.equal(context.pending.damage.cancelledByUserId, gmUser.id);
+  assert.equal(context.defender.system.vitales.hp.value, 20);
+  assert.match(resolutionMessageFor(context.pending.id).content, /Daño cancelado por GM/);
+});
 
-  assert.equal(attacker.system.vitales.mp.value, 8);
-  assert.equal(defender.system.vitales.hp.value, 16);
+test("pifia de damageFormula consume el derecho sin tocar armadura ni HP", async () => {
+  const armor = createArmor("fumble-armor", 20);
+  const defender = createActor({
+    id: "fumble-target",
+    ownerIds: [defenderOwner.id],
+    items: [createDefenseSkill("fumble-defense"), armor],
+    equipment: { extra: armor.id }
+  });
+  const context = await createPending({ suffix: "damage-fumble", attackerTotal: 9, defender });
+  await defend({ pending: context.pending, defender, total: 4 });
+  queueRoll("1d6", 1);
+  queueRoll("1d10", 10);
+  const result = await damageModule.executeResolvedDamageAuthoritative(context.pending.id, {
+    requestingUserId: attackerOwner.id
+  });
+  assert.equal(result.fumble, true);
+  assert.equal(result.totalFinalDanio, 0);
+  assert.equal(context.pending.damage.status, "rolled");
+  assert.equal(armor.system.defensa, 20);
+  assert.equal(defender.system.vitales.hp.value, 20);
 });
 
 test("dano localizado consume armadura y transmite sobrante a HP", async () => {
@@ -1196,7 +1241,7 @@ test("pasivas modifican un único total antes de localización, armadura y HP", 
   assert.equal(defender.system.vitales.hp.value, 106);
 });
 
-test("un fallo de ejecucion queda terminal y no permite reintentar dano", async () => {
+test("un fallo de ejecución conserva el derecho y permite reintentar", async () => {
   const context = await createPending({
     suffix: "failed-damage",
     attackerTotal: 9,
@@ -1222,7 +1267,7 @@ test("un fallo de ejecucion queda terminal y no permite reintentar dano", async 
     /Formula de dano invalida/
   );
 
-  assert.equal(context.pending.damage.status, "failed");
+  assert.equal(context.pending.damage.status, "available");
   assert.equal(context.attacker.system.vitales.mp.value, 9, "el costo adicional se reembolsa si el daño no puede ejecutarse");
   assert.equal(context.defender.system.vitales.hp.value, 20);
   assert.match(
@@ -1230,15 +1275,13 @@ test("un fallo de ejecucion queda terminal y no permite reintentar dano", async 
     /No se pudo completar el daño/
   );
 
-  await assert.rejects(
-    damageModule.executeResolvedDamageAuthoritative(
-      context.pending.id,
-      { requestingUserId: attackerOwner.id }
-    ),
-    /fallo o ya fue ejecutado/
-  );
-
-  assert.equal(context.defender.system.vitales.hp.value, 20);
+  context.attackSkill.system.damageFormula = "1d6";
+  queueRoll("1d6", 5);
+  queueRoll("1d10", 5);
+  await damageModule.executeResolvedDamageAuthoritative(context.pending.id, {
+    requestingUserId: attackerOwner.id
+  });
+  assert.equal(context.defender.system.vitales.hp.value, 15);
 });
 
 test("Owner atacante inicia por socket y el GM ejecuta el dano autoritativo", async () => {
@@ -1342,7 +1385,7 @@ test("registrar y rerenderizar chat no duplica handlers", () => {
   renderHandlers[0](null, html);
   renderHandlers[0](null, html);
 
-  assert.equal(activeHandlers.size, 1);
+  assert.equal(activeHandlers.size, 2);
   assert.equal(activeHandlers.has("click.mtrolResolvedDamage"), true);
 });
 

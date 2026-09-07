@@ -77,7 +77,10 @@ export function isAttributeFollowUpAttack(item) {
 }
 
 export function resolveAttributeMovementFollowUp(actor) {
-  return getAttributeMovementFollowUpForClass(actor?.system?.identidad?.classId);
+  return getAttributeMovementFollowUpForClass(
+    actor?.system?.identidad?.classId,
+    actor?.system?.identidad?.classDomain
+  );
 }
 
 export function evaluateAttributeFollowUpTarget({ actor, targetToken, context = {}, state = {} } = {}) {

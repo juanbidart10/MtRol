@@ -24,6 +24,10 @@ import {
 import {
   getActorResourceTransitionUpdate
 } from "./class-resource-service.js";
+import {
+  resolveCompetencyProgressionGain,
+  resolveProgressionGain
+} from "../effects/progression-policy.js";
 
 function createTransactionId() {
   return foundry.utils.randomID?.() ?? crypto.randomUUID();
@@ -79,6 +83,14 @@ function readFiniteNumber(value, label) {
   return number;
 }
 
+function readPolicyIntegerGain(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    throw new Error(`${label} produjo una ganancia incompatible con el schema entero.`);
+  }
+  return number;
+}
+
 function getMigrationStableFields(actor) {
   const progression = actor.system?.progression ?? {};
   const pending = actor.system?.pendingAdvancement ?? {};
@@ -92,6 +104,8 @@ function getMigrationStableFields(actor) {
     "system.progression.dmApproval": progression.dmApproval === true,
     "system.pendingAdvancement.attributePoints": readNonNegativeInteger(pending.attributePoints),
     "system.pendingAdvancement.competencePoints": readNonNegativeInteger(pending.competencePoints),
+    "system.awakening.grants": structuredClone(actor.system?.awakening?.grants ?? []),
+    "system.awakening.selections": structuredClone(actor.system?.awakening?.selections ?? []),
     "system.orbs": structuredClone(actor.system?.orbs ?? []),
     "system.alignment.type": alignment.type ?? null,
     "system.alignment.unlocked": alignment.unlocked === true
@@ -145,13 +159,21 @@ export async function levelUpActorAuthoritative(payload = {}, {
     const competencePoints = readNonNegativeInteger(
       canonicalActor.system?.pendingAdvancement?.competencePoints
     );
+    const attributePointGain = readPolicyIntegerGain(
+      resolveProgressionGain(canonicalActor, 1).value,
+      "ProgressionPolicy"
+    );
+    const competencePointGain = readPolicyIntegerGain(
+      resolveCompetencyProgressionGain(canonicalActor, 1).value,
+      "CompetencyProgressionPolicy"
+    );
     const changes = {
       ...getMigrationStableFields(canonicalActor),
       "system.recursos.nivel": currentLevel + 1,
       "system.recursos.exp": evaluation.current.exp - requiredExp,
       "system.recursos.mvp": evaluation.current.mvp - requiredMvp,
-      "system.pendingAdvancement.attributePoints": attributePoints + 1,
-      "system.pendingAdvancement.competencePoints": competencePoints + 1
+      "system.pendingAdvancement.attributePoints": attributePoints + attributePointGain,
+      "system.pendingAdvancement.competencePoints": competencePoints + competencePointGain
     };
 
     const resourceTransition = getActorResourceTransitionUpdate(canonicalActor, {
@@ -180,8 +202,10 @@ export async function levelUpActorAuthoritative(payload = {}, {
       expAfter: changes["system.recursos.exp"],
       mvpSpent: requiredMvp,
       mvpAfter: changes["system.recursos.mvp"],
-      attributePointsAfter: attributePoints + 1,
-      competencePointsAfter: competencePoints + 1
+      attributePointsAfter: attributePoints + attributePointGain,
+      competencePointsAfter: competencePoints + competencePointGain,
+      attributePointGain,
+      competencePointGain
     };
   });
 }

@@ -60,15 +60,6 @@ export async function crearCombatCard({
         : []
     );
 
-  const objetivoMuerto =
-    Number(resultadoDanio.hpNuevo ?? 1) <= 0;
-
-  const aplicacionManual =
-    resultadoDanio.aplicacion === "manual_sin_gm";
-
-  const armaduraDestruida =
-    Boolean(resultadoDanio.itemDestruido);
-
   const targetName =
     targetActor?.name ?? "Sin objetivo";
 
@@ -76,9 +67,6 @@ export async function crearCombatCard({
     targetActor
       ? `<strong>${targetName}</strong>`
       : "<strong>Sin objetivo</strong>";
-
-  const itemName =
-    resultadoDanio.item ?? "Sin armadura";
 
   const detallesCritico =
     Array.isArray(evaluacionDanio?.detalles)
@@ -99,6 +87,8 @@ export async function crearCombatCard({
     resultadoDanio.danioOriginal ??
     damageRoll.total ??
     0;
+  const weaponBreakdown = cardContext.breakdown?.weapons?.items ?? [];
+  const modifierBreakdown = cardContext.breakdown?.modifiers ?? [];
 
   await mtrolCreateRollMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
@@ -194,31 +184,17 @@ export async function crearCombatCard({
           </p>
 
           <p>
-            <span class="mtrol-combat-label">Da&ntilde;o aplicado</span>
-            <strong>${resultadoDanio.danioOriginal ?? 0}</strong>
+            <span class="mtrol-combat-label">Da&ntilde;o inicial</span>
+            <strong>${finalDanio}</strong>
           </p>
 
-          <p>
-            <span class="mtrol-combat-label">Armadura</span>
-            <strong>${itemName}</strong>
-          </p>
+          ${weaponBreakdown.length ? `<div class="mtrol-details"><strong>@armas:</strong><br>${weaponBreakdown
+            .map(entry => `${foundry.utils.escapeHTML(entry.name)} +${entry.damage}`)
+            .join("<br>")}<br>Total @armas: <strong>${cardContext.breakdown.weapons.total}</strong></div>` : ""}
 
-          <p>
-            <span class="mtrol-combat-label">Defensa</span>
-            <strong>${resultadoDanio.defensaInicial ?? 0}</strong>
-            &rarr;
-            <strong>${resultadoDanio.defensaFinal ?? 0}</strong>
-          </p>
-
-          <p>
-            <span class="mtrol-combat-label">Da&ntilde;o absorbido</span>
-            <strong>${resultadoDanio.danioAbsorbido ?? 0}</strong>
-          </p>
-
-          <p>
-            <span class="mtrol-combat-label">HP perdido</span>
-            <strong>${resultadoDanio.hpPerdido ?? 0}</strong>
-          </p>
+          ${modifierBreakdown.length ? `<div class="mtrol-details"><strong>Modifiers:</strong><br>${modifierBreakdown
+            .map(entry => `${foundry.utils.escapeHTML(entry.label)} ${entry.value >= 0 ? "+" : ""}${entry.value}`)
+            .join("<br>")}</div>` : ""}
 
           <hr>
 
@@ -227,35 +203,6 @@ export async function crearCombatCard({
             <strong>${costoTotal ?? 0}</strong>
           </p>
 
-          ${
-            aplicacionManual
-              ? `
-                <div class="mtrol-combat-alert">
-                  No hay GM conectado para aplicar automáticamente el daño. Aplicar manualmente.
-                </div>
-              `
-              : ""
-          }
-
-          ${
-            armaduraDestruida
-              ? `
-                <div class="mtrol-combat-alert destroy">
-                  ${itemName} fue destruido
-                </div>
-              `
-              : ""
-          }
-
-          ${
-            objetivoMuerto && targetActor
-              ? `
-                <div class="mtrol-combat-alert death">
-                  ${targetName} ha muerto
-                </div>
-              `
-              : ""
-          }
         </div>
       </div>
     `

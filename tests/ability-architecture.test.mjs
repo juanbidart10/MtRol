@@ -14,8 +14,8 @@ test("la configuración declarativa de daño conserva defaults legacy contextual
     }),
     {
       executesDamage: true,
-      resolution: "immediate",
-      mode: "automatic",
+      resolution: "onOppositionWin",
+      mode: "enabled",
       costType: "none",
       additionalMpCost: 0
     }
@@ -50,7 +50,7 @@ test("la configuración canónica de Explosión se resuelve sin depender del nom
   assert.equal(configured.additionalMpCost, 1);
 });
 
-test("una resolución por oposición imposible se autocorrige a inmediato", () => {
+test("una resolución de daño conserva oposición y lanzamiento manual", () => {
   const configured = normalizeAbilityDamageConfig({
     requiresOpposition: false,
     ejecutaDanio: true,
@@ -59,7 +59,7 @@ test("una resolución por oposición imposible se autocorrige a inmediato", () =
     damageCostType: "basic"
   });
 
-  assert.equal(configured.resolution, "immediate");
+  assert.equal(configured.resolution, "onOppositionWin");
   assert.equal(configured.mode, "enabled");
   assert.equal(configured.additionalMpCost, 1);
 });

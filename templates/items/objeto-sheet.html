@@ -116,7 +116,7 @@
                name="system.defensa"
                value="{{system.defensa}}"
                min="0"
-               max="20"
+               max="30"
                {{#unless esGM}}disabled{{/unless}} />
       </div>
 
@@ -127,16 +127,19 @@
                name="system.defensaBase"
                value="{{system.defensaBase}}"
                min="0"
-               max="20"
+               max="30"
                {{#unless esGM}}disabled{{/unless}} />
       </div>
 
       <div class="objeto-field">
         <label>Daño</label>
 
-        <input type="text"
+        <input type="number"
                name="system.danio"
                value="{{system.danio}}"
+               min="0"
+               max="30"
+               step="1"
                {{#unless esGM}}disabled{{/unless}} />
       </div>
 

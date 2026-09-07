@@ -41,7 +41,7 @@ export function findPendingActionMessage(pendingActionId, presentationType) {
 
 function canShowDamageButton(pendingAction, result) {
   return pendingAction.status === "resolved" &&
-    result?.success === true &&
+    pendingAction.winnerResolutionResult === "damage" &&
     pendingAction.damage?.available === true &&
     pendingAction.damage?.rolled !== true &&
     pendingAction.damage?.status === "available" &&
@@ -81,11 +81,14 @@ export function buildResolutionContent(pendingAction, result, rollsHTML = "") {
   const damageExecutedMessage = pendingAction.damage?.rolled === true
     ? `<p>Daño ejecutado: <strong>${escapeHTML(pendingAction.damage?.total ?? "-")}</strong>.</p>`
     : "";
-  const damageErrorMessage = pendingAction.damage?.error && damageStatus === "failed"
+  const damageErrorMessage = pendingAction.damage?.error && damageStatus === "available"
     ? `<p class="mtrol-chat-warning">No se pudo completar el daño: ${escapeHTML(pendingAction.damage.error)}</p>`
     : "";
   const damageButton = canShowDamageButton(pendingAction, result)
-    ? `<button type="button" data-action="mtrol-resolved-damage" data-pending-action-id="${escapeHTML(pendingAction.id)}">TIRAR DAÑO</button>`
+    ? `<button type="button" data-action="mtrol-resolved-damage" data-pending-action-id="${escapeHTML(pendingAction.id)}">LANZAR DAÑO</button>`
+    : "";
+  const cancelDamageButton = canShowDamageButton(pendingAction, result)
+    ? `<button type="button" data-action="mtrol-cancel-damage" data-pending-action-id="${escapeHTML(pendingAction.id)}">CANCELAR DAÑO</button>`
     : "";
   const reactionMovementButton = canShowReactionMovementButton(pendingAction)
     ? `<p>Esquiva exitosa: el objetivo puede mover 1 cuadro en cualquier dirección o renunciar.</p>
@@ -109,8 +112,13 @@ export function buildResolutionContent(pendingAction, result, rollsHTML = "") {
        <p>Defensa restante de ${escapeHTML(shieldWear.shieldName)}: <strong>${escapeHTML(shieldWear.remainingDefense)}</strong>.</p>
        ${shieldWear.destroyed ? `<p><strong>${escapeHTML(shieldWear.shieldName)}</strong> se rompe y queda destruido.</p>` : ""}`
     : "";
-  const outcomeMessage = result.success
-    ? `${escapeHTML(pendingAction.sourceActorName ?? pendingAction.sourceItemName)} supera la defensa de ${escapeHTML(targetName)}. Puede ejecutar daño.`
+  const damageWinnerName = pendingAction.damage?.sourceActorUuid === pendingAction.targetActorUuid
+    ? targetName
+    : pendingAction.sourceActorName ?? pendingAction.sourceItemName;
+  const outcomeMessage = pendingAction.winnerResolutionResult === "damage"
+    ? `${escapeHTML(damageWinnerName)} ganó la confrontación y obtuvo derecho a lanzar daño.`
+    : result.success
+    ? `${escapeHTML(pendingAction.sourceActorName ?? pendingAction.sourceItemName)} gana con consecuencia ${escapeHTML(pendingAction.winnerResolutionResult ?? "utility")}.`
     : shieldWear?.applied
       ? `${escapeHTML(targetName)} bloquea correctamente con ${escapeHTML(shieldWear.shieldName)}.`
       : `${escapeHTML(targetName)} defiende correctamente.`;
@@ -121,7 +129,8 @@ export function buildResolutionContent(pendingAction, result, rollsHTML = "") {
     ${rollsHTML}${tieMessages}<p>${outcomeMessage}</p>${shieldWearMessages}
     <p>Resultado:<br><strong>${escapeHTML(getResolutionOutcomeLabel(result))}</strong>.</p>
     <p>${escapeHTML(getResolutionDescription(result))}</p>
-    ${damageExecutedMessage}${damageErrorMessage}${damageButton}${reactionMovementButton}</div>`;
+    ${pendingAction.damage?.status === "cancelled" ? "<p><strong>Daño cancelado por GM.</strong></p>" : ""}
+    ${damageExecutedMessage}${damageErrorMessage}${damageButton}${cancelDamageButton}${reactionMovementButton}</div>`;
 }
 
 function appendRestoredRollEntries(entries, serializedRolls, label) {

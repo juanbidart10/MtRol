@@ -86,7 +86,11 @@ export function preventReservedTradeItemMutation(item, changes = {}, options = {
   if (isTradeMutation(options)) return true;
   const actorUuid = item?.parent?.uuid ?? item?.actor?.uuid ?? null;
   if (!actorUuid) return true;
-  const reserved = getTradeReservedQuantity(actorUuid, item);
+  const itemReference = {
+    itemUuid: item?.uuid ?? null,
+    itemId: item?.id ?? null
+  };
+  const reserved = getTradeReservedQuantity(actorUuid, itemReference);
   if (reserved <= 0) return true;
   const equipped = changes["system.equipado"] ?? changes.system?.equipado;
   if (equipped === true) return false;
@@ -98,7 +102,11 @@ export function preventReservedTradeItemMutation(item, changes = {}, options = {
 export function preventReservedTradeItemDeletion(item, options = {}) {
   if (isTradeMutation(options)) return true;
   const actorUuid = item?.parent?.uuid ?? item?.actor?.uuid ?? null;
-  return !actorUuid || getTradeReservedQuantity(actorUuid, item) <= 0;
+  const itemReference = {
+    itemUuid: item?.uuid ?? null,
+    itemId: item?.id ?? null
+  };
+  return !actorUuid || getTradeReservedQuantity(actorUuid, itemReference) <= 0;
 }
 
 export function registerTradeLifecycleHooks() {

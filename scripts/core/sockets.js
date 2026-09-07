@@ -50,6 +50,7 @@ import { logger } from "../utils/logger.js";
 import { dispatchOrbSocketCommand, getOrbCommandForSocketAction } from "../runtime/orb-commands.js";
 import { authorityService } from "./authority-service.js";
 import { integrationObservability } from "./integration-observability.js";
+import { NARRATIVE_CAPABILITY_SOCKET_ACTION, dispatchNarrativeCapabilityCommand } from "../runtime/narrative-capability-commands.js";
 
 let socketsRegistered = false;
 
@@ -142,6 +143,11 @@ export function registerMtrolSockets() {
       return;
     }
     const request = { ...data, requestingUserId: authority.requestingUserId };
+
+    if (request.action === NARRATIVE_CAPABILITY_SOCKET_ACTION) {
+      await respondWithResult(request, () => dispatchNarrativeCapabilityCommand(request));
+      return;
+    }
 
     if (getOppositionCommandForSocketAction(request.action)) {
       await respondWithResult(request, async () => {

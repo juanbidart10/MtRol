@@ -168,3 +168,46 @@ export function mtrolObtenerDanioManos(actor) {
 
   return resultado;
 }
+
+export function mtrolResolverDanioArmas(actor) {
+  const items = [];
+  const seen = new Set();
+  let total = 0;
+
+  for (const slot of ["manoDer", "manoIzq"]) {
+    const item = getEquipmentItemForSlot(actor, slot);
+    if (!item) continue;
+    if (String(item.system?.tipoObjeto ?? "").trim().toLowerCase() !== "arma") continue;
+    const id = item.uuid ?? item.id ?? item._id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    const raw = item.system?.danio;
+    const value = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+    if (
+      raw === null || raw === undefined || raw === "" ||
+      !Number.isInteger(value) || value < 0 || value > 30
+    ) {
+      const error = new Error(
+        `El arma equipada ${item.name ?? id} tiene daño inválido; debe ser un entero entre 0 y 30.`
+      );
+      error.reasonCode = "EQUIPPED_WEAPON_DAMAGE_INVALID";
+      throw error;
+    }
+    total += value;
+    items.push({
+      id,
+      name: item.name ?? "Arma equipada",
+      damage: value,
+      slots: [slot]
+    });
+  }
+
+  for (const entry of items) {
+    entry.slots = Object.freeze(["manoDer", "manoIzq"].filter(slot =>
+      (getEquipmentItemForSlot(actor, slot)?.uuid ?? getEquipmentItemForSlot(actor, slot)?.id) === entry.id
+    ));
+    Object.freeze(entry);
+  }
+  return Object.freeze({ total, items: Object.freeze(items) });
+}

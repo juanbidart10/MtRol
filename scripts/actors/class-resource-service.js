@@ -8,14 +8,23 @@ import {
 } from "./class-registry.js";
 
 import {
+  prepareClassInitialCompetencyGrant
+} from "./class-initial-competency-service.js";
+
+import { logger } from "../utils/logger.js";
+
+import {
   runActorResourceTransaction
 } from "./actor-resource-service.js";
 import { preUpdateActorDispatcher } from "../core/hook-dispatcher.js";
+import { getAttributeCap } from "../progression/progression-caps.js";
 
-const INTERNAL_UPDATE_OPTION = "mtrolClassResourceTransition";
+export const CLASS_RESOURCE_INTERNAL_UPDATE_OPTION = "mtrolClassResourceTransition";
 
 const CONFIG_CHANGE_KEYS = new Set([
   "classId",
+  "classDomain",
+  "competencySelections",
   "hpModifier",
   "hpModifierLabel",
   "mpModifier",
@@ -31,6 +40,7 @@ const PERMANENT_CHANGE_KEYS = new Set([
 
 const CONFIG_PATHS = Object.freeze([
   "system.identidad.classId",
+  "system.identidad.classDomain",
   "system.resourceModifiers",
   "system.resourceModifierEntries"
 ]);
@@ -149,6 +159,7 @@ export function extractActorClassResourceState(actor) {
   const hasEntries = entries.length > 0;
   return {
     classId: actor?.system?.identidad?.classId,
+    classDomain: actor?.system?.identidad?.classDomain,
     level: actor?.system?.recursos?.nivel,
     resistance: actor?.system?.atributos?.resistencia,
     intelligence: actor?.system?.atributos?.inteligencia,
@@ -173,6 +184,7 @@ function buildIntendedState(oldState, changes = {}) {
   return {
     ...oldState,
     ...(Object.hasOwn(changes, "classId") ? { classId: changes.classId } : {}),
+    ...(Object.hasOwn(changes, "classDomain") ? { classDomain: changes.classDomain } : {}),
     ...(Object.hasOwn(changes, "level")
       ? { level: finiteNumber(changes.level, "Nivel") }
       : {}),
@@ -251,6 +263,16 @@ export async function updateActorPermanentResourcesAuthoritative(payload = {}, {
     const current = extractActorClassResourceState(canonicalActor);
     assertExpectedState(current, payload.expected);
     const intended = buildIntendedState(current, payload.changes);
+    const attributeCap = getAttributeCap(canonicalActor);
+    for (const [key, currentKey, label] of [
+      ["resistance", "resistance", "Resistencia"],
+      ["intelligence", "intelligence", "Inteligencia"]
+    ]) {
+      if (!Object.hasOwn(payload.changes, key)) continue;
+      if (intended[key] > attributeCap && intended[key] > current[currentKey]) {
+        throw new Error(`${label} excede el cap efectivo ${attributeCap}.`);
+      }
+    }
     const { transition, changes: vitalChanges } =
       getActorResourceTransitionUpdate(canonicalActor, payload.changes);
     const update = {};
@@ -268,7 +290,7 @@ export async function updateActorPermanentResourcesAuthoritative(payload = {}, {
 
     await beforeWrite();
 
-    await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
+    await canonicalActor.update(update, { [CLASS_RESOURCE_INTERNAL_UPDATE_OPTION]: true });
     return { authorized: true, transition };
   });
 }
@@ -303,6 +325,26 @@ export async function updateActorResourceConfigurationAuthoritative(payload = {}
       throw new Error("La Clase solicitada no existe.");
     }
 
+    const changesClass = Object.hasOwn(payload.changes, "classId");
+    if (!changesClass && (
+      Object.hasOwn(payload.changes, "classDomain") ||
+      Object.hasOwn(payload.changes, "competencySelections")
+    )) {
+      throw new Error("Domain y selección de Competencias requieren una Clase explícita.");
+    }
+
+    const grantPlan = changesClass
+      ? prepareClassInitialCompetencyGrant(canonicalActor, {
+          classId: payload.changes.classId,
+          classDomain: payload.changes.classDomain,
+          competencySelections: payload.changes.competencySelections
+        })
+      : null;
+
+    const intendedChanges = grantPlan
+      ? { ...payload.changes, classDomain: grantPlan.application.domain }
+      : payload.changes;
+
     const update = {};
     let mechanicalChange = false;
 
@@ -310,7 +352,9 @@ export async function updateActorResourceConfigurationAuthoritative(payload = {}
       const definition = getClassDefinition(payload.changes.classId);
       update["system.identidad.classId"] = definition.id;
       update["system.identidad.clase"] = definition.label;
+      update["system.identidad.classDomain"] = grantPlan.application.domain;
       mechanicalChange = definition.id !== String(current.classId ?? "");
+      mechanicalChange ||= grantPlan.application.domain !== String(current.classDomain ?? "");
     }
     if (Object.hasOwn(payload.changes, "resourceModifierEntries")) {
       const entries = sanitizeResourceModifierEntries(payload.changes.resourceModifierEntries);
@@ -348,15 +392,72 @@ export async function updateActorResourceConfigurationAuthoritative(payload = {}
 
     let transition = null;
     if (mechanicalChange) {
-      const result = getActorResourceTransitionUpdate(canonicalActor, payload.changes);
+      const result = getActorResourceTransitionUpdate(canonicalActor, intendedChanges);
       transition = result.transition;
       Object.assign(update, result.changes);
     }
 
     await beforeWrite();
 
-    await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
-    return { authorized: true, transition };
+    let createdItems = [];
+    try {
+      if (grantPlan?.createData.length) {
+        if (typeof canonicalActor.createEmbeddedDocuments !== "function") {
+          throw new Error("El Actor no admite creación de Competencias embebidas.");
+        }
+        createdItems = await canonicalActor.createEmbeddedDocuments(
+          "Item",
+          grantPlan.createData,
+          { render: false }
+        );
+        const createdIds = new Set(
+          Array.from(createdItems ?? []).map(item => item?.system?.technicalId)
+        );
+        if (
+          createdItems.length !== grantPlan.createData.length ||
+          grantPlan.missing.some(entry => !createdIds.has(entry.technicalId))
+        ) {
+          throw new Error("No se pudieron verificar todas las Competencias iniciales creadas.");
+        }
+      }
+
+      await canonicalActor.update(update, { [CLASS_RESOURCE_INTERNAL_UPDATE_OPTION]: true });
+    } catch (error) {
+      const createdDocumentIds = Array.from(createdItems ?? [])
+        .map(item => item?.id ?? item?._id)
+        .filter(Boolean);
+      if (createdDocumentIds.length && typeof canonicalActor.deleteEmbeddedDocuments === "function") {
+        try {
+          await canonicalActor.deleteEmbeddedDocuments("Item", createdDocumentIds, { render: false });
+        } catch (rollbackError) {
+          error.message = `${error.message} Rollback de Competencias falló: ${rollbackError.message}`;
+        }
+      }
+      throw error;
+    }
+
+    if (grantPlan?.conflicts.length) {
+      logger.warn("CLASS", "Clase aplicada con duplicados históricos de Competencias", {
+        actorUuid: canonicalActor.uuid,
+        classId: grantPlan.application.definition.technicalId,
+        conflicts: grantPlan.conflicts
+      });
+    }
+
+    return {
+      authorized: true,
+      transition,
+      classGrant: grantPlan
+        ? {
+            classId: grantPlan.application.definition.technicalId,
+            classDomain: grantPlan.application.domain,
+            requested: grantPlan.application.competencies.length,
+            existing: grantPlan.existing.map(entry => entry.technicalId),
+            created: grantPlan.missing.map(entry => entry.technicalId),
+            conflicts: grantPlan.conflicts
+          }
+        : null
+    };
   });
 }
 
@@ -379,7 +480,7 @@ function deletePathAndChildren(changes, path) {
 }
 
 export function guardActorClassResourceUpdate(actor, changes, options = {}, userId) {
-  if (options[INTERNAL_UPDATE_OPTION] === true) return true;
+  if (options[CLASS_RESOURCE_INTERNAL_UPDATE_OPTION] === true) return true;
 
   const user = getUser(userId);
   const isGm = user?.isGM === true;
@@ -424,7 +525,21 @@ export async function updateActorFromSheetAuthoritative(actor, formData) {
   }, async (canonicalActor, { beforeWrite }) => {
     const current = extractActorClassResourceState(canonicalActor);
     const update = { ...formData };
+    const attributeCap = getAttributeCap(canonicalActor);
+    for (const attribute of [
+      "resistencia", "carisma", "fuerza", "inteligencia", "voluntad",
+      "aura", "percepcion", "destreza", "suerte"
+    ]) {
+      const path = `system.atributos.${attribute}`;
+      if (!Object.hasOwn(formData, path)) continue;
+      const submitted = finiteNumber(formData[path], attribute);
+      const existing = finiteNumber(canonicalActor.system?.atributos?.[attribute], attribute);
+      if (submitted > attributeCap && submitted > existing) {
+        throw new Error(`${attribute} excede el cap efectivo ${attributeCap}.`);
+      }
+    }
     deletePath(update, "system.identidad.classId");
+    deletePath(update, "system.identidad.classDomain");
     deletePathAndChildren(update, "system.resourceModifiers");
     deletePath(update, "system.vitales.hp.max");
     deletePath(update, "system.vitales.mp.max");
@@ -447,7 +562,7 @@ export async function updateActorFromSheetAuthoritative(actor, formData) {
 
     Object.assign(update, changes);
     await beforeWrite();
-    await canonicalActor.update(update, { [INTERNAL_UPDATE_OPTION]: true });
+    await canonicalActor.update(update, { [CLASS_RESOURCE_INTERNAL_UPDATE_OPTION]: true });
     return { authorized: true, transition };
   });
 }

@@ -27,6 +27,7 @@ test("presentación resuelta deriva controles sin mutar dominio", () => {
     sourceActorName: "A",
     targetActorName: "B",
     targetActorUuid: "Actor.b",
+    winnerResolutionResult: "damage",
     damage: { available: true, rolled: false, status: "available", mode: "enabled" },
     reactionMovement: { status: "available" }
   };

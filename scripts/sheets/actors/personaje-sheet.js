@@ -1,4 +1,7 @@
 import { mtrolRoll } from "../../rolls/mtrol-rolls.js";
+import { resolveNarrativeCapabilities } from "../../effects/narrative-capability-resolver.js";
+import { authorityService } from "../../core/authority-service.js";
+import { onDeclareNarrativeCapability } from "./personaje-narrative-controller.js";
 import { evaluateProgression } from "../../actors/progression-engine.js";
 
 import {
@@ -68,7 +71,6 @@ import {
 import {
   attachDefenseRollForActor,
   createPendingActionFromCompetencia,
-  createReadyDamageActionFromCompetencia,
   declareOppositionResponse,
   getActionDefinitionFromItem
 } from "../../actions/action-engine.js";
@@ -81,14 +83,11 @@ import {
 } from "../../actions/competence-mode-service.js";
 
 import {
-  executeConfiguredCompetenciaDamage
-} from "../../actions/action-damage-engine.js";
-
-import {
   buildCombatLibraryViewModel
 } from "../../combat/combat-library-view-model.js";
 
 import { getItemAbilityDamageConfig } from "../../actions/ability-config.js";
+import { adjudicateLevelDifferenceModifier } from "../../actions/gm-roll-modifier-service.js";
 
 import {
   calcularCargaActor
@@ -164,6 +163,21 @@ import {
   getClassDefinition,
   isValidClassId
 } from "../../actors/class-registry.js";
+
+import {
+  promptApprenticeClassConfiguration
+} from "../../ui/apprentice-class-dialog.js";
+
+import {
+  getAllRaceDefinitions,
+  getRaceDefinition
+} from "../../races/race-catalog.js";
+
+import {
+  applyRaceCreationBenefitsAuthoritative,
+  getRaceCreationGrantState,
+  updateActorRaceIdentityAuthoritative
+} from "../../actors/race-service.js";
 
 import {
   buildSpecialAbilitySlotView,
@@ -289,6 +303,15 @@ export class PersonajeSheet extends ActorSheet {
         dropSelector: null
       }],
 
+      scrollY: [
+        '.mtrol-sheet-body-v2 > .tab[data-tab="personaje"]',
+        '.mtrol-sheet-body-v2 > .tab[data-tab="combate"]',
+        '.mtrol-sheet-body-v2 > .tab[data-tab="competencias"]',
+        '.mtrol-sheet-body-v2 > .tab[data-tab="inventario"]',
+        '.mtrol-sheet-body-v2 > .tab[data-tab="progresion"]',
+        ".mtrol-inventory-list-region"
+      ],
+
       submitOnChange: true,
       closeOnSubmit: false
     });
@@ -302,6 +325,11 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     return super.render(force, renderOptions);
+  }
+
+  _restoreScrollPositions(html) {
+    if (!this._scrollPositions) return;
+    super._restoreScrollPositions(html);
   }
 
   getData(options) {
@@ -362,6 +390,28 @@ export class PersonajeSheet extends ActorSheet {
     );
     context.selectedClassInvalid = Boolean(persistedClassId && !selectedClass);
     context.canManageClass = game.user.isGM === true;
+    const persistedRaceId = String(this.actor.system?.identidad?.raceId ?? "");
+    const selectedRace = getRaceDefinition(persistedRaceId);
+    const raceCreationGrant = getRaceCreationGrantState(this.actor);
+    context.raceOptions = getAllRaceDefinitions().map(definition => ({
+      id: definition.technicalId,
+      label: definition.displayName,
+      selected: definition.technicalId === selectedRace?.technicalId
+    }));
+    context.selectedRaceId = selectedRace?.technicalId ?? "";
+    context.selectedRaceLabel = selectedRace?.displayName ?? (
+      persistedRaceId ? "Raza inválida" : "Sin raza seleccionada"
+    );
+    context.selectedRaceInvalid = Boolean(persistedRaceId && !selectedRace);
+    context.canManageRace = game.user.isGM === true;
+    context.raceCreationGrant = {
+      ...raceCreationGrant,
+      sourceLabel: getRaceDefinition(raceCreationGrant.sourceRaceId)?.displayName ?? raceCreationGrant.sourceRaceId,
+      canApply: game.user.isGM === true && Boolean(selectedRace) && !raceCreationGrant.applied
+    };
+    context.narrativeCapabilities = resolveNarrativeCapabilities(this.actor).capabilities;
+    context.canDeclareNarrativeCapability = authorityService.ownsActor(this.actor, game.user.id) &&
+      !this._mtrolNarrativeDeclarationPending;
     context.canManageResourceModifiers = game.user.isGM === true;
     context.resourceModifierEntries = getActorResourceModifierEntries(
       this.actor,
@@ -772,6 +822,10 @@ export class PersonajeSheet extends ActorSheet {
   async _updateObject(event, formData) {
     for (const key of Object.keys(formData)) {
       if (key === "system.identidad.classId") delete formData[key];
+      if (key === "system.identidad.classDomain") delete formData[key];
+      if (key === "system.identidad.raceId" || key === "system.identidad.raza") delete formData[key];
+      if (key === "system.raceCreationGrant" || key.startsWith("system.raceCreationGrant.")) delete formData[key];
+      if (key === "system.awakening" || key.startsWith("system.awakening.")) delete formData[key];
       if (key === "system.resourceModifiers" || key.startsWith("system.resourceModifiers.")) {
         delete formData[key];
       }
@@ -856,6 +910,14 @@ export class PersonajeSheet extends ActorSheet {
         .off("change")
         .on("change", this._onClassResourceConfigurationChange.bind(this));
 
+      html.find(".mtrol-race-select")
+        .off("change")
+        .on("change", this._onRaceIdentityChange.bind(this));
+
+      html.find(".mtrol-race-creation-grant")
+        .off("click")
+        .on("click", this._onApplyRaceCreationBenefits.bind(this));
+
       html.find(".mtrol-resource-modifier-entry-control")
         .off("change")
         .on("change", this._onResourceModifierEntryChange.bind(this));
@@ -924,6 +986,10 @@ export class PersonajeSheet extends ActorSheet {
     html.find(".competencia-roll")
       .off("click")
       .on("click", this._onCompetenciaRoll.bind(this));
+
+    html.find(".mtrol-narrative-capability-declare")
+      .off("click")
+      .on("click", onDeclareNarrativeCapability.bind(this));
 
     html.find(".mtrol-special-ability-lock")
       .off("click")
@@ -1050,13 +1116,28 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     try {
+      let changes = {
+        [configKey]: input.value
+      };
+
+      if (configKey === "classId" && input.value === "aprendiz") {
+        const apprentice = await promptApprenticeClassConfiguration();
+        if (!apprentice) {
+          this.render(false);
+          return false;
+        }
+        changes = {
+          classId: "aprendiz",
+          classDomain: apprentice.classDomain,
+          competencySelections: apprentice.competencySelections
+        };
+      }
+
       await updateActorResourceConfigurationAuthoritative({
         actorUuid: this.actor.uuid,
         transactionId: `sheet-resource-config-${foundry.utils.randomID()}`,
         expectedClassId: String(this.actor.system?.identidad?.classId ?? ""),
-        changes: {
-          [configKey]: input.value
-        }
+        changes
       }, {
         requestingUserId: game.user.id,
         trustedActor: this.actor
@@ -1065,6 +1146,53 @@ export class PersonajeSheet extends ActorSheet {
     } catch (error) {
       logger.error("SHEET", "No se pudo actualizar la configuración de recursos", { error: error.message });
       ui.notifications.error(error?.message ?? "No se pudo actualizar la configuración de recursos.");
+      return false;
+    }
+  }
+
+  async _onRaceIdentityChange(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    if (!game.user.isGM) {
+      ui.notifications.warn("Sólo un GM puede modificar la Raza.");
+      return false;
+    }
+    try {
+      await updateActorRaceIdentityAuthoritative({
+        actorUuid: this.actor.uuid,
+        transactionId: `sheet-race-identity-${foundry.utils.randomID()}`,
+        expectedRaceId: String(this.actor.system?.identidad?.raceId ?? ""),
+        raceId: event.currentTarget.value
+      }, { requestingUserId: game.user.id, trustedActor: this.actor });
+      return true;
+    } catch (error) {
+      logger.error("SHEET", "No se pudo actualizar la Raza", { error: error.message });
+      ui.notifications.error(error?.message ?? "No se pudo actualizar la Raza.");
+      this.render(false);
+      return false;
+    }
+  }
+
+  async _onApplyRaceCreationBenefits(event) {
+    event.preventDefault();
+    if (!game.user.isGM) {
+      ui.notifications.warn("Sólo un GM puede aplicar beneficios raciales de creación.");
+      return false;
+    }
+    try {
+      const raceId = String(this.actor.system?.identidad?.raceId ?? "");
+      const result = await applyRaceCreationBenefitsAuthoritative({
+        actorUuid: this.actor.uuid,
+        transactionId: `sheet-race-creation-${foundry.utils.randomID()}`,
+        expectedRaceId: raceId
+      }, { requestingUserId: game.user.id, trustedActor: this.actor });
+      if (result.alreadyApplied) ui.notifications.info("Los beneficios raciales de creación ya fueron aplicados.");
+      else ui.notifications.info("Beneficios raciales de creación aplicados.");
+      return true;
+    } catch (error) {
+      logger.error("SHEET", "No se pudieron aplicar los beneficios raciales", { error: error.message });
+      ui.notifications.error(error?.message ?? "No se pudieron aplicar los beneficios raciales.");
       return false;
     }
   }
@@ -2105,7 +2233,7 @@ export class PersonajeSheet extends ActorSheet {
     }
 
     const actor = this.actor;
-    const actionDefinition = getActionDefinitionFromItem(item);
+    let actionDefinition = getActionDefinitionFromItem(item);
 
     if (!specialContext) {
       const assignedSpecial = findSpecialAbilitySlotForItem(actor, item);
@@ -2132,6 +2260,7 @@ export class PersonajeSheet extends ActorSheet {
       const executionModeIntent = await prepareCompetenceModeIntent(actor, item, selectedMode);
       actionMode = selectedMode.modeId;
       specialContext = { ...(specialContext ?? {}), executionModeIntent };
+      actionDefinition = getActionDefinitionFromItem(item, { declaredMode: actionMode });
     }
 
     if (
@@ -2175,6 +2304,9 @@ export class PersonajeSheet extends ActorSheet {
     const actionKey = control?.dataset?.mtrolActionKey;
     const dharmaSpend = this._getPreparedDharmaSpend(event);
     let resultado = null;
+    const contextualModifiers = await adjudicateLevelDifferenceModifier({
+      enabled: game.user?.isGM === true && event.shiftKey === true
+    });
 
     const costoMP =
       calcularConsumoMP(actor, item).costoTotal;
@@ -2196,7 +2328,8 @@ export class PersonajeSheet extends ActorSheet {
         targetToken,
         formulaFallback: this._formulaCompetenciaPorNivel(nivel),
         dharmaSpend,
-        actionMode
+        actionMode,
+        rollModifiers: contextualModifiers.initial
       });
     } finally {
       this._updatePreparedDharmaState(actionKey, null);
@@ -2209,7 +2342,8 @@ export class PersonajeSheet extends ActorSheet {
       consumoMP,
       costoTotal,
       danioFormula,
-      resultadoCompetencia
+      resultadoCompetencia,
+      rollModifiers
     } = resultado;
 
     if (turnGuard.reactive) {
@@ -2250,7 +2384,7 @@ export class PersonajeSheet extends ActorSheet {
       kindOverride === "movement" ||
       item.system?.actionType === "movement";
 
-    if (resultadoCompetencia?.pifia) {
+    if (resultadoCompetencia?.pifia && !actionDefinition.requiresOpposition) {
       await this._finalizarConsumoCompetencia({
         actor,
         item,
@@ -2290,7 +2424,8 @@ export class PersonajeSheet extends ActorSheet {
       formula: danioFormula,
       flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
       localized: item.system?.usaDanioLocalizado !== false,
-      costoTotal
+      costoTotal,
+      modifiers: contextualModifiers.damage
     };
 
     if (actionDefinition.requiresOpposition) {
@@ -2299,57 +2434,20 @@ export class PersonajeSheet extends ActorSheet {
         item,
         targetToken,
         attackerRoll: resultadoCompetencia,
-        damage: damageConfig.resolution === "onOppositionWin"
-          ? damageContext
-          : {
-              ...damageContext,
-              available: false
-            }
+        declaredMode: actionMode,
+        actionModifiers: rollModifiers,
+        damage: damageContext
       });
 
       if (pendingAction) {
-        const immediateReadyDamage = hasDamage &&
-          damageConfig.resolution === "immediate" &&
-          damageConfig.mode === "enabled"
-          ? await createReadyDamageActionFromCompetencia({
-              actor,
-              item,
-              targetToken,
-              attackerRoll: resultadoCompetencia,
-              damage: damageContext
-            })
-          : null;
         await this._finalizarConsumoCompetencia({
           actor,
           item,
           consumoMP,
           resultadoCompetencia,
           specialContext,
-          pendingResolutionIds: [pendingAction.id, immediateReadyDamage?.id].filter(Boolean)
+          pendingResolutionId: pendingAction.id
         });
-
-        if (hasDamage && damageConfig.resolution === "immediate") {
-          if (damageConfig.mode !== "enabled") {
-            try {
-              await executeConfiguredCompetenciaDamage({
-                actor,
-                targetActor,
-                targetToken,
-                formula: danioFormula,
-                flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
-                costoTotal,
-                damageCostType: damageConfig.costType,
-                damageContext: {
-                  item,
-                  title: item.name,
-                  icon: item.img ?? actor.img ?? ""
-                }
-              });
-            } catch (error) {
-              ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
-            }
-          }
-        }
 
         ui.notifications.info(
           `${item.name} espera una defensa manual.`
@@ -2361,44 +2459,6 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
-    if (!hasDamage) {
-      await this._finalizarConsumoCompetencia({
-        actor,
-        item,
-        consumoMP,
-        resultadoCompetencia,
-        specialContext
-      });
-
-      await this._completarTurnoTrasAccion({ actor, item });
-
-      return;
-    }
-
-    if (damageConfig.mode === "enabled") {
-      const readyDamage = await createReadyDamageActionFromCompetencia({
-        actor,
-        item,
-        targetToken,
-        attackerRoll: resultadoCompetencia,
-        damage: damageContext
-      });
-
-      if (!readyDamage) return;
-
-      await this._finalizarConsumoCompetencia({
-        actor,
-        item,
-        consumoMP,
-        resultadoCompetencia,
-        specialContext,
-        pendingResolutionId: readyDamage.id
-      });
-
-      ui.notifications.info(`${item.name} habilitó su ejecución de daño.`);
-      return;
-    }
-
     await this._finalizarConsumoCompetencia({
       actor,
       item,
@@ -2406,27 +2466,7 @@ export class PersonajeSheet extends ActorSheet {
       resultadoCompetencia,
       specialContext
     });
-
-    try {
-      await executeConfiguredCompetenciaDamage({
-        actor,
-        targetActor,
-        targetToken,
-        formula: danioFormula,
-        flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
-        costoTotal,
-        damageCostType: damageConfig.costType,
-        damageContext: {
-          item,
-          title: item.name,
-          icon: item.img ?? actor.img ?? ""
-        }
-      });
-    } catch (error) {
-      ui.notifications.warn(error.message ?? `Formula de dano invalida: ${danioFormula}`);
-    } finally {
-      await this._completarTurnoTrasAccion({ actor, item });
-    }
+    await this._completarTurnoTrasAccion({ actor, item });
 
     return;
 

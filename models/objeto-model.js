@@ -59,18 +59,21 @@ export class ObjetoDataModel extends foundry.abstract.TypeDataModel {
         initial: 0,
         integer: true,
         min: 0,
-        max: 20
+        max: 30
       }),
 
       defensaBase: new fields.NumberField({
         initial: 0,
         integer: true,
         min: 0,
-        max: 20
+        max: 30
       }),
 
-      danio: new fields.StringField({
-        initial: ""
+      danio: new fields.NumberField({
+        initial: 0,
+        integer: true,
+        min: 0,
+        max: 30
       }),
 
       valor: new fields.NumberField({

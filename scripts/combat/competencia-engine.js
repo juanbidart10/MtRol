@@ -25,6 +25,12 @@ import {
   getActionGuard
 } from "./turn-system.js";
 import { logger } from "../utils/logger.js";
+import { getCanonicalDamageFormula } from "../actions/combat-ability-policy.js";
+import {
+  appendModifiersToFormula,
+  normalizeContextualModifiers,
+  validateCanonicalFormula
+} from "../actions/combat-ability-policy.js";
 
 // =========================
 // HELPERS
@@ -91,7 +97,8 @@ export async function resolverCompetencia({
   targetToken = null,
   formulaFallback = null,
   dharmaSpend = null,
-  actionMode = null
+  actionMode = null,
+  rollModifiers = []
 } = {}) {
 
   if (!actor || !item) {
@@ -133,9 +140,9 @@ export async function resolverCompetencia({
     normalizarCategoria(item.system?.categoria ?? MTROL_CATEGORIES.COMPETENCIA);
 
   const danioFormula =
-    item.system?.danio?.toString().trim() || "";
+    getCanonicalDamageFormula(item);
 
-  const formulaTirada =
+  const formulaTiradaBase =
     getCompetenciaRollFormula(
       item,
       {
@@ -143,6 +150,19 @@ export async function resolverCompetencia({
         formulaFallback
       }
     );
+  const normalizedRollModifiers = normalizeContextualModifiers(rollModifiers, {
+    allowGmOnly: game.user?.isGM === true
+  });
+  const formulaTirada = formulaTiradaBase
+    ? appendModifiersToFormula(formulaTiradaBase, normalizedRollModifiers)
+    : "";
+  if (formulaTiradaBase) {
+    const validation = validateCanonicalFormula(formulaTiradaBase, { label: "formula" });
+    if (!validation.valid) {
+      ui.notifications.warn(`Configuración inválida de ${item.name}: ${validation.errors.join(" ")}`);
+      return null;
+    }
+  }
 
   const esHabilidadCombate =
     categoria === MTROL_CATEGORIES.COMBATE ||
@@ -258,7 +278,8 @@ export async function resolverCompetencia({
     nivel,
     esHabilidadCombate,
     esSkillBar,
-    actionMode
+    actionMode,
+    rollModifiers: normalizedRollModifiers
   };
 
 }

@@ -563,3 +563,23 @@
       "mp";
   }
 }
+.mtrol-personaje-sheet .mtrol-narrative-capabilities {
+  grid-column: 1 / -1;
+  padding: .75rem;
+  border: 1px solid rgba(205, 164, 83, .35);
+  border-radius: .4rem;
+}
+
+.mtrol-personaje-sheet .mtrol-narrative-capability {
+  margin-top: .65rem;
+}
+
+.mtrol-personaje-sheet .mtrol-narrative-capability p {
+  margin: .25rem 0;
+  font-size: .85em;
+}
+
+.mtrol-personaje-sheet .mtrol-narrative-capability button {
+  width: auto;
+  white-space: normal;
+}

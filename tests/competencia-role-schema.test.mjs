@@ -130,11 +130,47 @@ test("todos los nuevos campos tienen defaults compatibles con su enum", () => {
   const schema = CompetenciaDataModel.defineSchema();
 
   assert.equal(schema.rol.options.initial, null);
-  assert.equal(schema.damageResolution.options.initial, "immediate");
-  assert.equal(schema.damageMode.options.initial, "automatic");
+  assert.equal(schema.damageResolution.options.initial, "onOppositionWin");
+  assert.equal(schema.damageMode.options.initial, "enabled");
   assert.equal(schema.damageCostType.options.initial, "none");
+  assert.equal(schema.damageSourceAttribute.options.initial, null);
 
-  assert.ok(schema.damageResolution.options.choices.includes("immediate"));
-  assert.ok(schema.damageMode.options.choices.includes("automatic"));
+  assert.ok(schema.damageResolution.options.choices.includes("onOppositionWin"));
+  assert.ok(schema.damageMode.options.choices.includes("enabled"));
   assert.ok(schema.damageCostType.options.choices.includes("none"));
+  assert.deepEqual(schema.damageSourceAttribute.options.choices, [
+    "fuerza", "destreza", "resistencia", "inteligencia", "voluntad",
+    "suerte", "carisma", "aura", "percepcion"
+  ]);
+});
+
+test("damageSourceAttribute se persiste como ID canónico nullable y la Sheet normaliza vacío", async () => {
+  const field = CompetenciaDataModel.defineSchema().damageSourceAttribute;
+  const itemSheet = await readFile(
+    new URL("../scripts/sheets/items/competencia-sheet.js", import.meta.url),
+    "utf8"
+  );
+  const template = await readFile(
+    new URL("../templates/items/competencia-sheet.html", import.meta.url),
+    "utf8"
+  );
+  assert.equal(field.options.nullable, true);
+  assert.doesNotThrow(() => field.validate("aura"));
+  assert.throws(() => field.validate("@atributos.aura"), /valid choice/);
+  assert.match(itemSheet, /formData\["system\.damageSourceAttribute"\]\s*=\s*null/);
+  assert.match(template, /name="system\.damageSourceAttribute"/);
+});
+
+test("technicalId es persistente en schema y no se expone como editor en la Item Sheet", async () => {
+  const technicalId = CompetenciaDataModel.defineSchema().technicalId;
+  const template = await readFile(
+    new URL("../templates/items/competencia-sheet.html", import.meta.url),
+    "utf8"
+  );
+
+  assert.equal(technicalId.options.required, false);
+  assert.equal(technicalId.options.nullable, false);
+  assert.equal(technicalId.options.initial, "");
+  assert.equal(technicalId.options.blank, true);
+  assert.doesNotMatch(template, /system\.technicalId/);
 });

@@ -204,7 +204,7 @@ test("Preparación se integra una vez en mtrolRoll e iniciativa y las tres vista
   assert.equal((rollSource.match(/consumePreparation\(actor/g) ?? []).length, 1);
   assert.equal((initiativeSource.match(/consumePreparation\(actor/g) ?? []).length, 1);
   assert.match(rollSource, /orbPassiveBonus\.bonus \+\s*preparationBonus/);
-  assert.match(initiativeSource, /totalBase \+ evaluacion\.totalExtra \+ preparationBonus/);
+  assert.match(initiativeSource, /primaryRollEffects\.value \+ evaluacion\.totalExtra \+ preparationBonus/);
   assert.match(sheetSource, /context\.mtrolPreparation/);
   assert.equal((templateSource.match(/En preparación:/g) ?? []).length, 3);
   assert.match(templateSource, /\{\{#if esGM\}\}[\s\S]*mtrol-preparation-adjust/);

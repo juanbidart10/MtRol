@@ -122,7 +122,13 @@ export function resolveAllowedResponses(item = {}) {
     OPPOSITION_CAPABILITIES.DODGE,
     OPPOSITION_CAPABILITIES.COUNTERATTACK
   ]));
-  return explicit.length > 0 ? explicit : Array.from(DEFAULT_ALLOWED_RESPONSES);
+  const persisted = item?._source?.system;
+  const explicitlyConfigured = persisted
+    ? Object.hasOwn(persisted, "allowedResponses")
+    : Object.hasOwn(item?.system ?? {}, "allowedResponses");
+  const runtimeConfigured = Array.isArray(item?.system?.allowedResponses) &&
+    item.system.allowedResponses.length > 0;
+  return explicitlyConfigured || runtimeConfigured ? explicit : Array.from(DEFAULT_ALLOWED_RESPONSES);
 }
 
 export function getOppositionActionDefinition(item = {}, options = {}) {
@@ -217,7 +223,8 @@ export function evaluateOppositionResponseEligibility({
       );
     }
     const classId = actor?.system?.identidad?.classId ?? null;
-    const policy = getCounterattackPolicyForClass(classId);
+    const classDomain = actor?.system?.identidad?.classDomain ?? null;
+    const policy = getCounterattackPolicyForClass(classId, classDomain);
     metadata.classPolicy = policy;
     const exceptionalDomains = normalizeList(item?.system?.counterattackDomainOverrides, VALID_DOMAINS);
     const permittedDomains = new Set([

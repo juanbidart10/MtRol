@@ -30,6 +30,15 @@ import {
 
 import { recoverMovementTransactions } from "../combat/movement-service.js";
 
+import {
+  migrateCompetencyTechnicalIds
+} from "../migrations/competency-technical-id-migration.js";
+
+import {
+  migrateRaceIdentities
+} from "../migrations/race-identity-migration.js";
+import { migrateAwakeningFoundation } from "../migrations/awakening-foundation-migration.js";
+
 let recoveryHooksInstalled = false;
 let authorityRecoveryScheduled = false;
 
@@ -99,6 +108,11 @@ export async function readyMtrol() {
   game.mtrol = game.mtrol || {};
 
   installMtrolDebugApi();
+  if (isPrimaryActiveGM()) {
+    await migrateCompetencyTechnicalIds();
+    await migrateRaceIdentities();
+    await migrateAwakeningFoundation();
+  }
   const tradeAuthority = await initializeTradeAuthority();
   if (tradeAuthority.primary) await recoverTradeTransactionsAuthoritative();
   await reconcileActiveTurn();

@@ -67,11 +67,32 @@ export class PersonajeDataModel extends foundry.abstract.TypeDataModel {
         titulo: new fields.StringField({ initial: "" }),
         clase: new fields.StringField({ initial: "" }),
         classId: new fields.StringField({ initial: "" }),
+        classDomain: new fields.StringField({
+          required: false,
+          nullable: false,
+          initial: "",
+          blank: true,
+          choices: ["", "physical", "magical", "hybrid"]
+        }),
         raza: new fields.StringField({ initial: "" }),
+        raceId: new fields.StringField({ initial: "" }),
         profesion: new fields.StringField({ initial: "" }),
         maestria: new fields.StringField({ initial: "" }),
         fullBodyImage: new fields.StringField({ initial: "" }),
         edad: new fields.NumberField({ initial: 0, integer: true, min: 0 })
+      }),
+
+      raceCreationGrant: new fields.SchemaField({
+        applied: new fields.BooleanField({
+          required: false,
+          nullable: false,
+          initial: false
+        }),
+        sourceRaceId: new fields.StringField({
+          required: false,
+          nullable: false,
+          initial: ""
+        })
       }),
 
       resourceModifiers: new fields.SchemaField({
@@ -173,6 +194,36 @@ export class PersonajeDataModel extends foundry.abstract.TypeDataModel {
           integer: true,
           min: 0
         })
+      }),
+
+      awakening: new fields.SchemaField({
+        grants: new fields.ArrayField(
+          new fields.SchemaField({
+            grantId: new fields.StringField({ required: true, nullable: false, blank: false }),
+            source: new fields.StringField({
+              required: true,
+              nullable: false,
+              choices: ["normalNarrative", "racialPassive", "gmOverride"]
+            }),
+            sourcePassiveId: new fields.StringField({ required: false, nullable: true, initial: null }),
+            grantedAtLevel: new fields.NumberField({ required: true, nullable: false, integer: true, min: 1 }),
+            grantedBy: new fields.StringField({ required: true, nullable: false, blank: false }),
+            grantedAt: new fields.NumberField({ required: true, nullable: false, integer: true, min: 0 }),
+            reason: new fields.StringField({ required: false, nullable: false, initial: "", blank: true })
+          }),
+          { required: false, nullable: false, initial: [] }
+        ),
+        selections: new fields.ArrayField(
+          new fields.SchemaField({
+            passiveId: new fields.StringField({ required: true, nullable: false, blank: false }),
+            selectedAtLevel: new fields.NumberField({ required: true, nullable: false, integer: true, min: 1 }),
+            selectedBy: new fields.StringField({ required: true, nullable: false, blank: false }),
+            grantId: new fields.StringField({ required: true, nullable: false, blank: false }),
+            selectedAt: new fields.NumberField({ required: true, nullable: false, integer: true, min: 0 }),
+            reason: new fields.StringField({ required: false, nullable: false, initial: "", blank: true })
+          }),
+          { required: false, nullable: false, initial: [] }
+        )
       }),
 
       orbs: new fields.ArrayField(

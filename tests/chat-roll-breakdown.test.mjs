@@ -176,11 +176,18 @@ function createActor(id = "actor") {
         destreza: 3,
         fuerza: 3
       },
+      identidad: {
+        raceId: ""
+      },
       recursos: {
         dharma: 0,
         karma: 0
       },
       vitales: {
+        hp: {
+          value: 10,
+          max: 10
+        },
         mp: {
           value: 10,
           max: 10
@@ -295,6 +302,29 @@ test("pifia natural permanece visible en los terminos del Roll", async () => {
   assert.equal(chatMessages.at(-1).rolls[0], result.roll);
 });
 
+test("Frenesí multiplica sólo el resultado base y conserva la pifia oficial", async () => {
+  const draconian = createActor("frenesi");
+  draconian.system.identidad.raceId = "draconiano";
+  draconian.system.vitales.hp.value = 2;
+
+  queueRoll("2d10 + 3", 11, [{
+    faces: 10,
+    results: [4, 4]
+  }]);
+  const success = await rollModule.mtrolRoll("2d10 + 3", draconian, "Frenesí");
+  assert.equal(success.total, 22);
+  assert.equal(success.roll.total, 11, "el Roll y sus dados no se preevalúan ni reescriben");
+  assert.equal(success.rollEffects.appliedEffects[0].passiveId, "frenesi");
+
+  queueRoll("2d10 + 3", 13, [{
+    faces: 10,
+    results: [2, 8]
+  }]);
+  const fumble = await rollModule.mtrolRoll("2d10 + 3", draconian, "Pifia con Frenesí");
+  assert.equal(fumble.pifia, true);
+  assert.equal(fumble.total, 0);
+});
+
 test("critico y cadena conservan cada Roll real y todos sus resultados", async () => {
   const beforeEvaluations = evaluationCount;
   const beforeAnimations = diceAnimations.length;
@@ -384,6 +414,23 @@ test("iniciativa conserva principal, secundaria y el total existente", async () 
   assert.deepEqual(chatMessages.at(-1).rolls, result.rolls);
   assert.match(chatMessages.at(-1).content, /Iniciativa principal/);
   assert.match(chatMessages.at(-1).content, /Iniciativa secundaria/);
+});
+
+test("Instinto suma +10 una vez en la iniciativa canónica", async () => {
+  const animalium = createActor("instinto");
+  animalium.system.identidad.raceId = "animalium";
+  queueRoll("1d10 + @atributos.destreza", 7, [{
+    faces: 10,
+    results: [4]
+  }]);
+  queueRoll("1d10", 8, [{
+    faces: 10,
+    results: [8]
+  }]);
+  const result = await initiativeModule.rollMtrolInitiative(animalium);
+  assert.equal(result.total, 25);
+  assert.equal(result.initiativeEffects.appliedEffects.length, 1);
+  assert.equal(result.initiativeEffects.appliedEffects[0].delta, 10);
 });
 
 test("card de dano conserva dano, cadena y localizacion sin lanzar dados", async () => {
@@ -546,7 +593,7 @@ test("system.json conserva la versión declarada de release", async () => {
     )
   );
 
-  assert.equal(system.version, "1.2.9");
+  assert.equal(system.version, "1.3.0");
 });
 
 test.after(() => {

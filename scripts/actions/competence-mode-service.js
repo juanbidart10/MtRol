@@ -16,7 +16,9 @@ export function getCompetenceExecutionModes(item) {
     .map(mode => ({
       modeId: String(mode?.modeId ?? "").trim(),
       label: String(mode?.label ?? mode?.modeId ?? "").trim(),
-      strategy: String(mode?.strategy ?? "narrative").trim()
+      strategy: String(mode?.strategy ?? "narrative").trim(),
+      resolutionResult: mode?.resolutionResult ?? null,
+      damageFormula: String(mode?.damageFormula ?? "").trim()
     }))
     .filter(mode => mode.modeId && mode.label);
   if (configured.length > 0) return configured;
@@ -77,6 +79,8 @@ export async function persistCompetenceModeIntentAuthoritative(payload = {}, {
       itemUuid: item.uuid,
       modeId: mode.modeId,
       strategy: mode.strategy,
+      resolutionResult: mode.resolutionResult,
+      damageFormula: mode.damageFormula,
       selectedAt: Date.now()
     })
   });

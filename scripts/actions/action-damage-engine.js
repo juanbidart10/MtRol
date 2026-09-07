@@ -9,8 +9,8 @@ import {
 } from "../rolls/mtrol-dharma-karma.js";
 
 import {
-  mtrolObtenerDanioManos
-} from "../rolls/roll-helpers.js";
+  mtrolPrepararRollData
+} from "../rolls/formula-parser.js";
 
 import {
   aplicarDanioLocalizado
@@ -26,6 +26,7 @@ import {
 } from "../rolls/chat-rolls.js";
 
 import {
+  isPrimaryActiveGM,
   requestPrimaryGM
 } from "../core/socket-requests.js";
 
@@ -40,17 +41,32 @@ import {
 } from "../combat/mp-engine.js";
 
 import {
-  MTROL_CATEGORIES,
-  normalizarCategoria
-} from "../core/categories.js";
-
-import {
-  completeResolvedTurnAction
+  completeResolvedTurnAction,
+  getCombatantForActor,
+  getTurnContext
 } from "../combat/turn-system.js";
 import { logger } from "../utils/logger.js";
 
+import { createEffectContext } from "../effects/effect-context.js";
+import { resolveEffects } from "../effects/effect-resolver.js";
+import {
+  MTROL_EFFECT_ATTRIBUTE_KEYS,
+  MTROL_EFFECT_PHASES
+} from "../effects/effect-types.js";
+import {
+  appendModifiersToFormula,
+  getCanonicalDamageFormula,
+  normalizeContextualModifiers,
+  validateCanonicalFormula
+} from "./combat-ability-policy.js";
+import {
+  MTROL_BODY_ROLL_TABLE,
+  MTROL_BODY_SLOT_LABELS
+} from "../constants/body-slots.js";
+
 const RESOLVED_DAMAGE_ACTION =
   "mtrol-resolved-damage";
+const CANCEL_DAMAGE_ACTION = "mtrol-cancel-damage";
 
 let chatHandlerRegistered =
   false;
@@ -123,8 +139,8 @@ function assertCanExecuteResolvedDamage(pendingAction) {
     throw new Error("La accion todavia no esta resuelta.");
   }
 
-  if (pendingAction.result?.success !== true) {
-    throw new Error("La defensa gano; no hay dano disponible.");
+  if (pendingAction.winnerResolutionResult !== "damage") {
+    throw new Error("La consecuencia ganadora no concede daño.");
   }
 
   if (!hasUsableDamage(pendingAction.damage)) {
@@ -146,6 +162,11 @@ function validateUserCanExecuteDamage(actor, userId) {
 }
 
 async function publishPendingDamageState(pendingAction) {
+  if (pendingAction.damage?.id) {
+    const others = Array.from(pendingAction.damageEntitlements ?? [])
+      .filter(entitlement => entitlement?.id !== pendingAction.damage.id);
+    pendingAction.damageEntitlements = [pendingAction.damage, ...others];
+  }
   pendingAction.updatedAt =
     Math.max(
       Date.now(),
@@ -168,21 +189,29 @@ async function publishPendingDamageState(pendingAction) {
   }
 }
 
-function buildRollData(actor, damage = {}) {
-  const rollData =
-    foundry.utils.deepClone(actor?.getRollData?.() ?? {});
+function resolveDamageCombatId(actor, damage = {}) {
+  if (Object.hasOwn(damage, "combatId")) return damage.combatId || null;
+  const context = getTurnContext();
+  return getCombatantForActor(actor, context.combat) ? context.combatId : null;
+}
 
-  const danioManos =
-    mtrolObtenerDanioManos(actor);
-
-  rollData.mano =
-    danioManos.total;
-
-  rollData.manoDer =
-    danioManos.manoDer;
-
-  rollData.manoIzq =
-    danioManos.manoIzq;
+export function prepareDamageFormulaContext({
+  actor,
+  targetActor = null,
+  formula = "",
+  damage = {}
+} = {}) {
+  const validation = validateCanonicalFormula(formula, {
+    allowWeapons: true,
+    label: "damageFormula"
+  });
+  if (!validation.valid) throw new Error(validation.errors.join(" "));
+  const modifiers = normalizeContextualModifiers(damage.modifiers ?? [], { allowGmOnly: true });
+  const effectiveFormula = appendModifiersToFormula(validation.formula, modifiers);
+  const { data: preparedData, etiquetas, armas } = mtrolPrepararRollData(actor, {
+    includeWeapons: validation.formula.includes("@armas")
+  });
+  const rollData = foundry.utils.deepClone(preparedData);
 
   if (damage.rollData && typeof damage.rollData === "object") {
     foundry.utils.mergeObject(
@@ -195,7 +224,39 @@ function buildRollData(actor, damage = {}) {
     );
   }
 
-  return rollData;
+  const combatId = resolveDamageCombatId(actor, damage);
+  const damageSourceAttribute = MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damage.damageSourceAttribute)
+    ? damage.damageSourceAttribute
+    : MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damage.item?.system?.damageSourceAttribute)
+      ? damage.item.system.damageSourceAttribute
+      : null;
+  const context = createEffectContext({
+    phase: MTROL_EFFECT_PHASES.DAMAGE_FORMULA_BUILD,
+    sourceActor: actor,
+    targetActor,
+    action: damage.item ?? null,
+    actionType: damage.actionType ?? null,
+    actionDomain: damage.actionDomain ?? damage.damageDomain ?? null,
+    damageType: damage.damageType ?? null,
+    damageSourceAttribute,
+    formula: effectiveFormula,
+    formulaData: rollData,
+    isCombat: Boolean(combatId),
+    combatId,
+    metadata: { sourceItemUuid: damage.item?.uuid ?? damage.competenciaUuid ?? null }
+  });
+  const resolution = resolveEffects(context);
+  return {
+    context,
+    formulaData: resolution.formulaData,
+    resolution,
+    effectiveFormula,
+    breakdown: {
+      labels: etiquetas,
+      weapons: armas,
+      modifiers
+    }
+  };
 }
 
 async function rollDamage({
@@ -225,6 +286,7 @@ async function createDamageFumbleMessage(
   actor,
   damageRoll,
   evaluacionDanio,
+  localizationRoll,
   damageContext = {}
 ) {
   const chatRolls =
@@ -236,7 +298,8 @@ async function createDamageFumbleMessage(
       ...(evaluacionDanio.extraRolls ?? []).map((extraRoll, index) => ({
         roll: extraRoll,
         label: `Cadena critica de dano ${index + 1}`
-      }))
+      })),
+      ...(localizationRoll ? [{ roll: localizationRoll, label: "Tirada de Localización" }] : [])
     ]);
 
   await mtrolCreateRollMessage({
@@ -259,13 +322,14 @@ async function createDamageFumbleMessage(
 
         <p>${foundry.utils.escapeHTML(evaluacionDanio.motivo)}</p>
 
-        <p>El dano localizado fue cancelado.</p>
+        <p>Daño inicial: <strong>0</strong>.</p>
+        <p>Localización: <strong>${damageContext.locationLabel ?? "determinada sin consecuencias"}</strong>.</p>
       </div>
     `
   });
 }
 
-export async function executeCompetenciaDamage({
+async function executeCompetenciaDamage({
   actor,
   targetActor = null,
   targetToken = null,
@@ -278,22 +342,25 @@ export async function executeCompetenciaDamage({
     throw new Error("No hay actor atacante para ejecutar dano.");
   }
 
-  const rollData =
-    buildRollData(
-      actor,
-      damageContext
-    );
+  const formulaEffects = prepareDamageFormulaContext({
+    actor,
+    targetActor,
+    formula,
+    damage: damageContext
+  });
+  const rollData = formulaEffects.formulaData;
 
   let damageRoll = null;
+  let localizationRoll = null;
 
   try {
-    damageRoll =
-      await rollDamage({
+    [damageRoll, localizationRoll] =
+      await Promise.all([rollDamage({
         actor,
-        formula,
+        formula: formulaEffects.effectiveFormula,
         flatValue,
         rollData
-      });
+      }), new Roll("1d10").evaluate()]);
   } catch (error) {
     logger.error("DAMAGE", "damage formula evaluation failed", {
       actorUuid: actor?.uuid ?? null,
@@ -307,6 +374,7 @@ export async function executeCompetenciaDamage({
   }
 
   await mtrolMostrarDados(damageRoll);
+  await mtrolMostrarDados(localizationRoll);
 
   const evaluacionDanio =
     await mtrolEvaluarDadosMtrol(
@@ -324,7 +392,13 @@ export async function executeCompetenciaDamage({
       actor,
       damageRoll,
       evaluacionDanio,
-      damageContext
+      localizationRoll,
+      {
+        ...damageContext,
+        locationLabel: MTROL_BODY_SLOT_LABELS[
+          MTROL_BODY_ROLL_TABLE[Number(localizationRoll.total ?? 0)]
+        ] ?? "No determinada"
+      }
     );
 
     return {
@@ -334,6 +408,9 @@ export async function executeCompetenciaDamage({
       evaluacionDanio,
       totalBaseDanio: 0,
       totalFinalDanio: 0,
+      formulaEffects: formulaEffects.resolution,
+      breakdown: formulaEffects.breakdown,
+      localizationRoll,
       resultadoDanio: null
     };
   }
@@ -345,7 +422,8 @@ export async function executeCompetenciaDamage({
 
   const totalBeforeOrbPassives =
     totalBaseDanio +
-    evaluacionDanio.totalExtra;
+    evaluacionDanio.totalExtra +
+    Number(evaluacionDanio.dharmaBonus ?? 0);
 
   const sourceItem =
     damageContext.item ??
@@ -374,6 +452,10 @@ export async function executeCompetenciaDamage({
       evaluacionDanio,
       totalBaseDanio,
       totalFinalDanio,
+      combatId: formulaEffects.context.combatId,
+      damageSourceAttribute: formulaEffects.context.damageSourceAttribute,
+      localizacionRoll: localizationRoll,
+      transactionId: damageContext.transactionId ?? null,
       cardContext: damageContext
     });
 
@@ -393,7 +475,11 @@ export async function executeCompetenciaDamage({
       costoTotal,
       evaluacionDanio,
       totalBaseDanio,
-      totalFinalDanio
+      totalFinalDanio,
+      cardContext: {
+        ...damageContext,
+        breakdown: formulaEffects.breakdown
+      }
     });
   } catch (error) {
     logger.warn("DAMAGE", "damage presentation creation failed", {
@@ -412,51 +498,10 @@ export async function executeCompetenciaDamage({
     totalBaseDanio,
     totalFinalDanio,
     orbPassiveDamage,
+    formulaEffects: formulaEffects.resolution,
+    breakdown: formulaEffects.breakdown,
     resultadoDanio
   };
-}
-
-export async function executeConfiguredCompetenciaDamage({
-  actor,
-  damageCostType = "none",
-  costoTotal = 0,
-  damageContext = {},
-  ...damageArgs
-} = {}) {
-  const basicCostIncludedInActivation =
-    normalizarCategoria(damageContext?.item?.system?.categoria) === MTROL_CATEGORIES.COMPETENCIA &&
-    damageCostType === "basic";
-  let additionalCostReceipt =
-    validarCostoResolucionMP(
-      actor,
-      basicCostIncludedInActivation ? "none" : damageCostType
-    );
-
-  if (!additionalCostReceipt?.exito) {
-    throw new Error("No hay MP suficiente para ejecutar la resolución de daño.");
-  }
-
-  let additionalCostApplied = false;
-
-  try {
-    if (additionalCostReceipt.costoTotal > 0) {
-      additionalCostReceipt = await aplicarConsumoMP(actor, additionalCostReceipt);
-      additionalCostApplied = true;
-    }
-
-    return await executeCompetenciaDamage({
-      actor,
-      ...damageArgs,
-      damageContext,
-      costoTotal: Number(costoTotal ?? 0) + additionalCostReceipt.costoTotal
-    });
-  } catch (error) {
-    if (additionalCostApplied) {
-      await reembolsarCostoResolucionMP(actor, additionalCostReceipt);
-    }
-
-    throw error;
-  }
 }
 
 export async function executeResolvedDamageAuthoritative(
@@ -507,6 +552,11 @@ export async function executeResolvedDamageAuthoritative(
       throw new Error("No se encontro el objetivo.");
     }
 
+    const sourceItem = actor.items?.get?.(damage.competenciaId) ?? null;
+    if (!sourceItem) throw new Error("La habilidad que concede el daño ya no existe.");
+    damage.formula = getCanonicalDamageFormula(sourceItem, damage.declaredMode ?? null);
+    damage.damageFormula = damage.formula;
+
     validateUserCanExecuteDamage(
       actor,
       requestingUserId
@@ -526,6 +576,8 @@ export async function executeResolvedDamageAuthoritative(
 
     damage.status =
       "rolling";
+
+    damage.transactionId ??= `damage:${pendingAction.id}:${damage.id ?? "1"}`;
 
     damage.rolled =
       false;
@@ -555,7 +607,8 @@ export async function executeResolvedDamageAuthoritative(
         damageContext: damage
           ? {
               ...damage,
-              item: actor.items?.get?.(damage.competenciaId) ?? null
+              combatId: pendingAction.combatId ?? null,
+              item: sourceItem
             }
           : damage
       });
@@ -578,7 +631,10 @@ export async function executeResolvedDamageAuthoritative(
     await publishPendingDamageState(pendingAction);
 
     try {
-      await completeResolvedTurnAction(actor, {
+      const turnActor = pendingAction.sourceActorUuid
+        ? await fromUuid(pendingAction.sourceActorUuid)
+        : actor;
+      await completeResolvedTurnAction(turnActor, {
         resolutionId: pendingAction.id,
         completionId: `damage:${pendingAction.id}`
       });
@@ -608,7 +664,7 @@ export async function executeResolvedDamageAuthoritative(
 
     if (damage.status === "rolling") {
       damage.status =
-        "failed";
+        "available";
 
       damage.rolled =
         false;
@@ -617,27 +673,8 @@ export async function executeResolvedDamageAuthoritative(
         error.message;
     }
 
-    if (damage.status === "failed") {
+    if (damage.status === "available") {
       await publishPendingDamageState(pendingAction);
-      const sourceActor = damage.sourceActorUuid
-        ? await fromUuid(damage.sourceActorUuid)
-        : null;
-      if (sourceActor) {
-        try {
-          await completeResolvedTurnAction(sourceActor, {
-            resolutionId: pendingAction.id,
-            completionId: `damage-failed:${pendingAction.id}`
-          });
-        } catch (turnError) {
-          logger.error("TURN", "turn advance after failed damage failed", {
-            transactionId: damage.transactionId ?? null,
-            pendingActionId,
-            actorUuid: damage.sourceActorUuid ?? null,
-            reasonCode: turnError.reasonCode ?? "TURN_ADVANCE_FAILED",
-            error: turnError.message
-          });
-        }
-      }
     }
 
     throw error;
@@ -676,6 +713,58 @@ export async function executeResolvedDamage(pendingActionId, options = {}) {
   );
 
   return response.result?.damageResult ?? null;
+}
+
+export async function cancelResolvedDamageAuthoritative(
+  pendingActionId,
+  { requestingUserId = game.user?.id } = {}
+) {
+  if (!game.user?.isGM) throw new Error("Sólo el Primary GM puede cancelar daño.");
+  const requestingUser = game.users?.get?.(requestingUserId);
+  if (!requestingUser?.isGM) throw new Error("Sólo un GM puede cancelar daño.");
+  const pendingAction = actions().getPendingAction(pendingActionId);
+  assertCanExecuteResolvedDamage(pendingAction);
+  const damage = pendingAction.damage;
+  damage.status = "cancelled";
+  damage.available = false;
+  damage.cancelledAt = Date.now();
+  damage.cancelledByUserId = requestingUserId;
+  damage.cancellationReason = "gm-cancelled";
+  await publishPendingDamageState(pendingAction);
+
+  const turnActor = pendingAction.sourceActorUuid
+    ? await fromUuid(pendingAction.sourceActorUuid)
+    : null;
+  if (turnActor) {
+    await completeResolvedTurnAction(turnActor, {
+      resolutionId: pendingAction.id,
+      completionId: `damage-cancelled:${pendingAction.id}`
+    });
+  }
+  return pendingAction;
+}
+
+export async function cancelResolvedDamage(pendingActionId) {
+  if (game.user?.isGM && isPrimaryActiveGM()) {
+    return cancelResolvedDamageAuthoritative(pendingActionId, { requestingUserId: game.user.id });
+  }
+  const response = await requestPrimaryGM("mtrolCancelResolvedDamage", { pendingActionId });
+  if (!response.ok) throw new Error(response.error ?? "No se pudo cancelar el daño.");
+  return actions().receivePendingActionSync(response.result?.pendingAction);
+}
+
+async function onCancelDamageClick(event) {
+  const button = event.target.closest(`[data-action="${CANCEL_DAMAGE_ACTION}"]`);
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  button.disabled = true;
+  try {
+    await cancelResolvedDamage(button.dataset.pendingActionId);
+  } catch (error) {
+    ui.notifications.warn(error.message);
+    button.disabled = false;
+  }
 }
 
 async function onResolvedDamageClick(event) {
@@ -722,22 +811,41 @@ export function registerResolvedDamageChatHandler() {
   chatHandlerRegistered =
     true;
 
-  Hooks.on("renderChatMessage", (_message, html) => {
+  Hooks.on("renderChatMessage", async (_message, html) => {
     const selector =
       `[data-action="${RESOLVED_DAMAGE_ACTION}"]`;
 
     if (typeof html?.find === "function") {
-      html
-        .find(selector)
+      const damageButtons = html.find(selector);
+      for (const button of damageButtons?.toArray?.() ?? []) {
+        const pending = actions().getPendingAction(button.dataset.pendingActionId);
+        const source = pending?.damage?.sourceActorUuid
+          ? await fromUuid(pending.damage.sourceActorUuid)
+          : null;
+        if (!actions().userCanControlActor(source, game.user?.id)) button.remove();
+      }
+      damageButtons
         .off("click.mtrolResolvedDamage")
         .on("click.mtrolResolvedDamage", onResolvedDamageClick);
+
+      const cancelButtons = html.find(`[data-action="${CANCEL_DAMAGE_ACTION}"]`);
+      if (game.user?.isGM !== true) cancelButtons.remove?.();
+      else cancelButtons
+        .off("click.mtrolCancelDamage")
+        .on("click.mtrolCancelDamage", onCancelDamageClick);
 
       return;
     }
 
-    html
-      ?.querySelectorAll?.(selector)
-      .forEach(button => {
+    for (const button of html?.querySelectorAll?.(selector) ?? []) {
+        const pending = actions().getPendingAction(button.dataset.pendingActionId);
+        const source = pending?.damage?.sourceActorUuid
+          ? await fromUuid(pending.damage.sourceActorUuid)
+          : null;
+        if (!actions().userCanControlActor(source, game.user?.id)) {
+          button.remove();
+          continue;
+        }
         button.removeEventListener(
           "click",
           onResolvedDamageClick
@@ -747,6 +855,13 @@ export function registerResolvedDamageChatHandler() {
           "click",
           onResolvedDamageClick
         );
-      });
+      }
+    html?.querySelectorAll?.(`[data-action="${CANCEL_DAMAGE_ACTION}"]`).forEach(button => {
+      if (game.user?.isGM !== true) button.remove();
+      else {
+        button.removeEventListener("click", onCancelDamageClick);
+        button.addEventListener("click", onCancelDamageClick);
+      }
+    });
   });
 }

@@ -35,8 +35,6 @@ import {
   REACTION_MOVEMENT_ACTION
 } from "./pending-action-presentation.js";
 
-import { getItemAbilityDamageConfig } from "./ability-config.js";
-
 import {
   resolveActionDefinition as getActionDefinitionFromItem,
   resolveCanonicalDamageContext as getCanonicalDamageContext
@@ -70,11 +68,13 @@ import {
 } from "./opposition-policy.js";
 
 import { pendingActionCache } from "./pending-action-cache.js";
+import {
+  assertCanonicalOffensiveConfiguration,
+  normalizeContextualModifiers
+} from "./combat-ability-policy.js";
 
 import {
-  configureActionDamageDependencies,
-  executeConfiguredCompetenciaDamage,
-  executeResolvedDamageAuthoritative
+  configureActionDamageDependencies
 } from "./action-damage-engine.js";
 
 import {
@@ -86,9 +86,6 @@ import {
 const pendingActions = pendingActionCache.actions;
 const resolvingActions = pendingActionCache.resolving;
 const attachingDefenseActions = pendingActionCache.attachingDefense;
-
-const PENDING_ACTION_TTL_MS =
-  30 * 60 * 1000;
 
 const PENDING_ACTION_TERMINAL_RETENTION_MS =
   10 * 60 * 1000;
@@ -312,28 +309,17 @@ async function cleanupExpiredPendingActions() {
     const terminal =
       ["resolved", "cancelled"].includes(pendingAction.status);
 
-    const expiresAt =
-      terminal
-        ? Number(pendingAction.resolvedAt ?? pendingAction.cancelledAt ?? pendingAction.expiresAt ?? 0) +
-          PENDING_ACTION_TERMINAL_RETENTION_MS
-        : Number(pendingAction.expiresAt ?? 0);
+    if (!terminal) continue;
+    if (
+      pendingAction.winnerResolutionResult === "damage" &&
+      pendingAction.damage?.status === "available"
+    ) continue;
+    const expiresAt = Number(pendingAction.resolvedAt ?? pendingAction.cancelledAt ?? 0) +
+      PENDING_ACTION_TERMINAL_RETENTION_MS;
 
     if (!expiresAt || expiresAt > now || pendingAction.terminalHandledAt) continue;
 
-    if (!terminal) {
-      pendingAction.status =
-        "cancelled";
-
-      pendingAction.cancelledAt =
-        now;
-
-      pendingAction.updatedAt =
-        now;
-
-      pendingAction.cancellationReason =
-        "timeout";
-
-    } else if (pendingAction.reactionMovement?.status === "available") {
+    if (pendingAction.reactionMovement?.status === "available") {
       pendingAction.reactionMovement.status = "skipped";
       pendingAction.reactionMovement.reason = "timeout";
       pendingAction.reactionMovement.closedAt = now;
@@ -419,11 +405,14 @@ function normalizeDamageContext(data = {}) {
     (formula.length > 0 || hasFlatValue);
 
   return {
+    id: data.id ?? null,
     available,
     rolled: false,
     status: available ? "available" : "unavailable",
     formula,
+    damageFormula: data.damageFormula ?? formula,
     flatValue: hasFlatValue ? Number(flatValue) : null,
+    damageSourceAttribute: data.damageSourceAttribute ?? null,
     sourceActorUuid: data.sourceActorUuid ?? null,
     sourceTokenUuid: data.sourceTokenUuid ?? null,
     targetActorUuid: data.targetActorUuid ?? null,
@@ -447,6 +436,11 @@ function normalizeDamageContext(data = {}) {
         : 0,
     additionalCostApplied: false,
     rollData: foundry.utils.deepClone(data.rollData ?? {}),
+    modifiers: foundry.utils.deepClone(data.modifiers ?? []),
+    declaredMode: data.declaredMode ?? null,
+    actionModifiers: Array.from(data.actionModifiers ?? []),
+    createdFromPendingActionId: data.createdFromPendingActionId ?? null,
+    receiptLinkage: data.receiptLinkage ?? null,
     total: null,
     fumble: false,
     error: null,
@@ -516,7 +510,7 @@ function buildPendingAction(data = {}) {
   const id =
     data.id ?? foundry.utils.randomID();
 
-  return {
+  const pendingAction = {
     id,
     combatId: data.combatId ?? game.combat?.id ?? null,
     createTransactionId: data.createTransactionId ?? null,
@@ -536,6 +530,8 @@ function buildPendingAction(data = {}) {
     sourceItemName: data.sourceItemName ?? "Accion",
     actionType: data.actionType ?? "opposed",
     actionBehavior: data.actionBehavior ?? null,
+    resolutionResult: data.resolutionResult ?? "utility",
+    declaredMode: data.declaredMode ?? null,
     capabilities: Array.from(data.capabilities ?? []),
     actionDomain: data.actionDomain ?? null,
     allowedResponses: Array.from(data.allowedResponses ?? []),
@@ -549,6 +545,7 @@ function buildPendingAction(data = {}) {
     responseItemName: data.responseItemName ?? null,
     responseActionType: data.responseActionType ?? null,
     responseEffect: data.responseEffect ?? null,
+    responseResolutionResult: data.responseResolutionResult ?? null,
     responseDamage: data.responseDamage ?? null,
     responseDeclaration: data.responseDeclaration ?? null,
     reactionMovement: data.reactionMovement ?? null,
@@ -562,10 +559,11 @@ function buildPendingAction(data = {}) {
     attackerRoll: rollToData(data.attackerRoll),
     defenderRoll: data.defenderRoll ? rollToData(data.defenderRoll) : null,
     damage: normalizeDamageContext(data.damage),
+    damageEntitlements: [],
     status: "waiting-defense",
     createdAt: data.createdAt ?? now,
     updatedAt: data.updatedAt ?? now,
-    expiresAt: data.expiresAt ?? (now + PENDING_ACTION_TTL_MS),
+    expiresAt: null,
     resolvedAt: data.resolvedAt ?? null,
     cancelledAt: data.cancelledAt ?? null,
     cancellationReason: data.cancellationReason ?? null,
@@ -575,6 +573,12 @@ function buildPendingAction(data = {}) {
     result: data.result ?? null,
     shieldWear: data.shieldWear ?? null
   };
+  if (pendingAction.damage.available) {
+    pendingAction.damage.id ??= `damage:${id}:1`;
+    pendingAction.damage.createdFromPendingActionId = id;
+    pendingAction.damageEntitlements = [pendingAction.damage];
+  }
+  return pendingAction;
 }
 
 async function canonicalizePendingActionData(data, requestingUserId) {
@@ -607,7 +611,7 @@ async function canonicalizePendingActionData(data, requestingUserId) {
   if (!turnGuard.allowed) throw new Error(turnGuard.reason);
 
   const definition =
-    getActionDefinitionFromItem(sourceItem);
+    getActionDefinitionFromItem(sourceItem, { declaredMode: data.declaredMode ?? null });
 
   if (!definition.requiresOpposition) {
     throw new Error("La competencia no requiere una resolución enfrentada.");
@@ -624,11 +628,22 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     throw new Error("La acción ofensiva enfrentada no tiene actionDomain válido.");
   }
 
+  assertCanonicalOffensiveConfiguration({
+    item: sourceItem,
+    targetActor,
+    definition,
+    declaredMode: data.declaredMode ?? null
+  });
+
   if (!isValidRollData(data.attackerRoll)) {
     throw new Error("La tirada atacante no es válida.");
   }
 
-  return {
+  const requestingUser = game.users?.get?.(requestingUserId);
+  const suppliedModifiers = requestingUser?.isGM === true
+    ? normalizeContextualModifiers(data.damage?.modifiers ?? [], { allowGmOnly: true })
+    : [];
+  const pendingAction = {
     ...data,
     sourceUserId: requestingUserId,
     sourceActorId: sourceActor.id,
@@ -641,6 +656,11 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     sourceItemName: sourceItem.name,
     actionType: definition.actionType,
     actionBehavior: definition.actionBehavior,
+    resolutionResult: definition.resolutionResult,
+    declaredMode: data.declaredMode ?? null,
+    actionModifiers: requestingUser?.isGM === true
+      ? normalizeContextualModifiers(data.actionModifiers ?? [], { allowGmOnly: true })
+      : [],
     capabilities: definition.capabilities,
     actionDomain: definition.actionDomain,
     allowedResponses: definition.allowedResponses,
@@ -655,9 +675,14 @@ async function canonicalizePendingActionData(data, requestingUserId) {
       sourceItem,
       targetActor,
       requiresOpposition: true,
-      data: data.damage ?? {}
+      data: {
+        ...(data.damage ?? {}),
+        declaredMode: data.declaredMode ?? null,
+        modifiers: suppliedModifiers
+      }
     })
   };
+  return pendingAction;
 }
 
 export async function createPendingActionAuthoritative(
@@ -778,10 +803,12 @@ export async function createPendingActionFromCompetencia({
   item,
   targetToken,
   attackerRoll,
-  damage = null
+  damage = null,
+    declaredMode = null,
+    actionModifiers = []
 } = {}) {
   const definition =
-    getActionDefinitionFromItem(item);
+    getActionDefinitionFromItem(item, { declaredMode });
 
   if (!definition.requiresOpposition) return null;
 
@@ -803,6 +830,9 @@ export async function createPendingActionFromCompetencia({
     sourceItemName: item?.name ?? "Accion",
     actionType: definition.actionType,
     actionBehavior: definition.actionBehavior,
+    resolutionResult: definition.resolutionResult,
+    declaredMode,
+    actionModifiers,
     capabilities: definition.capabilities,
     actionDomain: definition.actionDomain,
     allowedResponses: definition.allowedResponses,
@@ -831,88 +861,9 @@ export async function createPendingActionFromCompetencia({
 export async function createReadyDamageActionAuthoritative(data = {}, {
   requestingUserId = game.user?.id
 } = {}) {
-  if (!game.user?.isGM) {
-    throw new Error("Solo el GM autoritativo puede habilitar una resolución de daño.");
-  }
-  const runtimeContext = await ensurePendingActionCache(data.combatId ?? null);
-  if (!runtimeContext) throw new Error("No existe Combat activo para habilitar el daño.");
-
-  const sourceActor = data.sourceActorUuid
-    ? await fromUuid(data.sourceActorUuid)
-    : game.actors?.get?.(data.sourceActorId) ?? null;
-  const targetActor = data.targetActorUuid
-    ? await fromUuid(data.targetActorUuid)
-    : game.actors?.get?.(data.targetActorId) ?? null;
-
-  if (!sourceActor || !targetActor) {
-    throw new Error("La resolución de daño no contiene actores válidos.");
-  }
-
-  if (!userCanControlActor(sourceActor, requestingUserId)) {
-    throw new Error("El usuario no controla al actor atacante.");
-  }
-
-  const sourceItem = sourceActor.items.get(data.sourceItemId);
-
-  if (!sourceItem || sourceItem.type !== "competencia") {
-    throw new Error("La competencia atacante ya no existe.");
-  }
-
-  const turnGuard = getActionGuard(sourceActor, sourceItem);
-  if (!turnGuard.allowed) throw new Error(turnGuard.reason);
-
-  const definition = getActionDefinitionFromItem(sourceItem);
-  const config = getItemAbilityDamageConfig(sourceItem, {
-    requiresOpposition: definition.requiresOpposition
-  });
-
-  if (config.resolution !== "immediate" || config.mode !== "enabled") {
-    throw new Error("La habilidad no admite una ejecución de daño inmediata habilitada.");
-  }
-
-  const canonicalData = {
-    ...data,
-    sourceUserId: requestingUserId,
-    sourceActorId: sourceActor.id,
-    sourceActorUuid: sourceActor.uuid,
-    sourceActorName: sourceActor.name,
-    targetActorId: targetActor.id,
-    targetActorUuid: targetActor.uuid,
-    targetActorName: targetActor.name,
-    sourceItemId: sourceItem.id,
-    sourceItemName: sourceItem.name,
-    actionType: definition.actionType,
-    effect: definition.effect,
-    defenseType: definition.defenseType,
-    oppositionType: definition.oppositionType,
-    requiresOpposition: false,
-    damage: getCanonicalDamageContext({
-      sourceActor,
-      sourceItem,
-      targetActor,
-      requiresOpposition: false,
-      data: data.damage ?? {}
-    })
-  };
-  const pendingAction = buildPendingAction(canonicalData);
-
-  pendingAction.status = "resolved";
-  pendingAction.result = {
-    success: true,
-    reason: "no-opposition",
-    attackerTotal: Number(data.attackerRoll?.total ?? 0),
-    defenderTotal: 0,
-    tieBreaker: null
-  };
-  pendingAction.resolvedAt = Date.now();
-  pendingAction.updatedAt = pendingAction.resolvedAt;
-  pendingActions.set(pendingAction.id, pendingAction);
-  await persistPendingAction(pendingAction);
-
-  await createResolutionMessage(pendingAction, pendingAction.result);
-  await persistPendingAction(pendingAction);
-  broadcastPendingAction(pendingAction);
-  return pendingAction;
+  void data;
+  void requestingUserId;
+  throw new Error("El daño directo está deshabilitado: toda acción ofensiva debe resolver una oposición.");
 }
 
 export async function createReadyDamageAction(data = {}) {
@@ -1015,6 +966,17 @@ export async function declareOppositionResponseAuthoritative({
   const actor = await resolveDefenderActor(pendingAction, defenderActorUuid);
   const responseItem = actor?.items?.get?.(responseItemId) ?? null;
   const guard = actor && responseItem ? getActionGuard(actor, responseItem) : null;
+  if (responseItem) {
+    const responseDefinition = getActionDefinitionFromItem(responseItem, { declaredMode: mode });
+    const initiatorActor = pendingAction?.sourceActorUuid
+      ? await fromUuid(pendingAction.sourceActorUuid)
+      : null;
+    assertCanonicalOffensiveConfiguration({
+      item: responseItem,
+      targetActor: null,
+      definition: responseDefinition
+    });
+  }
   const eligibility = evaluateOppositionResponseEligibility({
     pendingAction,
     actor,
@@ -1260,9 +1222,20 @@ export async function attachDefenseRollAuthoritative({
   if (!defenseItem || defenseItem.type !== "competencia") {
     throw new Error("La acción de oposición no es válida.");
   }
+  const declaredResponse = pendingAction.responseDeclaration ?? null;
+  const responseDefinition = getActionDefinitionFromItem(defenseItem, {
+    declaredMode: declaredResponse?.mode ?? mode
+  });
+  const initiatorActor = pendingAction.sourceActorUuid
+    ? await fromUuid(pendingAction.sourceActorUuid)
+    : null;
+  assertCanonicalOffensiveConfiguration({
+    item: defenseItem,
+    targetActor: null,
+    definition: responseDefinition
+  });
 
   const responseGuard = getActionGuard(actor, defenseItem);
-  const declaredResponse = pendingAction.responseDeclaration ?? null;
   if (declaredResponse && declaredResponse.itemId !== defenseItem.id) {
     throw new Error("La tirada no corresponde al Item de respuesta declarado.");
   }
@@ -1351,6 +1324,8 @@ export async function attachDefenseRollAuthoritative({
   pendingAction.responseEffect =
     defenseItem.system?.effect ?? "none";
 
+  pendingAction.responseResolutionResult = responseDefinition.resolutionResult;
+
   pendingAction.responseDeclaration = {
     ...(declaredResponse ?? {}),
     itemUuid: defenseItem.uuid ?? null,
@@ -1368,11 +1343,10 @@ export async function attachDefenseRollAuthoritative({
     getCanonicalDamageContext({
       sourceActor: actor,
       sourceItem: defenseItem,
-      targetActor: pendingAction.sourceActorUuid
-        ? await fromUuid(pendingAction.sourceActorUuid)
-        : null,
-      requiresOpposition: false,
+      targetActor: initiatorActor,
+      requiresOpposition: true,
       data: {
+        declaredMode: declaredResponse?.mode ?? mode,
         sourceTokenUuid: pendingAction.targetTokenUuid,
         targetTokenUuid: pendingAction.sourceTokenUuid
       }
@@ -1708,47 +1682,33 @@ export async function resolvePendingActionAuthoritative(
 
     if (
       !result.success &&
-      pendingAction.responseDeclaration?.selectedCapability === OPPOSITION_CAPABILITIES.DODGE
+      pendingAction.responseResolutionResult === "movement"
     ) {
       pendingAction.reactionMovement = {
         resolutionId: pendingAction.id,
         actorUuid: pendingAction.targetActorUuid,
         tokenUuid: pendingAction.targetTokenUuid,
-        allowance: 1,
+        allowance: Math.max(0, Math.floor(Number(pendingAction.defenderRoll?.total ?? 0) / 10)),
         status: "available",
         grantedAt: Date.now()
       };
     }
 
-    if (!result.success && pendingAction.responseDamage?.available === true) {
-      const responseActor = pendingAction.targetActorUuid
-        ? await fromUuid(pendingAction.targetActorUuid)
-        : null;
-      const sourceActor = pendingAction.sourceActorUuid
-        ? await fromUuid(pendingAction.sourceActorUuid)
-        : null;
-      const sourceToken = pendingAction.sourceTokenUuid
-        ? await fromUuid(pendingAction.sourceTokenUuid)
-        : null;
-      const responseItem = responseActor?.items?.get?.(pendingAction.responseItemId) ?? null;
-      const damageResult = await executeConfiguredCompetenciaDamage({
-        actor: responseActor,
-        targetActor: sourceActor,
-        targetToken: sourceToken,
-        formula: pendingAction.responseDamage.formula,
-        flatValue: pendingAction.responseDamage.flatValue,
-        costoTotal: Number(pendingAction.responseDamage.costoTotal ?? 0),
-        damageCostType: pendingAction.responseDamage.costType ?? "none",
-        damageContext: {
-          ...pendingAction.responseDamage,
-          item: responseItem,
-          title: pendingAction.responseItemName,
-          icon: responseItem?.img ?? responseActor?.img ?? ""
-        }
-      });
-      pendingAction.responseDamage.status = damageResult?.success === true ? "rolled" : "failed";
-      pendingAction.responseDamage.rolled = true;
-      pendingAction.responseDamage.total = Number(damageResult?.totalFinalDanio ?? 0);
+    const winnerResolutionResult = result.success
+      ? pendingAction.resolutionResult
+      : pendingAction.responseResolutionResult ?? "defense";
+    pendingAction.winnerResolutionResult = winnerResolutionResult;
+    const entitlement = result.success ? pendingAction.damage : pendingAction.responseDamage;
+    if (winnerResolutionResult === "damage" && entitlement?.available === true) {
+      entitlement.id ??= `damage:${pendingAction.id}:${pendingAction.damageEntitlements.length + 1}`;
+      entitlement.createdFromPendingActionId = pendingAction.id;
+      entitlement.status = "available";
+      entitlement.rolled = false;
+      pendingAction.damage = entitlement;
+      pendingAction.damageEntitlements = [entitlement];
+    } else {
+      pendingAction.damage = normalizeDamageContext({ available: false });
+      pendingAction.damageEntitlements = [];
     }
   } catch (error) {
     pendingAction.result =
@@ -1815,22 +1775,6 @@ export async function resolvePendingActionAuthoritative(
     logger.error("OPPOSITION", "resolved action presentation failed", { error });
   }
 
-  if (
-    result.success === true &&
-    pendingAction.damage?.available === true &&
-    pendingAction.damage?.mode === "automatic" &&
-    pendingAction.damage?.resolution === "onOppositionWin"
-  ) {
-    try {
-      await executeResolvedDamageAuthoritative(
-        pendingAction.id,
-        { requestingUserId: pendingAction.sourceUserId ?? game.user?.id }
-      );
-    } catch (error) {
-      logger.warn("DAMAGE", "automatic resolved damage execution failed", { error });
-    }
-  }
-
   broadcastPendingAction(pendingAction);
 
   logger.info("OPPOSITION", "opposed action resolved", {
@@ -1841,7 +1785,7 @@ export async function resolvePendingActionAuthoritative(
     reason: result.reason
   });
 
-  const waitsForManualDamage = result.success === true &&
+  const waitsForManualDamage = pendingAction.winnerResolutionResult === "damage" &&
     pendingAction.damage?.available === true &&
     pendingAction.damage?.mode === "enabled" &&
     pendingAction.damage?.status === "available";

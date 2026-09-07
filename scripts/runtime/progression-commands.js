@@ -4,14 +4,17 @@ import {
 } from "../actors/progression-advancement-service.js";
 import { commandRegistry } from "./runtime-foundation.js";
 import { authorityService } from "../core/authority-service.js";
+import { grantAwakeningSlotAuthoritative } from "../actors/awakening-service.js";
 
 const SOCKET_COMMANDS = Object.freeze({
   mtrolSpendPendingAttribute: "progression.spend-attribute",
-  mtrolSpendPendingCompetence: "progression.spend-competence"
+  mtrolSpendPendingCompetence: "progression.spend-competence",
+  mtrolGrantAwakening: "progression.awakening-grant"
 });
 const SERVICES = Object.freeze({
   spendAttribute: spendPendingAttributePointAuthoritative,
-  spendCompetence: spendPendingCompetencePointAuthoritative
+  spendCompetence: spendPendingCompetencePointAuthoritative,
+  grantAwakening: grantAwakeningSlotAuthoritative
 });
 
 export function registerProgressionCommands(registry = commandRegistry, services = SERVICES) {
@@ -26,6 +29,11 @@ export function registerProgressionCommands(registry = commandRegistry, services
   if (!registry.has("progression.spend-competence")) {
     registry.register("progression.spend-competence", async (payload, context) => ({
       receipt: await services.spendCompetence(payload, { requestingUserId: context.requestingUserId })
+    }), options);
+  }
+  if (!registry.has("progression.awakening-grant")) {
+    registry.register("progression.awakening-grant", async (payload, context) => ({
+      receipt: await services.grantAwakening(payload, { requestingUserId: context.requestingUserId })
     }), options);
   }
   return registry;

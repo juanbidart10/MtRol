@@ -21,13 +21,18 @@ export function getAbilityRoleLabel(role) {
 }
 
 export const MTROL_DAMAGE_RESOLUTIONS = Object.freeze([
-  "immediate",
   "onOppositionWin"
 ]);
 
 export const MTROL_DAMAGE_MODES = Object.freeze([
-  "automatic",
   "enabled"
+]);
+
+export const MTROL_RESOLUTION_RESULTS = Object.freeze([
+  "damage",
+  "defense",
+  "movement",
+  "utility"
 ]);
 
 export const MTROL_DAMAGE_COST_TYPES = Object.freeze([
@@ -52,27 +57,16 @@ export function normalizeAbilityDamageConfig(system = {}, {
 } = {}) {
   const requiresOpposition = isTrue(system.requiresOpposition);
   const executesDamage = !isFalse(system.ejecutaDanio);
-  const legacyResolution = requiresOpposition
-    ? "onOppositionWin"
-    : "immediate";
-  const legacyMode = requiresOpposition
-    ? "enabled"
-    : "automatic";
-
-  let resolution = selectKnown(
+  const resolution = selectKnown(
     legacy ? undefined : system.damageResolution,
     MTROL_DAMAGE_RESOLUTIONS,
-    legacyResolution
+    "onOppositionWin"
   );
-
-  if (!requiresOpposition && resolution === "onOppositionWin") {
-    resolution = "immediate";
-  }
 
   const mode = selectKnown(
     legacy ? undefined : system.damageMode,
     MTROL_DAMAGE_MODES,
-    legacyMode
+    "enabled"
   );
   const costType = selectKnown(
     legacy ? undefined : system.damageCostType,
@@ -87,6 +81,11 @@ export function normalizeAbilityDamageConfig(system = {}, {
     costType,
     additionalMpCost: costType === "basic" ? 1 : 0
   };
+}
+
+export function normalizeResolutionResult(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return MTROL_RESOLUTION_RESULTS.includes(normalized) ? normalized : null;
 }
 
 export function getItemAbilityDamageConfig(item, {

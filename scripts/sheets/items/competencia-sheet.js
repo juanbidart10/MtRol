@@ -19,6 +19,7 @@ import {
   MTROL_ORB_IDS,
   MTROL_ORB_REGISTRY
 } from "../../progression/orb-registry.js";
+import { MTROL_EFFECT_ATTRIBUTE_KEYS } from "../../effects/effect-types.js";
 import { logger } from "../../utils/logger.js";
 
 const { ItemSheet } =
@@ -121,7 +122,7 @@ export class CompetenciaSheet extends ItemSheet {
     context.damageConfig = damageConfig;
     context.rolLabel = getAbilityRoleLabel(this.item.system?.rol);
     context.showOppositionType = this.item.system?.requiresOpposition === true;
-    context.showDamageConfiguration = damageConfig.executesDamage;
+    context.showDamageConfiguration = this.item.system?.resolutionResult === "damage";
     context.showOrbAssociation = this.item.system?.categoria === "hechizo";
     const selectedCapabilities = new Set(this.item.system?.capabilities ?? []);
     const selectedResponses = new Set(this.item.system?.allowedResponses ?? []);
@@ -185,7 +186,7 @@ export class CompetenciaSheet extends ItemSheet {
     const refreshContextualFields = () => {
       const root = html[0] ?? html;
       const requiresOpposition = root.querySelector('[name="system.requiresOpposition"]')?.checked === true;
-      const executesDamage = root.querySelector('[name="system.ejecutaDanio"]')?.checked === true;
+      const resolutionResult = root.querySelector('[name="system.resolutionResult"]')?.value;
       const oppositionRegion = root.querySelector('[data-mtrol-context="opposition"]');
       const damageRegion = root.querySelector('[data-mtrol-context="damage"]');
       const resolution = root.querySelector('[name="system.damageResolution"]');
@@ -193,14 +194,12 @@ export class CompetenciaSheet extends ItemSheet {
       const additionalCost = root.querySelector('[data-mtrol-damage-additional-cost]');
 
       if (oppositionRegion) oppositionRegion.hidden = !requiresOpposition;
-      if (damageRegion) damageRegion.hidden = !executesDamage;
+      if (damageRegion) damageRegion.hidden = resolutionResult !== "damage";
 
-      if (!requiresOpposition && resolution?.value === "onOppositionWin") {
-        resolution.value = "immediate";
-        ui.notifications.warn("Al ganar oposición requiere que la habilidad use oposición. Se ajustó a Inmediato.");
+      if (resolutionResult === "damage") {
+        const opposition = root.querySelector('[name="system.requiresOpposition"]');
+        if (opposition) opposition.checked = true;
       }
-
-      resolution?.querySelector('[value="onOppositionWin"]')?.toggleAttribute("disabled", !requiresOpposition);
       if (additionalCost) {
         additionalCost.textContent = costType === "basic"
           ? "+1 MP al ejecutar"
@@ -208,7 +207,7 @@ export class CompetenciaSheet extends ItemSheet {
       }
     };
 
-    html.find('[name="system.requiresOpposition"], [name="system.ejecutaDanio"], [name="system.damageCostType"]')
+    html.find('[name="system.requiresOpposition"], [name="system.ejecutaDanio"], [name="system.damageCostType"], [name="system.resolutionResult"]')
       .on("change.mtrolAbilityContext", refreshContextualFields);
 
     refreshContextualFields();
@@ -227,6 +226,13 @@ export class CompetenciaSheet extends ItemSheet {
       formData["system.rol"] = null;
     }
 
+    const damageSourceAttribute = formData["system.damageSourceAttribute"];
+    if (damageSourceAttribute === "" || damageSourceAttribute === undefined) {
+      formData["system.damageSourceAttribute"] = null;
+    } else if (!MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damageSourceAttribute)) {
+      throw new Error("El atributo de origen del daño no pertenece al registro canónico.");
+    }
+
     const category = String(
       formData["system.categoria"] ?? this.item.system?.categoria ?? ""
     );
@@ -239,12 +245,12 @@ export class CompetenciaSheet extends ItemSheet {
       throw new Error("El tipo de Orbe del hechizo no pertenece al registro canónico.");
     }
 
-    const requiresOpposition = formData["system.requiresOpposition"] === true || formData["system.requiresOpposition"] === "true";
-
-    if (!requiresOpposition && formData["system.damageResolution"] === "onOppositionWin") {
-      formData["system.damageResolution"] = "immediate";
-      ui.notifications.warn("La resolución de daño se ajustó a Inmediato porque la habilidad no requiere oposición.");
+    if (formData["system.resolutionResult"] === "damage") {
+      formData["system.requiresOpposition"] = true;
+      formData["system.ejecutaDanio"] = true;
     }
+    formData["system.damageResolution"] = "onOppositionWin";
+    formData["system.damageMode"] = "enabled";
 
     return super._updateObject(event, formData);
   }

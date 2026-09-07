@@ -15,7 +15,10 @@ import {
   applyDamageToHpAuthoritative
 } from "../actors/actor-resource-service.js";
 
-import { aplicarDanioCanonicoAutorizado } from "./damage-authorized.js";
+import {
+  aplicarDanioCanonicoAutorizado,
+  resolveAuthorizedDamageMitigation
+} from "./damage-authorized.js";
 import { logger } from "../utils/logger.js";
 
 // =========================
@@ -49,9 +52,11 @@ function createDamageTransactionId(prefix) {
 }
 
 function previewDamageToTarget({
+  actor,
   actorObjetivo,
   slotObjetivo,
   danioFinal,
+  combatId,
   resultado
 }) {
   if (danioFinal <= 0) return resultado;
@@ -63,11 +68,18 @@ function previewDamageToTarget({
     itemId ? actorObjetivo.items.get(itemId) : null;
 
   if (!item) {
-    resultado.hpPerdido =
-      danioFinal;
+    const mitigation = resolveAuthorizedDamageMitigation({
+      attackerActor: actor,
+      targetActor: actorObjetivo,
+      damage: danioFinal,
+      combatId
+    });
+    resultado.hpPerdido = mitigation.resolution.value;
+    resultado.danioMitigadoPasiva = danioFinal - resultado.hpPerdido;
+    resultado.effectResolution = mitigation.resolution;
 
     resultado.hpNuevo =
-      Math.max(0, resultado.hpAnterior - danioFinal);
+      Math.max(0, resultado.hpAnterior - resultado.hpPerdido);
 
     return resultado;
   }
@@ -80,6 +92,14 @@ function previewDamageToTarget({
 
   const danioSobrante =
     Math.max(0, danioFinal - defensaActual);
+
+  const mitigation = resolveAuthorizedDamageMitigation({
+    attackerActor: actor,
+    targetActor: actorObjetivo,
+    damage: danioSobrante,
+    combatId
+  });
+  const hpDamage = mitigation.resolution.value;
 
   const defensaNueva =
     Math.max(0, defensaActual - danioFinal);
@@ -94,10 +114,13 @@ function previewDamageToTarget({
     danioAbsorbido;
 
   resultado.hpPerdido =
-    danioSobrante;
+    hpDamage;
+
+  resultado.danioMitigadoPasiva = danioSobrante - hpDamage;
+  resultado.effectResolution = mitigation.resolution;
 
   resultado.hpNuevo =
-    Math.max(0, resultado.hpAnterior - danioSobrante);
+    Math.max(0, resultado.hpAnterior - hpDamage);
 
   resultado.itemDestruido =
     defensaNueva <= 0;
@@ -206,6 +229,8 @@ function delegateApplyDamageToGM({
   evaluacionDanio,
   totalBaseDanio,
   totalFinalDanio,
+  combatId,
+  damageSourceAttribute,
   transactionId
 }) {
   const gmActivo =
@@ -245,7 +270,9 @@ function delegateApplyDamageToGM({
       costoTotal,
       evaluacionDanio,
       totalBaseDanio,
-      totalFinalDanio
+      totalFinalDanio,
+      combatId,
+      damageSourceAttribute
     }
   });
 
@@ -261,7 +288,11 @@ export async function aplicarDanioLocalizado({
   costoTotal = 0,
   evaluacionDanio = null,
   totalBaseDanio = null,
-  totalFinalDanio = null
+  totalFinalDanio = null,
+  combatId = null,
+  damageSourceAttribute = null,
+  localizacionRoll = null,
+  transactionId = null
 } = {}) {
   logger.debug("DAMAGE", "damage request started", {
     actorUuid: actor?.uuid ?? null,
@@ -283,9 +314,9 @@ export async function aplicarDanioLocalizado({
   const danioFinal =
     Math.max(0, toNumber(danioBase));
 
-  const transactionId = createDamageTransactionId("damage-localized");
+  transactionId ??= createDamageTransactionId("damage-localized");
 
-  const localizacionRoll =
+  localizacionRoll ??=
     await new Roll("1d10").evaluate();
 
   await mtrolMostrarDados(localizacionRoll);
@@ -340,6 +371,8 @@ export async function aplicarDanioLocalizado({
       payload: {
         transactionId,
         danio: danioFinal,
+        combatId,
+        damageSourceAttribute,
         numeroLocalizacion,
         slot: slotObjetivo,
         zona: labelLocalizacion
@@ -354,9 +387,11 @@ export async function aplicarDanioLocalizado({
   }
 
   previewDamageToTarget({
+    actor,
     actorObjetivo,
     slotObjetivo,
     danioFinal,
+    combatId,
     resultado
   });
 
@@ -374,8 +409,10 @@ export async function aplicarDanioLocalizado({
       costoTotal,
       evaluacionDanio,
       totalBaseDanio,
-      totalFinalDanio
-      ,transactionId
+      totalFinalDanio,
+      combatId,
+      damageSourceAttribute,
+      transactionId
     });
 
   resultado.aplicacion =

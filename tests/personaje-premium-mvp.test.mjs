@@ -126,7 +126,7 @@ test("functional portrait, vital, attribute, Dharma and identity hooks remain pr
     'mtrol-roll-atributo',
     'data-mtrol-action-key="attribute:',
     'name="system.identidad.titulo"',
-    'name="system.identidad.raza"',
+    'class="mtrol-race-select"',
     'name="system.identidad.profesion"',
     'name="system.identidad.maestria"',
     'name="system.identidad.edad"'

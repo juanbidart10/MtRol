@@ -58,7 +58,8 @@ function createActor({
   mpMax = 100,
   attributePoints = 0,
   competencePoints = 0,
-  classId = undefined
+  classId = undefined,
+  raceId = ""
 } = {}) {
   const req = requirementsFor(level);
   const items = (req.skills ?? []).map((nivel, index) => ({
@@ -78,7 +79,9 @@ function createActor({
     id: "hero",
     uuid: "Actor.hero",
     system: {
-      identidad: classId === undefined ? { clase: "Mago" } : { clase: "Mago", classId },
+      identidad: classId === undefined
+        ? { clase: "Mago", raceId }
+        : { clase: "Mago", classId, raceId },
       recursos: {
         nivel: level,
         exp: req.exp + expExtra - (eligible ? 0 : 1),
@@ -213,6 +216,30 @@ test("pending existente se acumula con el ascenso", async () => {
     attributePoints: 2,
     competencePoints: 2
   });
+});
+
+test("Prodigio duplica sólo la ganancia pendiente de Competencia", async () => {
+  const actor = createActor({ level: 1, raceId: "humano" });
+  const receipt = await levelUpActorAuthoritative(levelPayload(actor, "prodigio-level"), {
+    requestingUserId: "gm"
+  });
+  assert.equal(actor.system.pendingAdvancement.competencePoints, 2);
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 1);
+  assert.equal(receipt.competencePointGain, 2);
+  assert.ok(actor.items.every(item => item.updates.length === 0), "no aumenta directamente niveles de Competencia");
+});
+
+test("Infinito duplica sólo la ganancia pendiente de atributo", async () => {
+  const actor = createActor({ level: 1, raceId: "eterno" });
+  const before = structuredClone(actor.system.vitales);
+  const receipt = await levelUpActorAuthoritative(levelPayload(actor, "infinito-level"), {
+    requestingUserId: "gm"
+  });
+  assert.equal(actor.system.pendingAdvancement.attributePoints, 2);
+  assert.equal(actor.system.pendingAdvancement.competencePoints, 1);
+  assert.equal(receipt.attributePointGain, 2);
+  assert.equal(actor.system.vitales.hp.max - before.hp.max, 10);
+  assert.equal(actor.system.vitales.mp.max - before.mp.max, 10);
 });
 
 test("Actor legacy sin classId sube de nivel con un único +10/+10 sin reconstrucción de Clase", async () => {

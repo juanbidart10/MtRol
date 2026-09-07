@@ -423,8 +423,51 @@
 
           <div class="mtrol-field">
             <label>Raza</label>
-            <input type="text" name="system.identidad.raza" value="{{system.identidad.raza}}">
+            {{#if canManageRace}}
+              <select id="mtrol-race-select-{{actor.id}}"
+                      class="mtrol-race-select"
+                      aria-label="Raza del personaje">
+                <option value="" disabled {{#unless selectedRaceId}}selected{{/unless}}>
+                  {{#if selectedRaceInvalid}}Raza inv&aacute;lida — seleccionar raza...{{else}}Seleccionar raza...{{/if}}
+                </option>
+                {{#each raceOptions}}
+                  <option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+              {{#if raceCreationGrant.applied}}
+                <small>Beneficios de creaci&oacute;n aplicados: {{raceCreationGrant.sourceLabel}}</small>
+              {{else}}
+                <button type="button"
+                        class="mtrol-race-creation-grant"
+                        {{#unless raceCreationGrant.canApply}}disabled{{/unless}}>
+                  Aplicar beneficios de creaci&oacute;n
+                </button>
+              {{/if}}
+            {{else}}
+              <output class="mtrol-race-readonly" aria-label="Raza del personaje">{{selectedRaceLabel}}</output>
+              {{#if raceCreationGrant.applied}}
+                <small>Beneficios de creaci&oacute;n aplicados: {{raceCreationGrant.sourceLabel}}</small>
+              {{/if}}
+            {{/if}}
           </div>
+
+          {{#if narrativeCapabilities.length}}
+          <section class="mtrol-field mtrol-narrative-capabilities" aria-label="Capacidades narrativas">
+            <h3>Capacidades narrativas</h3>
+            <small>Declaraciones al GM · sin tiradas ni consumo automático.</small>
+            {{#each narrativeCapabilities}}
+            <div class="mtrol-narrative-capability">
+              <strong>{{displayName}}</strong>
+              <p>{{description}}</p>
+              <button type="button" class="mtrol-narrative-capability-declare"
+                      data-capability-id="{{technicalId}}"
+                      {{#unless ../canDeclareNarrativeCapability}}disabled{{/unless}}>
+                Declarar {{displayName}}
+              </button>
+            </div>
+            {{/each}}
+          </section>
+          {{/if}}
 
           <div class="mtrol-field">
             <label>Profesi&oacute;n</label>

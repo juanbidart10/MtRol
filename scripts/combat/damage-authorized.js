@@ -16,11 +16,19 @@ import {
 } from "../rolls/chat-rolls.js";
 
 import {
-  applyDamageToHpAuthoritative
+  applyDamageToHpAuthoritative,
+  restoreActorResourceAuthoritative
 } from "../actors/actor-resource-service.js";
 
 import { transactionCoordinator } from "../runtime/runtime-foundation.js";
 import { logger } from "../utils/logger.js";
+import { getCombatantForActor, getTurnContext } from "./turn-system.js";
+import { createEffectContext } from "../effects/effect-context.js";
+import { resolveEffects } from "../effects/effect-resolver.js";
+import {
+  MTROL_EFFECT_ATTRIBUTE_KEYS,
+  MTROL_EFFECT_PHASES
+} from "../effects/effect-types.js";
 
 // =========================
 // MTROL - DAMAGE AUTHORIZED
@@ -354,6 +362,123 @@ async function rollLocalization() {
   return Number(roll.total ?? 5);
 }
 
+export function resolveAuthorizedDamageMitigation({
+  attackerActor = null,
+  targetActor = null,
+  damage = 0,
+  combatId = null,
+  mitigationPolicy = "standard"
+} = {}) {
+  const turnContext = getTurnContext();
+  const targetCombatant = getCombatantForActor(targetActor, turnContext.combat);
+  const isCombat = Boolean(
+    targetCombatant &&
+    turnContext.combatId &&
+    (!combatId || combatId === turnContext.combatId)
+  );
+  const context = createEffectContext({
+    phase: MTROL_EFFECT_PHASES.DAMAGE_MITIGATION,
+    sourceActor: attackerActor,
+    targetActor,
+    rawDamage: Math.max(0, toNumber(damage)),
+    currentDamage: Math.max(0, toNumber(damage)),
+    isCombat,
+    combatId: isCombat ? turnContext.combatId : null,
+    mitigationPolicy
+  });
+  return { context, resolution: resolveEffects(context) };
+}
+
+export function resolveAfterDamageEffects({
+  sourceActor = null,
+  targetActor = null,
+  damageApplied = 0,
+  damageSourceAttribute = null,
+  parentTransactionId = null
+} = {}) {
+  const canonicalAttribute = MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damageSourceAttribute)
+    ? damageSourceAttribute
+    : null;
+  const context = createEffectContext({
+    phase: MTROL_EFFECT_PHASES.AFTER_DAMAGE_APPLIED,
+    sourceActor,
+    targetActor,
+    currentDamage: Math.max(0, Number(damageApplied) || 0),
+    damageSourceAttribute: canonicalAttribute,
+    metadata: { parentTransactionId }
+  });
+  return { context, resolution: resolveEffects(context) };
+}
+
+export async function applyAfterDamageEffects({
+  sourceActor = null,
+  targetActor = null,
+  damageApplied = 0,
+  damageSourceAttribute = null,
+  parentTransactionId
+} = {}) {
+  const resolved = resolveAfterDamageEffects({
+    sourceActor,
+    targetActor,
+    damageApplied,
+    damageSourceAttribute,
+    parentTransactionId
+  });
+  const operations = [];
+  const diagnostics = [...resolved.resolution.diagnostics];
+
+  for (const intent of resolved.resolution.resourceIntents) {
+    const transactionId = [
+      parentTransactionId,
+      "effect",
+      intent.passiveId,
+      intent.effectIndex,
+      intent.resource
+    ].join(":");
+    try {
+      const receipt = await restoreActorResourceAuthoritative(
+        sourceActor,
+        intent.resource,
+        intent.amount,
+        {
+          transactionId,
+          origin: "passive-effect",
+          parentTransactionId
+        }
+      );
+      operations.push(Object.freeze({
+        ...intent,
+        parentTransactionId,
+        transactionId,
+        resourceBefore: receipt.before,
+        resourceAfter: receipt.after,
+        resourceDelta: receipt.restored,
+        replayed: receipt.replayed === true
+      }));
+    } catch (error) {
+      const diagnostic = Object.freeze({
+        code: "AFTER_DAMAGE_RESOURCE_FAILED",
+        passiveId: intent.passiveId,
+        effectType: intent.effectType,
+        parentTransactionId,
+        transactionId,
+        error: error.message,
+        reasonCode: error.reasonCode ?? "RESOURCE_RESTORE_FAILED"
+      });
+      diagnostics.push(diagnostic);
+      logger.errorOnce?.("EFFECT", "after-damage resource restore failed", diagnostic, {
+        key: `after-damage-resource:${transactionId}`
+      });
+    }
+  }
+
+  return Object.freeze({
+    ...resolved.resolution,
+    operations: Object.freeze(operations),
+    diagnostics: Object.freeze(diagnostics)
+  });
+}
+
 /** CANONICAL: única ruta autoritativa de mutación de daño. */
 export async function aplicarDanioCanonicoAutorizado({
   attackerActor = null,
@@ -365,10 +490,13 @@ export async function aplicarDanioCanonicoAutorizado({
   if (!game.user?.isGM) throw new Error("Solo el Primary GM puede aplicar daño.");
   if (!targetActor) throw new Error("No se encontró el Actor objetivo.");
   const rawDamage = Math.max(0, toNumber(payload?.danio ?? payload?.damage ?? payload?.total ?? 0));
+  const damageSourceAttribute = MTROL_EFFECT_ATTRIBUTE_KEYS.includes(payload?.damageSourceAttribute)
+    ? payload.damageSourceAttribute
+    : null;
   const rootId = String(transactionId || createDamageTransactionId("damage"));
   const scope = game.combat ? { combat: game.combat, actor: targetActor } : { actor: targetActor };
 
-  return transactionCoordinator.execute(scope, {
+  const damageReceipt = await transactionCoordinator.execute(scope, {
     transactionId: rootId,
     command: "damage.apply",
     metadata: {
@@ -376,6 +504,7 @@ export async function aplicarDanioCanonicoAutorizado({
       targetActorUuid: targetActor.uuid,
       sourceItemUuid: payload?.sourceItemUuid ?? null,
       damageDomain: payload?.damageDomain ?? payload?.damageType ?? null,
+      damageSourceAttribute,
       rawDamage
     },
     prepare: async () => {
@@ -389,7 +518,15 @@ export async function aplicarDanioCanonicoAutorizado({
         : 0;
       const absorbed = Math.min(durabilityBefore, rawDamage);
       const hpBefore = Number(targetActor.system?.vitales?.hp?.value ?? 0);
-      const hpDamage = Math.max(0, rawDamage - absorbed);
+      const postArmorDamage = Math.max(0, rawDamage - absorbed);
+      const mitigation = resolveAuthorizedDamageMitigation({
+        attackerActor,
+        targetActor,
+        damage: postArmorDamage,
+        combatId: payload?.combatId ?? null,
+        mitigationPolicy: payload?.mitigationPolicy ?? "standard"
+      });
+      const hpDamage = mitigation.resolution.value;
       return {
         localization: {
           roll: localizationNumber || null,
@@ -402,6 +539,8 @@ export async function aplicarDanioCanonicoAutorizado({
         durabilityBefore,
         durabilityAfter: Math.max(0, durabilityBefore - rawDamage),
         absorbed,
+        postArmorDamage,
+        effectResolution: mitigation.resolution,
         hpBefore,
         hpDamage,
         hpAfter: Math.max(0, hpBefore - hpDamage)
@@ -444,6 +583,8 @@ export async function aplicarDanioCanonicoAutorizado({
         defensaFinal: prepared.durabilityAfter,
         danioOriginal: rawDamage,
         danioAbsorbido: prepared.absorbed,
+        danioMitigadoPasiva: prepared.postArmorDamage - prepared.hpDamage,
+        effectResolution: prepared.effectResolution,
         hpPerdido: prepared.hpDamage,
         itemDestruido: Boolean(destroyedItemUuid),
         destroyedItemUuid,
@@ -476,6 +617,8 @@ export async function aplicarDanioCanonicoAutorizado({
         defensaFinal: prepared.durabilityAfter,
         danioOriginal: rawDamage,
         danioAbsorbido: prepared.absorbed,
+        danioMitigadoPasiva: prepared.postArmorDamage - prepared.hpDamage,
+        effectResolution: prepared.effectResolution,
         hpPerdido: prepared.hpDamage,
         itemDestruido: prepared.durabilityAfter <= 0 && prepared.durabilityBefore > 0,
         destroyedItemUuid: prepared.durabilityAfter <= 0 ? prepared.armorItemUuid : null,
@@ -484,6 +627,50 @@ export async function aplicarDanioCanonicoAutorizado({
       }) };
     }
   });
+
+  const domainResult = damageReceipt?.result ?? damageReceipt;
+  if (domainResult?.afterDamageEffects) return damageReceipt;
+  const damageApplied = Math.max(
+    0,
+    Number(domainResult?.hpAnterior ?? 0) - Number(domainResult?.hpNuevo ?? 0)
+  );
+  const afterDamageEffects = await applyAfterDamageEffects({
+    sourceActor: attackerActor,
+    targetActor,
+    damageApplied,
+    damageSourceAttribute,
+    parentTransactionId: rootId
+  });
+
+  const enrichedReceipt = damageReceipt?.result
+    ? {
+        ...damageReceipt,
+        result: {
+          ...damageReceipt.result,
+          damageSourceAttribute,
+          afterDamageEffects
+        }
+      }
+    : {
+        ...damageReceipt,
+        damageSourceAttribute,
+        afterDamageEffects
+      };
+  const resourceFailure = afterDamageEffects.diagnostics.some(
+    diagnostic => diagnostic.code === "AFTER_DAMAGE_RESOURCE_FAILED"
+  );
+  if (!resourceFailure && damageReceipt?.result) {
+    return transactionCoordinator.amendCompletedResult(scope, rootId, completed => ({
+      ...completed,
+      result: {
+        ...completed.result,
+        damageSourceAttribute,
+        afterDamageEffects
+      }
+    }));
+  }
+
+  return enrichedReceipt;
 }
 
 /** DEPRECATED compatibility wrapper. */

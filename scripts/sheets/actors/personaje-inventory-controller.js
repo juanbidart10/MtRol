@@ -1,24 +1,13 @@
 import { desequiparObjeto } from "../../items/equipment-engine.js";
 import { getItemUnitWeight, isMtrolObject } from "../../items/item-invariants.js";
+import { createBlankCompetencyItemData } from "../../competencies/competency-item-factory.js";
 
 function requireGM(user) {
   if (!user?.isGM) throw new Error("Esta operación de inventario es exclusiva para GM.");
 }
 
 export function createCompetenceData() {
-  return {
-    name: "Nueva competencia",
-    type: "competencia",
-    system: {
-      nivel: 1, categoria: "competencia", actionType: "utility", effect: "none",
-      requiresTarget: false, requiresOpposition: false, oppositionType: "free",
-      effectDuration: 1, effectIntensity: 0, banner: "",
-      damageResolution: "immediate", damageMode: "automatic", damageCostType: "none",
-      cooldown: 0,
-      fx: { visual: "", sonido: "", duracion: 5000, escala: 1 },
-      descripcion: ""
-    }
-  };
+  return createBlankCompetencyItemData();
 }
 
 export function createCombatAbilityData() {
@@ -31,7 +20,7 @@ export function createCombatAbilityData() {
       effectDuration: 1, effectIntensity: 0, equipadaCombate: false,
       formula: "", danio: "", atributo: "", tipo: "habilidad-combate",
       usaDanioLocalizado: false, ejecutaDanio: true,
-      damageResolution: "immediate", damageMode: "automatic", damageCostType: "none",
+      damageResolution: "onOppositionWin", damageMode: "enabled", damageCostType: "none",
       banner: "", cooldown: 0,
       fx: { visual: "", autocast: "", proyectil: "", target: "", sonido: "", duracion: 5000, escala: 1 },
       descripcion: ""

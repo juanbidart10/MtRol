@@ -12,6 +12,8 @@ const MAGIC_HYBRID_IDS = Object.freeze([
   "mago", "oraculo", "alquimista", "clerigo", "bardo"
 ]);
 
+const APPRENTICE_IDS = Object.freeze(["aprendiz"]);
+
 const EXPECTED_LABELS = Object.freeze({
   asesino: "Asesino",
   bandido: "Bandido",
@@ -37,7 +39,8 @@ const EXPECTED_LABELS = Object.freeze({
   oraculo: "Oráculo",
   alquimista: "Alquimista",
   clerigo: "Clérigo",
-  bardo: "Bardo"
+  bardo: "Bardo",
+  aprendiz: "Aprendiz"
 });
 
 function actorState(options = {}) {
@@ -89,22 +92,28 @@ async function loadCalculator() {
   return import("../scripts/actors/class-resource-calculator.js");
 }
 
-test("registry contractual contiene exactamente 25 IDs estables, únicos y con labels", async () => {
+test("registry contractual contiene exactamente 26 IDs estables, únicos y con labels", async () => {
   const {
     MTROL_CLASS_IDS,
     MTROL_CLASS_REGISTRY
   } = await loadRegistry();
-  const expectedIds = [...PHYSICAL_IDS, ...MAGIC_HYBRID_IDS];
+  const expectedIds = [
+    ...PHYSICAL_IDS,
+    "alquimista", "clerigo", "bardo",
+    ...MAGIC_HYBRID_IDS.slice(0, 8),
+    ...APPRENTICE_IDS
+  ];
 
   assert.deepEqual(MTROL_CLASS_IDS, expectedIds);
-  assert.equal(new Set(MTROL_CLASS_IDS).size, 25);
-  assert.equal(Object.keys(MTROL_CLASS_REGISTRY).length, 25);
+  assert.equal(new Set(MTROL_CLASS_IDS).size, 26);
+  assert.equal(Object.keys(MTROL_CLASS_REGISTRY).length, 26);
 
   for (const id of MTROL_CLASS_IDS) {
     assert.match(id, /^[a-z]+$/);
     assert.equal(MTROL_CLASS_REGISTRY[id].id, id);
     assert.equal(MTROL_CLASS_REGISTRY[id].label, EXPECTED_LABELS[id]);
-    assert.ok(MTROL_CLASS_REGISTRY[id].resourceProfile);
+    if (id === "aprendiz") assert.equal(MTROL_CLASS_REGISTRY[id].resourceProfile, null);
+    else assert.ok(MTROL_CLASS_REGISTRY[id].resourceProfile);
   }
 });
 

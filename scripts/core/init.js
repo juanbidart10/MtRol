@@ -96,6 +96,11 @@ import {
 } from "../actors/class-resource-service.js";
 
 import {
+  installMtrolRaceAuthorityHooks
+} from "../actors/race-service.js";
+import { installAwakeningAuthorityHooks } from "../actors/awakening-service.js";
+
+import {
   installTradeApi
 } from "../trade/trade-api.js";
 
@@ -122,6 +127,7 @@ import { registerStateCommands } from "../runtime/state-commands.js";
 import { registerProgressionCommands } from "../runtime/progression-commands.js";
 import { registerActionCommands } from "../runtime/action-commands.js";
 import { registerOrbCommands } from "../runtime/orb-commands.js";
+import { registerNarrativeCapabilityCommands } from "../runtime/narrative-capability-commands.js";
 import { mtrolRoll } from "../rolls/mtrol-rolls.js";
 import { authorityService } from "./authority-service.js";
 import { integrationObservability } from "./integration-observability.js";
@@ -253,6 +259,8 @@ export async function initMtrol() {
   installMtrolDeathApi();
   installMtrolOrbAuthorityHooks();
   installMtrolClassResourceAuthorityHooks();
+  installMtrolRaceAuthorityHooks();
+  installAwakeningAuthorityHooks();
   configureTurnActionIntegration({
     getPendingOppositionForActor,
     getReactionMovementForActor,
@@ -266,6 +274,7 @@ export async function initMtrol() {
   registerProgressionCommands();
   registerActionCommands();
   registerOrbCommands();
+  registerNarrativeCapabilityCommands();
   registerOppositionChatHandler();
   registerResolvedDamageChatHandler();
   registerMtrolPremiumRollCards();

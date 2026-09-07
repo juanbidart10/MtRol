@@ -113,14 +113,24 @@ test("schema contractual agrega classId y modificadores GM con defaults seguros"
   const schema = PersonajeDataModel.defineSchema();
 
   assert.ok(schema.identidad.fields.classId, "falta system.identidad.classId");
+  assert.ok(schema.identidad.fields.classDomain, "falta system.identidad.classDomain");
+  assert.ok(schema.identidad.fields.raceId, "falta system.identidad.raceId");
+  assert.ok(schema.raceCreationGrant, "falta system.raceCreationGrant");
+  assert.ok(schema.awakening, "falta system.awakening");
   assert.ok(schema.identidad.fields.fullBodyImage, "falta system.identidad.fullBodyImage");
   assert.ok(schema.resourceModifiers, "falta system.resourceModifiers");
   assert.equal(schema.identidad.fields.classId.options.initial, "");
+  assert.equal(schema.identidad.fields.classDomain.options.initial, "");
+  assert.equal(schema.identidad.fields.raceId.options.initial, "");
+  assert.equal(schema.raceCreationGrant.fields.applied.options.initial, false);
+  assert.equal(schema.raceCreationGrant.fields.sourceRaceId.options.initial, "");
   assert.equal(schema.identidad.fields.fullBodyImage.options.initial, "");
   assert.equal(schema.resourceModifiers.fields.hp.fields.value.options.initial, 0);
   assert.equal(schema.resourceModifiers.fields.hp.fields.label.options.initial, "");
   assert.equal(schema.resourceModifiers.fields.mp.fields.value.options.initial, 0);
   assert.equal(schema.resourceModifiers.fields.mp.fields.label.options.initial, "");
+  assert.deepEqual(schema.awakening.fields.grants.options.initial, []);
+  assert.deepEqual(schema.awakening.fields.selections.options.initial, []);
 });
 
 test("migrateData parcial no materializa classId ni resourceModifiers fuera del payload", () => {

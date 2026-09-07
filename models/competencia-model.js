@@ -19,6 +19,13 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
     const legacyRequiresOpposition =
       source?.requiresOpposition === true ||
       (source?.requiresOpposition === undefined && legacyDamageAction);
+    const legacyResolutionResult = legacyDamageAction
+      ? "damage"
+      : source?.actionType === "movement" || source?.defenseType === "dodge"
+        ? "movement"
+        : source?.actionType === "defense"
+          ? "defense"
+          : "utility";
 
     if (
       source.rol === undefined ||
@@ -27,14 +34,15 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
     ) {
       source.rol = null;
     }
-    source.requiresOpposition ??= legacyRequiresOpposition;
-    source.damageResolution ??=
-      legacyRequiresOpposition ? "onOppositionWin" : "immediate";
-    source.damageMode ??=
-      legacyRequiresOpposition ? "enabled" : "automatic";
+    source.resolutionResult ??= legacyResolutionResult;
+    source.damageFormula ??= source.danio ?? "";
+    source.requiresOpposition ??= legacyRequiresOpposition || legacyResolutionResult === "damage";
+    source.damageResolution = "onOppositionWin";
+    source.damageMode = "enabled";
     source.damageCostType ??= "none";
     source.damageType ??= null;
     source.damageElement ??= null;
+    source.damageSourceAttribute ??= null;
     source.spellTags ??= [];
     if (!Array.isArray(source.executionModes)) {
       source.executionModes = source.effect === "mpRecovery"
@@ -51,6 +59,13 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
   static defineSchema() {
 
     return {
+
+      technicalId: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "",
+        blank: true
+      }),
 
       nivel: new fields.NumberField({
         required: true,
@@ -232,7 +247,14 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
             nullable: false,
             initial: "narrative",
             choices: ["recover-mp", "narrative"]
-          })
+          }),
+          resolutionResult: new fields.StringField({
+            required: false,
+            nullable: true,
+            initial: null,
+            choices: ["damage", "defense", "movement", "utility"]
+          }),
+          damageFormula: new fields.StringField({ required: false, nullable: false, initial: "" })
         }),
         { required: false, nullable: false, initial: [] }
       ),
@@ -334,6 +356,29 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         initial: ""
       }),
 
+      damageFormula: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: ""
+      }),
+
+      damageSourceAttribute: new fields.StringField({
+        required: false,
+        nullable: true,
+        initial: null,
+        choices: [
+          "fuerza", "destreza", "resistencia", "inteligencia", "voluntad",
+          "suerte", "carisma", "aura", "percepcion"
+        ]
+      }),
+
+      resolutionResult: new fields.StringField({
+        required: false,
+        nullable: false,
+        initial: "utility",
+        choices: ["damage", "defense", "movement", "utility"]
+      }),
+
       atributo: new fields.StringField({
         required: false,
         nullable: false,
@@ -385,21 +430,15 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
       damageResolution: new fields.StringField({
         required: false,
         nullable: false,
-        initial: "immediate",
-        choices: [
-          "immediate",
-          "onOppositionWin"
-        ]
+        initial: "onOppositionWin",
+        choices: ["onOppositionWin"]
       }),
 
       damageMode: new fields.StringField({
         required: false,
         nullable: false,
-        initial: "automatic",
-        choices: [
-          "automatic",
-          "enabled"
-        ]
+        initial: "enabled",
+        choices: ["enabled"]
       }),
 
       damageCostType: new fields.StringField({

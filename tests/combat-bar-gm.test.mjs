@@ -279,6 +279,12 @@ function createActor() {
         documentName,
         documents: structuredClone(documents)
       });
+      const created = documents.map((document, index) => ({
+        ...structuredClone(document),
+        id: `created-${items.length + index + 1}`
+      }));
+      items.push(...created);
+      return created;
     },
     async updateEmbeddedDocuments() {
       metrics.embeddedUpdates++;
@@ -394,7 +400,7 @@ test("solo el GM puede editar HP/MP aunque el jugador sea Owner", () => {
   assert.equal(sheet.getData().puedeEditarVitales, false);
 });
 
-test("Fase 5 prepara las 25 Clases canónicas y nunca infiere desde el label legacy", () => {
+test("Fase 5 prepara las 26 Clases canónicas y nunca infiere desde el label legacy", () => {
   const actor = createActor();
   actor.system.identidad.clase = "Mago";
   actor.system.identidad.classId = "";
@@ -402,7 +408,7 @@ test("Fase 5 prepara las 25 Clases canónicas y nunca infiere desde el label leg
   game.user.isGM = true;
   const legacyContext = new PersonajeSheet(actor).getData();
 
-  assert.equal(legacyContext.classOptions.length, 25);
+  assert.equal(legacyContext.classOptions.length, 26);
   assert.equal(legacyContext.selectedClassId, "");
   assert.equal(legacyContext.selectedClassLabel, "Sin clase seleccionada");
   assert.equal(legacyContext.canManageClass, true);
@@ -943,8 +949,8 @@ test("los payloads de creación de Competencia y Habilidad de Combate delegan Ro
   assert.equal(Object.hasOwn(combate.system, "rol"), false);
 
   for (const created of [competencia, combate]) {
-    assert.equal(created.system.damageResolution, "immediate");
-    assert.equal(created.system.damageMode, "automatic");
+    assert.equal(created.system.damageResolution, "onOppositionWin");
+    assert.equal(created.system.damageMode, "enabled");
     assert.equal(created.system.damageCostType, "none");
   }
 });

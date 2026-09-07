@@ -15,11 +15,15 @@ const RESOURCE_ORIGINS = new Set([
   "pending-attribute",
   "pending-competence",
   "class-resource-update",
+  "race-identity-update",
+  "race-creation-grant",
   "permanent-resource-update",
   "gm-resource-set",
   "destiny-adjust",
   "dharma-spend",
-  "consumable"
+  "consumable",
+  "passive-effect",
+  "awakening-grant"
 ]);
 
 const RESTORABLE_RESOURCES = new Set(["hp", "mp"]);
@@ -34,7 +38,12 @@ import {
   transactionCoordinator
 } from "../runtime/runtime-foundation.js";
 
-function normalizeTransaction(actor, { transactionId, origin, allowOwnerCompatibility = false } = {}) {
+function normalizeTransaction(actor, {
+  transactionId,
+  origin,
+  allowOwnerCompatibility = false,
+  metadata = {}
+} = {}) {
   const actorUuid = String(
     actor?.uuid ?? (allowOwnerCompatibility && !game.users ? `compat:${actor?.name ?? "actor"}` : "")
   ).trim();
@@ -51,6 +60,7 @@ function normalizeTransaction(actor, { transactionId, origin, allowOwnerCompatib
     actorUuid,
     transactionId: normalizedTransactionId,
     origin,
+    metadata: { ...metadata },
     key: `${actorUuid}:${normalizedTransactionId}`
   };
 }
@@ -90,7 +100,11 @@ export async function runActorResourceTransaction(
     const receipt = await transactionCoordinator.execute(scope, {
       transactionId: normalized.transactionId,
       command: `resource.${normalized.origin}`,
-      metadata: { actorUuid: normalized.actorUuid, origin: normalized.origin },
+      metadata: {
+        actorUuid: normalized.actorUuid,
+        origin: normalized.origin,
+        ...normalized.metadata
+      },
       apply: async ({ checkpoint }) => {
         let mutationStarted = false;
         const beforeWrite = async () => {
@@ -176,6 +190,8 @@ export async function applyDamageToHpAuthoritative(actor, damage, {
 
 export async function restoreActorResourceAuthoritative(actor, resource, amount, {
   transactionId,
+  origin = "consumable",
+  parentTransactionId = null,
   commit = null,
   updateOptions = {}
 } = {}) {
@@ -194,7 +210,8 @@ export async function restoreActorResourceAuthoritative(actor, resource, amount,
 
   return runActorResourceTransaction(actor, {
     transactionId,
-    origin: "consumable",
+    origin,
+    metadata: { parentTransactionId },
     tracksWrites: true
   }, async (canonicalActor, { beforeWrite }) => {
     const resourceData = canonicalActor.system?.vitales?.[normalizedResource];

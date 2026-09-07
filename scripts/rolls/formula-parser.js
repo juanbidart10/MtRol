@@ -5,18 +5,22 @@
 // - @atributos
 // - @recursos
 // - @vitales
-// - @competencias.nombre
+// - @competencias.<technicalId>
 // - @mano
 // - @manoDer
 // - @manoIzq
 // =========================
 
 import {
-  mtrolSlug,
-  mtrolObtenerDanioManos
+  mtrolObtenerDanioManos,
+  mtrolResolverDanioArmas
 } from "./roll-helpers.js";
 
-export function mtrolPrepararRollData(actor) {
+import {
+  buildCompetencyFormulaContext
+} from "../competencies/competency-formula-context.js";
+
+export function mtrolPrepararRollData(actor, { includeWeapons = false } = {}) {
   const data =
     actor?.getRollData
       ? actor.getRollData()
@@ -31,8 +35,13 @@ export function mtrolPrepararRollData(actor) {
   data.vitales =
     actor?.system?.vitales ?? {};
 
+  const competencyContext =
+    buildCompetencyFormulaContext(actor?.items ?? [], {
+      actorUuid: actor?.uuid ?? null
+    });
+
   data.competencias =
-    data.competencias ?? {};
+    competencyContext.data;
 
   const etiquetas = {
     "atributos.aura": "AURA",
@@ -47,7 +56,8 @@ export function mtrolPrepararRollData(actor) {
 
     mano: "DAÑO DE MANO",
     manoDer: "MANO DERECHA",
-    manoIzq: "MANO IZQUIERDA"
+    manoIzq: "MANO IZQUIERDA",
+    ...competencyContext.labels
   };
 
   const danioManos =
@@ -62,27 +72,14 @@ export function mtrolPrepararRollData(actor) {
   data.manoIzq =
     danioManos.manoIzq;
 
-  for (const item of actor?.items ?? []) {
-    if (item.type !== "competencia") continue;
-
-    const slug =
-      mtrolSlug(item.name);
-
-    if (!slug) continue;
-
-    const nivel =
-      Number(item.system?.nivel ?? 0);
-
-    data.competencias[slug] =
-      nivel;
-
-    etiquetas[`competencias.${slug}`] =
-      item.name.toUpperCase();
-  }
+  const armas = includeWeapons ? mtrolResolverDanioArmas(actor) : { total: 0, items: [] };
+  data.armas = armas.total;
+  etiquetas.armas = "@ARMAS";
 
   return {
     data,
     etiquetas,
-    danioManos
+    danioManos,
+    armas
   };
 }

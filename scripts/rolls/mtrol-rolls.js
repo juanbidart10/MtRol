@@ -56,6 +56,10 @@ import {
   consumePreparation
 } from "../combat/turn-system.js";
 
+import { resolveGameplayRollEffects } from "../effects/effect-pipeline.js";
+
+export { resolveGameplayRollEffects } from "../effects/effect-pipeline.js";
+
 function buildDharmaCardAudit(context, traces = []) {
   if (!context || !Array.isArray(traces)) return null;
 
@@ -239,6 +243,9 @@ export async function mtrolRoll(
   const totalBase =
     mtrolCalcularTotalBaseSinCriticos(roll);
 
+  const rollEffects =
+    resolveGameplayRollEffects(actor, totalBase, cardContext);
+
   const orbRollBonus =
     resolveSpellOrbRollBonus(actor, cardContext.item);
 
@@ -246,7 +253,7 @@ export async function mtrolRoll(
     resolveOrbRollPassiveBonus(actor, cardContext.item);
 
   const totalFinal =
-    totalBase +
+    rollEffects.value +
     evaluacion.totalExtra +
     Number(evaluacion.dharmaBonus ?? 0) +
     orbRollBonus.bonus +
@@ -291,7 +298,8 @@ export async function mtrolRoll(
       total: totalFinal,
       dharma: dharmaCardAudit,
       orbBonus: orbRollBonus.bonus > 0 ? orbRollBonus : null,
-      orbPassiveBonus: orbPassiveBonus.bonus > 0 ? orbPassiveBonus : null
+      orbPassiveBonus: orbPassiveBonus.bonus > 0 ? orbPassiveBonus : null,
+      effects: rollEffects.appliedEffects
     },
     content: `
       <div class="mtrol-chat-card mtrol-chat-success">
@@ -376,6 +384,7 @@ export async function mtrolRoll(
     orb: orbRollBonus.bonus > 0 ? orbRollBonus : null,
     orbPassiveBonus: orbPassiveBonus.bonus,
     orbPassives: orbPassiveBonus.sources,
+    rollEffects,
     dharmaSpend: activeDharmaContext
       ? {
           context: activeDharmaContext,

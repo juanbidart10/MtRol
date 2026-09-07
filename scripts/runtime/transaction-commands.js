@@ -93,7 +93,10 @@ export function registerTransactionCommands() {
       attackerActor,
       targetActor,
       targetTokenDocument,
-      payload: payload.damage ?? payload,
+      payload: {
+        ...(payload.damage ?? payload),
+        combatId: (payload.damage ?? payload).combatId ?? envelope.combatId ?? null
+      },
       transactionId: envelope.transactionId
     });
   }, registration);

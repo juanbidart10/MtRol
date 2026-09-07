@@ -56,7 +56,9 @@ test("contexto de daño canónico conserva fórmula, coste y referencias", () =>
         usaDanioLocalizado: false,
         damageResolution: "onOppositionWin",
         damageMode: "enabled",
-        damageCostType: "basic"
+        damageCostType: "basic",
+        damageSourceAttribute: "aura",
+        resolutionResult: "damage"
       },
       _source: { system: { damageResolution: "onOppositionWin" } }
     },
@@ -72,6 +74,30 @@ test("contexto de daño canónico conserva fórmula, coste y referencias", () =>
   assert.equal(context.localized, false);
   assert.equal(context.sourceActorUuid, "Actor.a");
   assert.equal(context.targetActorUuid, "Actor.b");
+  assert.equal(context.damageSourceAttribute, "aura");
+});
+
+test("contexto de daño ignora atributo legacy y acepta sólo metadata explícita canónica", () => {
+  const sourceActor = { uuid: "Actor.a" };
+  const targetActor = { uuid: "Actor.b" };
+  const base = {
+    id: "spell",
+    system: {
+      ejecutaDanio: true,
+      danio: "1d6 + @atributos.aura",
+      atributo: "aura"
+    }
+  };
+  assert.equal(resolveCanonicalDamageContext({
+    sourceActor,
+    targetActor,
+    sourceItem: base
+  }).damageSourceAttribute, null);
+  assert.equal(resolveCanonicalDamageContext({
+    sourceActor,
+    targetActor,
+    sourceItem: { ...base, system: { ...base.system, damageSourceAttribute: "aura" } }
+  }).damageSourceAttribute, "aura");
 });
 
 test("action-engine conserva el export legacy del resolver", async () => {

@@ -149,6 +149,17 @@
             </div>
 
             <div class="mtrol-field wide">
+              <label>Consecuencia al ganar</label>
+              <select name="system.resolutionResult">
+                <option value="damage" {{#if (eq system.resolutionResult "damage")}}selected{{/if}}>Daño</option>
+                <option value="defense" {{#if (eq system.resolutionResult "defense")}}selected{{/if}}>Defensa</option>
+                <option value="movement" {{#if (eq system.resolutionResult "movement")}}selected{{/if}}>Movimiento</option>
+                <option value="utility" {{#if (eq system.resolutionResult "utility")}}selected{{/if}}>Utilidad</option>
+              </select>
+              <small>Una ejecución produce una sola consecuencia.</small>
+            </div>
+
+            <div class="mtrol-field wide">
               <label>Comportamiento legacy</label>
               <select name="system.actionType">
                 <option value="attack" {{#if (eq system.actionType "attack")}}selected{{/if}}>Ataque</option>
@@ -333,9 +344,25 @@
             <div class="mtrol-field wide">
               <label>Formula de Dano</label>
               <input type="text"
-                     name="system.danio"
-                     value="{{system.danio}}"
+                     name="system.damageFormula"
+                     value="{{system.damageFormula}}"
                      placeholder="2d10 + @atributos.aura" />
+            </div>
+
+            <div class="mtrol-field">
+              <label>Atributo de origen del da&ntilde;o</label>
+              <select name="system.damageSourceAttribute">
+                <option value="" {{#unless system.damageSourceAttribute}}selected{{/unless}}>Sin definir</option>
+                <option value="fuerza" {{#if (eq system.damageSourceAttribute "fuerza")}}selected{{/if}}>Fuerza</option>
+                <option value="destreza" {{#if (eq system.damageSourceAttribute "destreza")}}selected{{/if}}>Destreza</option>
+                <option value="resistencia" {{#if (eq system.damageSourceAttribute "resistencia")}}selected{{/if}}>Resistencia</option>
+                <option value="inteligencia" {{#if (eq system.damageSourceAttribute "inteligencia")}}selected{{/if}}>Inteligencia</option>
+                <option value="voluntad" {{#if (eq system.damageSourceAttribute "voluntad")}}selected{{/if}}>Voluntad</option>
+                <option value="suerte" {{#if (eq system.damageSourceAttribute "suerte")}}selected{{/if}}>Suerte</option>
+                <option value="carisma" {{#if (eq system.damageSourceAttribute "carisma")}}selected{{/if}}>Carisma</option>
+                <option value="aura" {{#if (eq system.damageSourceAttribute "aura")}}selected{{/if}}>Aura</option>
+                <option value="percepcion" {{#if (eq system.damageSourceAttribute "percepcion")}}selected{{/if}}>Percepci&oacute;n</option>
+              </select>
             </div>
 
             <label class="mtrol-toggle">
@@ -348,7 +375,6 @@
               <div class="mtrol-field wide">
                 <label>Resolución de Daño</label>
                 <select name="system.damageResolution">
-                  <option value="immediate" {{#if (eq damageConfig.resolution "immediate")}}selected{{/if}}>Inmediato</option>
                   <option value="onOppositionWin" {{#if (eq damageConfig.resolution "onOppositionWin")}}selected{{/if}}>Al ganar oposición</option>
                 </select>
               </div>
@@ -356,8 +382,7 @@
               <div class="mtrol-field">
                 <label>Modo</label>
                 <select name="system.damageMode">
-                  <option value="automatic" {{#if (eq damageConfig.mode "automatic")}}selected{{/if}}>Automático</option>
-                  <option value="enabled" {{#if (eq damageConfig.mode "enabled")}}selected{{/if}}>Habilitar ejecución</option>
+                  <option value="enabled" {{#if (eq damageConfig.mode "enabled")}}selected{{/if}}>Lanzamiento manual</option>
                 </select>
               </div>
 
@@ -374,13 +399,6 @@
                 <output data-mtrol-damage-additional-cost>{{#if damageConfig.additionalMpCost}}+{{damageConfig.additionalMpCost}} MP al ejecutar{{else}}Sin costo adicional{{/if}}</output>
               </div>
             </div>
-
-            <label class="mtrol-toggle">
-              <span>Ejecuta Dano</span>
-              <input type="checkbox"
-                     name="system.ejecutaDanio"
-                     {{checked system.ejecutaDanio}} />
-            </label>
 
           </div>
         </section>
