@@ -16,7 +16,7 @@ globalThis.game = {
   combat: null
 };
 
-const { ReceiptStore } = await import("../scripts/runtime/receipt-store.js");
+const { ReceiptStore, getReceiptFromRuntime } = await import("../scripts/runtime/receipt-store.js");
 const { TransactionCoordinator } = await import("../scripts/runtime/transaction-coordinator.js");
 const {
   NON_COMBAT_RECEIPT_MAX_AGE_MS,
@@ -59,7 +59,7 @@ test("TransactionCoordinator devuelve el mismo resultado y aplica side effects u
   assert.deepEqual(await execute(), { ok: true, value: 4 });
   assert.deepEqual(await execute(), { ok: true, value: 4 });
   assert.equal(writes, 1);
-  assert.equal(repository.runtime.receipts["tx-once"].status, "completed");
+  assert.equal(getReceiptFromRuntime(repository.runtime, "tx-once").status, "completed");
 });
 
 test("daño canónico con mismo transactionId muta armadura y HP una sola vez", async () => {

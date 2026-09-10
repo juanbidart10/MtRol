@@ -16,7 +16,7 @@ globalThis.ui = { notifications: { warn: message => notifications.push(message) 
 globalThis.fromUuid = async uuid => documents.get(uuid) ?? null;
 
 const { ActorRuntimeRepository, pruneActorReceiptsForTests, NON_COMBAT_RECEIPT_MAX_AGE_MS } = await import("../scripts/runtime/actor-runtime-repository.js");
-const { ReceiptStore } = await import("../scripts/runtime/receipt-store.js");
+const { ReceiptStore, getReceiptFromRuntime } = await import("../scripts/runtime/receipt-store.js");
 const { TransactionCoordinator } = await import("../scripts/runtime/transaction-coordinator.js");
 const foundation = await import("../scripts/runtime/runtime-foundation.js");
 const { runActorResourceTransaction, restoreActorResourceAuthoritative, resetActorResourceServiceForTests } = await import("../scripts/actors/actor-resource-service.js");
@@ -218,7 +218,7 @@ test("Orbes: ACK perdido exige recovery después de F5 y bloquea otro ID", async
 test("Orbes: Actor sintético resuelto por UUID usa su propio receipt", async () => {
   const actor = actorFixture("Scene.s.Token.t.Actor.synthetic"); game.actors.clear();
   await orbs.addActorOrbAuthoritative(request(actor), { requestingUserId: "gm-b" });
-  assert.equal(actor.flags.mtrol.transactionRuntime.receipts["orb-add"].status, "completed");
+  assert.equal(getReceiptFromRuntime(actor.flags.mtrol.transactionRuntime, "orb-add").status, "completed");
   assert.equal(actor.writes, 1);
 });
 

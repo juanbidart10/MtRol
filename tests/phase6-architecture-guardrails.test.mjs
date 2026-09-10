@@ -143,6 +143,7 @@ const MAP_SET_CLASSIFICATION = Object.freeze({
     "scripts/ui/chat-card-assets.js:unresolvedFamilyAudit"
   ]),
   legitimate: new Set([
+    "scripts/actions/action-engine.js:presentationInFlight",
     "scripts/actions/action-definition-resolver.js:OPPOSED_DAMAGE_ACTION_TYPES",
     "scripts/actions/opposition-policy.js:ACTION_IDENTITIES",
     "scripts/actions/opposition-policy.js:LEGACY_OFFENSIVE_TYPES",

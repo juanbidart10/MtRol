@@ -12,6 +12,7 @@ import {
 import { transactionCoordinator } from "../runtime/runtime-foundation.js";
 import { isPrimaryActiveGM } from "../core/socket-requests.js";
 import { logger } from "../utils/logger.js";
+import { traceMovement } from "./movement-trace.js";
 
 export const MOVEMENT_SOURCES = Object.freeze({
   TURN: "TURN",
@@ -30,9 +31,9 @@ const RULED_SOURCES = new Set([
   MOVEMENT_SOURCES.REACTION
 ]);
 
-const POSITION_SYNC_TIMEOUT_MS = 1000;
+const POSITION_SYNC_TIMEOUT_MS = 5000;
 const POSITION_SYNC_MAX_TIMEOUT_MS = 5000;
-const POSITION_SYNC_POLL_MS = 20;
+const POSITION_SYNC_POLL_MS = 50;
 
 function getUser(userId) {
   return game.users?.get?.(userId) ?? Array.from(game.users ?? []).find(user => user.id === userId) ?? null;
@@ -76,14 +77,45 @@ function onReservedPath(token, from, to) {
   return dot >= 0 && dot <= lengthSquared;
 }
 
-async function waitForAuthoritativeTokenPosition(token, { from, to, transactionId, source, timeoutMs }) {
-  if (at(token, to)) return { status: "already-synchronized", waitedMs: 0 };
-  if (!onReservedPath(token, from, to)) return { status: "unexpected-position", waitedMs: 0 };
+function sameTurnContext(expected, current = getTurnContext()) {
+  return current.combatId === expected.combatId &&
+    current.combatant?.id === expected.combatantId &&
+    Number(current.round) === Number(expected.round) &&
+    Number(current.turn) === Number(expected.turn);
+}
+
+async function resolveCanonicalToken(tokenUuid) {
+  return await globalThis.fromUuid?.(tokenUuid) ?? null;
+}
+
+async function waitForAuthoritativeTokenPosition(token, {
+  from, to, transactionId, source, timeoutMs, expectedContext
+}) {
+  traceMovement("MOVEMENT_WAIT_BEGIN", {
+    transactionId, actorUuid: token?.actor?.uuid, tokenUuid: token?.uuid, source,
+    destinationX: to?.x, destinationY: to?.y, primaryGMX: token?.x, primaryGMY: token?.y,
+    timeoutConfigured: timeoutMs
+  });
+  let authoritativeToken = await resolveCanonicalToken(token?.uuid);
+  if (!authoritativeToken) return { status: "token-missing", waitedMs: 0, pollCount: 0 };
+  if (!sameTurnContext(expectedContext)) return { status: "turn-changed", waitedMs: 0, pollCount: 0 };
+  if (at(authoritativeToken, to)) {
+    traceMovement("MOVEMENT_WAIT_SUCCESS", {
+      transactionId, actorUuid: token?.actor?.uuid, tokenUuid: token?.uuid,
+      waitElapsedMs: 0, primaryGMX: authoritativeToken.x, primaryGMY: authoritativeToken.y,
+      pollCount: 0, waitMaxMs: timeoutMs
+    });
+    return { status: "already-synchronized", waitedMs: 0, pollCount: 0, token: authoritativeToken };
+  }
+  if (!onReservedPath(authoritativeToken, from, to)) {
+    return { status: "unexpected-position", waitedMs: 0, pollCount: 0, token: authoritativeToken };
+  }
   const boundedTimeoutMs = Math.min(
     POSITION_SYNC_MAX_TIMEOUT_MS,
     Math.max(0, Number(timeoutMs) || 0)
   );
   const startedAt = Date.now();
+  let pollCount = 0;
   logger.info("MOVEMENT", "waiting for authoritative Token synchronization", {
     transactionId,
     command: "movement.commit",
@@ -97,8 +129,21 @@ async function waitForAuthoritativeTokenPosition(token, { from, to, transactionI
   while (Date.now() - startedAt < boundedTimeoutMs) {
     const remainingMs = boundedTimeoutMs - (Date.now() - startedAt);
     await new Promise(resolve => globalThis.setTimeout(resolve, Math.min(POSITION_SYNC_POLL_MS, remainingMs)));
-    if (at(token, to)) {
+    pollCount += 1;
+    if (!sameTurnContext(expectedContext)) {
+      return { status: "turn-changed", waitedMs: Date.now() - startedAt, pollCount };
+    }
+    authoritativeToken = await resolveCanonicalToken(token.uuid);
+    if (!authoritativeToken) {
+      return { status: "token-missing", waitedMs: Date.now() - startedAt, pollCount };
+    }
+    if (at(authoritativeToken, to)) {
       const waitedMs = Date.now() - startedAt;
+      traceMovement("MOVEMENT_WAIT_SUCCESS", {
+        transactionId, actorUuid: token?.actor?.uuid, tokenUuid: token?.uuid,
+        waitElapsedMs: waitedMs, primaryGMX: authoritativeToken.x, primaryGMY: authoritativeToken.y,
+        pollCount, waitMaxMs: boundedTimeoutMs
+      });
       logger.info("MOVEMENT", "authoritative Token synchronization completed", {
         transactionId,
         command: "movement.commit",
@@ -108,12 +153,20 @@ async function waitForAuthoritativeTokenPosition(token, { from, to, transactionI
         reasonCode: "POSITION_SYNC_COMPLETED",
         waitedMs
       });
-      return { status: "synchronized", waitedMs };
+      return { status: "synchronized", waitedMs, pollCount, token: authoritativeToken };
     }
-    if (!onReservedPath(token, from, to)) return { status: "unexpected-position", waitedMs: Date.now() - startedAt };
+    if (!onReservedPath(authoritativeToken, from, to)) {
+      return { status: "unexpected-position", waitedMs: Date.now() - startedAt, pollCount, token: authoritativeToken };
+    }
   }
   const waitedMs = Date.now() - startedAt;
-  return { status: "timeout", waitedMs, timeoutMs: boundedTimeoutMs };
+  traceMovement("MOVEMENT_WAIT_TIMEOUT", {
+    transactionId, actorUuid: token?.actor?.uuid, tokenUuid: token?.uuid,
+    waitElapsedMs: waitedMs, primaryGMX: authoritativeToken?.x, primaryGMY: authoritativeToken?.y,
+    destinationX: to?.x, destinationY: to?.y, pollCount, waitMaxMs: boundedTimeoutMs,
+    terminalReason: "POSITION_SYNC_TIMEOUT"
+  });
+  return { status: "timeout", waitedMs, timeoutMs: boundedTimeoutMs, pollCount, token: authoritativeToken };
 }
 
 function movementKindForSource(source) {
@@ -218,6 +271,21 @@ export async function executeMovementTransaction(payload = {}, {
   const squareType = globalThis.CONST?.GRID_TYPES?.SQUARE ?? 1;
   let measuredDistance = 0;
   const scope = { combat: context.combat };
+  const receiptAtEntry = transactionCoordinator.get(scope, transactionId);
+  const stateAtEntry = getAvailableMovement(token.actor, token, { context });
+  traceMovement("MOVEMENT_SOCKET_RECEIVE", {
+    transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+    originX: from.x, originY: from.y, destinationX: to.x, destinationY: to.y,
+    distance: payload.movement?.cost ?? payload.cost ?? null
+  });
+  traceMovement("MOVEMENT_TX_BEGIN", {
+    transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+    receiptStatus: receiptAtEntry?.status ?? null, receiptExists: Boolean(receiptAtEntry),
+    primaryGMX: token.x, primaryGMY: token.y,
+    baseBefore: stateAtEntry.state?.baseMovementRemaining,
+    extraBefore: stateAtEntry.state?.extraMovementRemaining,
+    movementSpentBefore: stateAtEntry.state?.movementSpent
+  });
 
   try {
     if (Number(grid.type ?? squareType) !== squareType) {
@@ -257,7 +325,13 @@ export async function executeMovementTransaction(payload = {}, {
           to,
           transactionId,
           source,
-          timeoutMs: positionSyncTimeoutMs
+          timeoutMs: positionSyncTimeoutMs,
+          expectedContext: {
+            combatId: context.combatId,
+            combatantId: context.combatant?.id ?? null,
+            round: context.round,
+            turn: context.turn
+          }
         });
         if (synchronization.status === "timeout") {
           throw Object.assign(
@@ -266,14 +340,41 @@ export async function executeMovementTransaction(payload = {}, {
               reasonCode: "POSITION_SYNC_TIMEOUT",
               transactionNoEffects: true,
               synchronizationWaitedMs: synchronization.waitedMs,
-              synchronizationTimeoutMs: synchronization.timeoutMs
+              synchronizationTimeoutMs: synchronization.timeoutMs,
+              synchronizationPollCount: synchronization.pollCount,
+              observedX: synchronization.token?.x ?? null,
+              observedY: synchronization.token?.y ?? null
             }
           );
         }
-        if (!at(token, to)) {
+        if (synchronization.status === "token-missing") {
+          throw Object.assign(new Error("El Token dejó de existir durante la confirmación del movimiento."), {
+            reasonCode: "MOVEMENT_TOKEN_MISSING",
+            transactionNoEffects: true,
+            synchronizationWaitedMs: synchronization.waitedMs,
+            synchronizationPollCount: synchronization.pollCount
+          });
+        }
+        if (synchronization.status === "turn-changed") {
+          throw Object.assign(new Error("El turno cambió antes de confirmar la posición del movimiento."), {
+            reasonCode: "MOVEMENT_TURN_CHANGED",
+            transactionNoEffects: true,
+            synchronizationWaitedMs: synchronization.waitedMs,
+            synchronizationPollCount: synchronization.pollCount
+          });
+        }
+        const authoritativeToken = synchronization.token ?? await resolveCanonicalToken(token.uuid);
+        if (!authoritativeToken || !at(authoritativeToken, to)) {
           throw Object.assign(
             new Error("La posición aplicada no coincide con la intención."),
-            { reasonCode: "MOVEMENT_POSITION_MISMATCH", transactionNoEffects: true }
+            {
+              reasonCode: "MOVEMENT_POSITION_MISMATCH",
+              transactionNoEffects: true,
+              synchronizationWaitedMs: synchronization.waitedMs,
+              synchronizationPollCount: synchronization.pollCount,
+              observedX: authoritativeToken?.x ?? null,
+              observedY: authoritativeToken?.y ?? null
+            }
           );
         }
         currentContext = getTurnContext();
@@ -300,7 +401,16 @@ export async function executeMovementTransaction(payload = {}, {
         };
       },
       apply: async ({ prepared, checkpoint }) => {
+        traceMovement("MOVEMENT_RECEIPT_BEGIN", {
+          transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+          receiptStatus: transactionCoordinator.get(scope, transactionId)?.status ?? null
+        });
         await checkpoint("position-applied", { to: prepared.to });
+        traceMovement("MOVEMENT_RECEIPT_TRANSITION", {
+          transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+          receiptStatus: transactionCoordinator.get(scope, transactionId)?.status ?? null,
+          checkpoint: "position-applied"
+        });
         const domainResult = await applyMovementConsumptionAuthoritative({
           tokenUuid: token.uuid,
           source,
@@ -332,6 +442,12 @@ export async function executeMovementTransaction(payload = {}, {
           domainResult
         });
         logger.info("MOVEMENT", "movement transaction completed", result.result);
+        traceMovement("MOVEMENT_RECEIPT_COMPLETE", {
+          transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+          receiptStatus: "completed", baseAfter: domainResult?.baseMovementRemaining,
+          extraAfter: domainResult?.extraMovementRemaining,
+          movementSpentAfter: domainResult?.movementSpent
+        });
         return result;
       },
       reconcile: async receipt => {
@@ -339,6 +455,13 @@ export async function executeMovementTransaction(payload = {}, {
         if (!prepared) return { resolved: false };
         const available = getAvailableMovement(token.actor, token, { context: getTurnContext() });
         const remaining = Number(available.remaining ?? 0);
+        traceMovement("MOVEMENT_RECONCILIATION_BEGIN", {
+          transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+          receiptStatus: receipt.status, primaryGMX: token.x, primaryGMY: token.y,
+          baseBefore: available.state?.baseMovementRemaining,
+          extraBefore: available.state?.extraMovementRemaining,
+          movementSpentBefore: available.state?.movementSpent
+        });
         if (at(token, prepared.to) && remaining === prepared.movementAfter) {
           return { resolved: true, result: receipt.result ?? uniform(transactionId, {
             source, tokenUuid: token.uuid, ...prepared, reconciled: "already-applied"
@@ -407,7 +530,8 @@ export async function executeMovementTransaction(payload = {}, {
   } catch (error) {
     const receipt = transactionCoordinator.get(scope, transactionId);
     const positionAlreadyConfirmed = hasCompletedPositionReceipt(scope, token.uuid, to, transactionId);
-    if ((!receipt || receipt.status === "failed") && !positionAlreadyConfirmed) {
+    const rollbackIsSafe = !["MOVEMENT_TURN_CHANGED", "MOVEMENT_TOKEN_MISSING"].includes(error.reasonCode);
+    if (rollbackIsSafe && (!receipt || receipt.status === "failed") && !positionAlreadyConfirmed) {
       await rollbackToken(token, from, transactionId);
     }
     logger.warnOnce("MOVEMENT", "movement transaction rejected", {
@@ -420,8 +544,20 @@ export async function executeMovementTransaction(payload = {}, {
       reasonCode: error.reasonCode ?? "MOVEMENT_REJECTED",
       synchronizationWaitedMs: error.synchronizationWaitedMs ?? null,
       synchronizationTimeoutMs: error.synchronizationTimeoutMs ?? null,
+      synchronizationPollCount: error.synchronizationPollCount ?? null,
+      observedX: error.observedX ?? token?.x ?? null,
+      observedY: error.observedY ?? token?.y ?? null,
       error: error.message
     }, { key: `movement-rejected:${transactionId}` });
+    traceMovement("MOVEMENT_RECEIPT_FAIL", {
+      transactionId, requestingUserId, actorUuid: token.actor?.uuid, tokenUuid: token.uuid,
+      receiptStatus: receipt?.status ?? null,
+      failureReason: error.reasonCode ?? error.message,
+      waitElapsedMs: error.synchronizationWaitedMs ?? null,
+      pollCount: error.synchronizationPollCount ?? null,
+      primaryGMX: error.observedX ?? token?.x ?? null,
+      primaryGMY: error.observedY ?? token?.y ?? null
+    });
     throw error;
   }
 }

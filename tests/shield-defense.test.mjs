@@ -42,6 +42,8 @@ class MockRoll {
 
     assert.equal(next.formula, this.formula);
     this.total = next.total;
+    this.terms = [{ class: "Die", faces: Number(this.formula.split("d")[1]),
+      results: [{ result: this.total, active: true }] }];
     return this;
   }
 
@@ -245,6 +247,7 @@ function createItem({
     name,
     type,
     system: {
+      formula: "1d20",
       tipoObjeto,
       slot,
       equipado,
@@ -291,6 +294,7 @@ function createActor({
     type: "personaje",
     ownerIds: new Set(ownerIds),
     system: {
+      vitales: { mp: { value: 30, max: 30 } },
       atributos: {
         fuerza
       },
@@ -988,25 +992,25 @@ test("resolución autoritativa desgasta una sola vez y bloquea doble resolución
 
   assert.match(
     resolutionMessage.content,
-    /bloquea correctamente con Escudo authoritative-shield/
+    /Ataque evitado/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     resolutionMessage.content,
     /MTROL tira 1d4 de desgaste/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     resolutionMessage.content,
     /Defensa restante/
   );
 
   assert.deepEqual(
     resolutionMessage.rolls.map(roll => roll.formula),
-    ["1d4"]
+    []
   );
 
-  assert.match(
+  assert.doesNotMatch(
     resolutionMessage.content,
     /Desgaste de escudo/
   );
@@ -1086,7 +1090,7 @@ test("socket autoritativo conserva los terminos oficiales de atacante y defensor
   );
 
   assert.match(resolutionMessage.content, /Tirada atacante/);
-  assert.match(resolutionMessage.content, /Tirada defensiva/);
+  assert.match(resolutionMessage.content, /Tirada de respuesta/);
 
   const synchronized =
     socketEvents.findLast(event =>
@@ -1151,15 +1155,8 @@ test("dos defensas concurrentes no pueden resolver ni desgastar dos veces", asyn
       })
     ]);
 
-  assert.equal(
-    attempts.filter(attempt => attempt.status === "fulfilled").length,
-    1
-  );
-
-  assert.equal(
-    attempts.filter(attempt => attempt.status === "rejected").length,
-    1
-  );
+  assert.equal(attempts.filter(attempt => attempt.status === "fulfilled").length, 2);
+  assert.deepEqual(attempts[0].value, attempts[1].value, "el segundo caller recibe el replay de la misma ejecución");
 
   assert.equal(shield.system.defensa, 6);
   assert.equal(pending.status, "resolved");
@@ -1317,10 +1314,10 @@ test("empate 1-5 no desgasta y empate 6-10 desgasta", async () => {
   assert.equal(defenderTie.shield.system.defensa, 6);
   assert.deepEqual(
     defenderTie.resolutionMessage.rolls.map(roll => roll.formula),
-    ["1d10", "1d4"]
+    ["1d10"]
   );
   assert.match(defenderTie.resolutionMessage.content, /Desempate/);
-  assert.match(defenderTie.resolutionMessage.content, /Desgaste de escudo/);
+  assert.doesNotMatch(defenderTie.resolutionMessage.content, /Desgaste de escudo/);
 });
 
 test("GM cancela si el escudo cambia después de validarlo y antes del desgaste", async () => {

@@ -271,13 +271,13 @@ test("ataque basico conserva 2d10, formula, modificador y total sin reevaluar", 
   assert.match(message.content, /dice-roll/);
   assert.match(message.content, /dice-tooltip/);
   assert.match(message.content, /4, 4/);
-  assert.equal(message.messageHookDisabledAtCreate, true);
+  assert.equal(message.messageHookDisabledAtCreate, false);
   assert.equal(
     Object.hasOwn(game.dice3d, "messageHookDisabled"),
     false
   );
   assert.equal(evaluationCount - beforeEvaluations, 1);
-  assert.equal(diceAnimations.length - beforeAnimations, 1);
+  assert.equal(diceAnimations.length - beforeAnimations, 0);
 });
 
 test("pifia natural permanece visible en los terminos del Roll", async () => {
@@ -359,7 +359,7 @@ test("critico y cadena conservan cada Roll real y todos sus resultados", async (
   );
   assert.deepEqual(chatMessages.at(-1).rolls, result.rolls);
   assert.equal(evaluationCount - beforeEvaluations, 3);
-  assert.equal(diceAnimations.length - beforeAnimations, 3);
+  assert.equal(diceAnimations.length - beforeAnimations, 0);
 });
 
 test("competencia, defensa, esquiva, contraataque, hechizo y meditacion comparten el Roll preservado", async () => {
@@ -593,7 +593,7 @@ test("system.json conserva la versión declarada de release", async () => {
     )
   );
 
-  assert.equal(system.version, "1.3.0");
+  assert.equal(system.version, "1.4.1");
 });
 
 test.after(() => {

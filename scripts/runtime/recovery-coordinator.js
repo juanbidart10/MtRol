@@ -1,3 +1,6 @@
+import { hasConsolidatedOpposition } from "../actions/action-lifecycle-evidence.js";
+import { getReceiptFromRuntime } from "./receipt-store.js";
+
 function clone(value) {
   if (globalThis.foundry?.utils?.deepClone) return foundry.utils.deepClone(value);
   return value === undefined ? undefined : structuredClone(value);
@@ -23,7 +26,7 @@ export class RecoveryCoordinator {
     const completedIds = [];
     const requiredIds = [];
     for (const receipt of Object.values(runtime.receipts ?? {})) {
-      if (!/^(damage|resource|consumable|movement|state|orb)\./.test(String(receipt?.command ?? ""))) continue;
+      if (!/^(?:(?:damage|resource|consumable|movement|state|orb)\.|opposition\.(?:activation|response-activation)$)/.test(String(receipt?.command ?? ""))) continue;
       if (receipt.status === "applied" && receipt.result) {
         await store.complete(target, receipt.transactionId, receipt.result);
         completedIds.push(receipt.transactionId);
@@ -97,6 +100,17 @@ export class RecoveryCoordinator {
     const mutation = await this.repository.mutate(combat, draft => {
       for (const [id, pendingAction] of Object.entries(draft.pendingActions)) {
         if (!pendingAction || typeof pendingAction !== "object") continue;
+        if (["waiting-defense", "resolving"].includes(pendingAction.status) ||
+            (pendingAction.status === "resolved" && pendingAction.damage?.available === true)) {
+          if (!hasConsolidatedOpposition(pendingAction, draft)) {
+            pendingAction.status = "recovery-required";
+            pendingAction.recoveryReason = "activation-not-consolidated";
+            pendingAction.updatedAt = Date.now();
+            requiredIds.add(id);
+            continue;
+          }
+        }
+
         const processingReceipts = Object.values(draft.receipts).filter(receipt =>
           receipt?.pendingActionId === id && receipt.status === "processing"
         );
@@ -145,7 +159,7 @@ export class RecoveryCoordinator {
         if (pendingAction.status !== "resolving") continue;
 
         const transactionId = pendingAction.resolutionTransactionId ?? null;
-        const receipt = transactionId ? draft.receipts[transactionId] : null;
+        const receipt = getReceiptFromRuntime(draft, transactionId);
         const receiptAction = receipt?.result?.pendingAction ?? null;
 
         if (receipt?.status === "completed" && receiptAction?.status === "resolved") {

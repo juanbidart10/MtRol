@@ -18,8 +18,8 @@ import {
 } from "../core/categories.js";
 
 import {
-  getActionDefinitionFromItem
-} from "../actions/action-engine.js";
+  resolveActionDefinition as getActionDefinitionFromItem
+} from "../actions/action-definition-resolver.js";
 
 import {
   getActionGuard
@@ -98,7 +98,9 @@ export async function resolverCompetencia({
   formulaFallback = null,
   dharmaSpend = null,
   actionMode = null,
-  rollModifiers = []
+  rollModifiers = [],
+  actionAttemptId = null,
+  paidConsumption = null
 } = {}) {
 
   if (!actor || !item) {
@@ -124,6 +126,7 @@ export async function resolverCompetencia({
   }
 
   const turnGuard = getActionGuard(actor, item, {
+    actionAttemptId,
     kindOverride: actionMode === "movement"
       ? "movement"
       : actionMode === "attack" ? "offensive" : null
@@ -196,7 +199,7 @@ export async function resolverCompetencia({
   // =========================
 
   const consumoMP =
-    validarConsumoMP(actor, item);
+    paidConsumption ?? validarConsumoMP(actor, item);
 
   if (!consumoMP?.exito) return null;
 

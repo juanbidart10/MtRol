@@ -266,12 +266,6 @@ export async function mtrolEvaluarDadosMtrol(roll, {
 
         extraRolls.push(extraRoll);
 
-        // =========================
-        // VISUAL DICE SO NICE
-        // =========================
-
-        await mtrolMostrarDados(extraRoll);
-
         const extraValor =
           Number(extraRoll.total);
 

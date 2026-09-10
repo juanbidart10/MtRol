@@ -1,7 +1,6 @@
 import {
   mtrolEvaluarDadosMtrol,
-  mtrolCalcularTotalBaseSinCriticos,
-  mtrolMostrarDados
+  mtrolCalcularTotalBaseSinCriticos
 } from "../rolls/dice-engine.js";
 
 import {
@@ -78,6 +77,7 @@ let actionDependencies = null;
 
 export function configureActionDamageDependencies(dependencies = {}) {
   const required = [
+    "assertActivationConsolidated",
     "broadcastPendingAction",
     "getPendingAction",
     "persistPendingActionRuntime",
@@ -373,9 +373,6 @@ async function executeCompetenciaDamage({
     throw new Error(`Formula de dano invalida: ${formula || flatValue}`);
   }
 
-  await mtrolMostrarDados(damageRoll);
-  await mtrolMostrarDados(localizationRoll);
-
   const evaluacionDanio =
     await mtrolEvaluarDadosMtrol(
       damageRoll
@@ -510,14 +507,15 @@ export async function executeResolvedDamageAuthoritative(
     requestingUserId = game.user?.id
   } = {}
 ) {
-  if (!game.user?.isGM) {
-    throw new Error("Solo el GM autoritativo puede ejecutar el dano resuelto.");
+  if (!isPrimaryActiveGM()) {
+    throw new Error("Solo el Primary GM puede ejecutar el dano resuelto.");
   }
 
   const pendingAction =
     actions().getPendingAction(pendingActionId);
 
   assertCanExecuteResolvedDamage(pendingAction);
+  actions().assertActivationConsolidated(pendingAction);
 
   if (executingResolvedDamageActions.has(pendingActionId)) {
     throw new Error("El dano ya esta en ejecucion.");

@@ -3,9 +3,6 @@ import {
   MTROL_BODY_SLOT_LABELS
 } from "../constants/body-slots.js";
 
-import {
-  mtrolMostrarDados
-} from "../rolls/dice-engine.js";
 
 import {
   destroyEquippedItem
@@ -318,8 +315,6 @@ export async function aplicarDanioLocalizado({
 
   localizacionRoll ??=
     await new Roll("1d10").evaluate();
-
-  await mtrolMostrarDados(localizacionRoll);
 
   const numeroLocalizacion =
     Number(localizacionRoll.total ?? 5);

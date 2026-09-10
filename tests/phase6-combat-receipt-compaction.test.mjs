@@ -10,7 +10,9 @@ const {
   ReceiptStore,
   TransactionResultExpiredError,
   canCompactReceipt,
-  compactReceipt
+  compactReceipt,
+  encodeReceiptKey,
+  getReceiptFromRuntime
 } = await import("../scripts/runtime/receipt-store.js");
 const { RuntimeRepository } = await import("../scripts/runtime/runtime-repository.js");
 const { TransactionCoordinator } = await import("../scripts/runtime/transaction-coordinator.js");
@@ -58,6 +60,11 @@ function fullReceipt(overrides = {}) {
     recoveryReason: "closed",
     ...overrides
   };
+}
+
+function encodedReceipts(receipts) {
+  return Object.fromEntries(Object.values(receipts).map(receipt =>
+    [encodeReceiptKey(receipt.transactionId), receipt]));
 }
 
 function target(id = "combat-compaction") {
@@ -183,7 +190,7 @@ test("CommandRegistry propaga RESULT_EXPIRED y no invoca handler ni genera otra 
   const repository = new MemoryRepository({
     revision: 0,
     pendingActions: { registry: { id: "registry", status: "resolved", terminalHandledAt: 1 } },
-    receipts: { [expired.transactionId]: expired }
+    receipts: encodedReceipts({ [expired.transactionId]: expired })
   });
   const store = new ReceiptStore({ repository, compactCompletedReceipts: true });
   const registry = new CommandRegistry({ receiptStore: store, observability: null });
@@ -197,20 +204,20 @@ test("CommandRegistry propaga RESULT_EXPIRED y no invoca handler ni genera otra 
   }, { isPrimaryGM: true, requestingUserId: "gm" }), error =>
     error.reasonCode === "TRANSACTION_RESULT_EXPIRED" && error.changed === false);
   assert.equal(handlers, 0);
-  assert.deepEqual(Object.keys(repository.read().receipts), [expired.transactionId]);
+  assert.deepEqual(Object.keys(repository.read().receipts), [encodeReceiptKey(expired.transactionId)]);
 });
 
 test("transactionId desconocido sigue ejecutándose y se diferencia de uno expirado", async () => {
   const repository = new MemoryRepository({
     revision: 0,
     pendingActions: { old: { id: "old", status: "resolved", terminalHandledAt: 1 } },
-    receipts: {
+    receipts: encodedReceipts({
       old: compactReceipt(fullReceipt({
         transactionId: "old",
         command: "opposition.resolve",
         pendingActionId: "old"
       }))
-    }
+    })
   });
   const store = new ReceiptStore({ repository, compactCompletedReceipts: true });
   let effects = 0;
@@ -247,7 +254,8 @@ test("execution vs compaction conserva FULL durante in-flight y compacta al term
 
 test("retry vs compaction y dos cleanups concurrentes son idempotentes", async () => {
   const receipt = fullReceipt({ transactionId: "resource-race", result: { stable: true } });
-  const repository = new MemoryRepository({ revision: 0, pendingActions: {}, receipts: { "resource-race": receipt } });
+  const repository = new MemoryRepository({ revision: 0, pendingActions: {},
+    receipts: encodedReceipts({ "resource-race": receipt }) });
   const store = new ReceiptStore({ repository, compactCompletedReceipts: true });
   let effects = 0;
   const retry = store.execute(target("race"), {
@@ -291,10 +299,10 @@ test("recovery/reconcile concurrentes con compaction convergen sin pérdida ni c
   const repository = new MemoryRepository({
     revision: 0,
     pendingActions: {},
-    receipts: {
+    receipts: encodedReceipts({
       recovery: fullReceipt({ transactionId: "recovery", status: "recovery-required" }),
       applied: fullReceipt({ transactionId: "applied", status: "applied", result: { recovered: true } })
-    }
+    })
   });
   const store = new ReceiptStore({ repository, compactCompletedReceipts: true });
   const combat = target("recovery-race");
@@ -304,11 +312,11 @@ test("recovery/reconcile concurrentes con compaction convergen sin pérdida ni c
     store.complete(combat, "applied", { recovered: true })
   ]);
   await store.compactEligible(combat);
-  const receipts = repository.read().receipts;
-  assert.equal(receipts.recovery.kind, RECEIPT_KIND_COMPACT);
-  assert.equal(receipts.applied.kind, RECEIPT_KIND_COMPACT);
-  assert.deepEqual(receipts.recovery.result, { recovered: "manual" });
-  assert.deepEqual(receipts.applied.result, { recovered: true });
+  const runtime = repository.read();
+  assert.equal(getReceiptFromRuntime(runtime, "recovery").kind, RECEIPT_KIND_COMPACT);
+  assert.equal(getReceiptFromRuntime(runtime, "applied").kind, RECEIPT_KIND_COMPACT);
+  assert.deepEqual(getReceiptFromRuntime(runtime, "recovery").result, { recovered: "manual" });
+  assert.deepEqual(getReceiptFromRuntime(runtime, "applied").result, { recovered: true });
 });
 
 test("recovery y reconcile pendientes nunca se compactan", async () => {
@@ -317,7 +325,8 @@ test("recovery y reconcile pendientes nunca se compactan", async () => {
     applying: fullReceipt({ transactionId: "applying", status: "applying" }),
     applied: fullReceipt({ transactionId: "applied", status: "applied" })
   };
-  const repository = new MemoryRepository({ revision: 0, pendingActions: {}, receipts });
+  const repository = new MemoryRepository({ revision: 0, pendingActions: {},
+    receipts: encodedReceipts(receipts) });
   const store = new ReceiptStore({ repository, compactCompletedReceipts: true });
   const result = await store.compactEligible(target("recovery"));
   assert.equal(result.changed, false);
@@ -330,10 +339,10 @@ test("Combat inactivo, cambio de escena y reload conservan identidad; deleteComb
   const runtime = {
     revision: 0,
     pendingActions: {},
-    receipts: {
+    receipts: encodedReceipts({
       full: fullReceipt({ transactionId: "full" }),
       compact: compactReceipt(fullReceipt({ transactionId: "compact" }))
-    },
+    }),
     recovery: {},
     authority: {}
   };
@@ -353,8 +362,8 @@ test("Combat inactivo, cambio de escena y reload conservan identidad; deleteComb
     game.scenes = new Map([["other-scene", { id: "other-scene" }]]);
     const beforeReload = new RuntimeRepository().read(combat.id);
     const afterReload = new RuntimeRepository().read(combat.id);
-    assert.equal(beforeReload.receipts.full.kind, RECEIPT_KIND_FULL);
-    assert.equal(afterReload.receipts.compact.kind, RECEIPT_KIND_COMPACT);
+    assert.equal(getReceiptFromRuntime(beforeReload, "full").kind, RECEIPT_KIND_FULL);
+    assert.equal(getReceiptFromRuntime(afterReload, "compact").kind, RECEIPT_KIND_COMPACT);
     game.combats.delete(combat.id);
     assert.equal(new RuntimeRepository().read(combat.id), null);
   } finally {

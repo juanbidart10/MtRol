@@ -13,6 +13,7 @@ const states = await import("../scripts/states/state-engine.js");
 const { dispatchStateSocketCommand, registerStateCommands } = await import("../scripts/runtime/state-commands.js");
 const { actorRuntimeRepository, commandRegistry, recoveryCoordinator } = await import("../scripts/runtime/runtime-foundation.js");
 const { createDefaultRuntime } = await import("../scripts/runtime/runtime-repository.js");
+const { setReceiptInRuntime } = await import("../scripts/runtime/receipt-store.js");
 const { logger } = await import("../scripts/utils/logger.js");
 const { registerMtrolSockets } = await import("../scripts/core/sockets.js");
 const { handleSocketResponse } = await import("../scripts/core/socket-requests.js");
@@ -211,10 +212,11 @@ test("la façade del propietario delega y recibe el reasonCode del Primary GM", 
 
 test("recovery-required bloquea un nuevo transactionId sin nuevos side effects", async () => {
   const fx = fixture();
-  fx.own.flags.mtrol.transactionRuntime = { schemaVersion: 1, revision: 1, receipts: {
-    broken: { transactionId: "broken", command: "state.apply", actorUuid: fx.own.uuid,
-      status: "recovery-required", state: "stunned", updatedAt: Date.now() }
-  } };
+  fx.own.flags.mtrol.transactionRuntime = { schemaVersion: 1, revision: 1, receipts: {} };
+  setReceiptInRuntime(fx.own.flags.mtrol.transactionRuntime, "broken", {
+    transactionId: "broken", command: "state.apply", actorUuid: fx.own.uuid,
+    status: "recovery-required", state: "stunned", updatedAt: Date.now()
+  });
   await assert.rejects(states.applyManualStateAuthoritative(fx.payload(), { requestingUserId: "owner" }), reason("STATE_RECOVERY_REQUIRED"));
   noWrites(fx);
 });
@@ -229,10 +231,11 @@ test("identificador de Item y UUID malformado no se aceptan como Actor", async (
 
 test("recovery de Foundation reconoce estados interrumpidos tras F5", async () => {
   const fx = fixture();
-  fx.own.flags.mtrol.transactionRuntime = { schemaVersion: 1, revision: 1, receipts: {
-    interrupted: { transactionId: "interrupted", command: "state.apply", actorUuid: fx.own.uuid,
-      status: "applying", state: "stunned", updatedAt: Date.now() }
-  } };
+  fx.own.flags.mtrol.transactionRuntime = { schemaVersion: 1, revision: 1, receipts: {} };
+  setReceiptInRuntime(fx.own.flags.mtrol.transactionRuntime, "interrupted", {
+    transactionId: "interrupted", command: "state.apply", actorUuid: fx.own.uuid,
+    status: "applying", state: "stunned", updatedAt: Date.now()
+  });
   actorRuntimeRepository.resetForTests();
   const recovered = await recoveryCoordinator.recoverActorTransactions([fx.own], { isPrimaryGM: true });
   assert.deepEqual(recovered.requiredIds, ["interrupted"]);

@@ -16,8 +16,7 @@ import {
 
 import {
   mtrolEvaluarDadosMtrol,
-  mtrolCalcularTotalBaseSinCriticos,
-  mtrolMostrarDados
+  mtrolCalcularTotalBaseSinCriticos
 } from "./dice-engine.js";
 
 import {
@@ -155,10 +154,6 @@ export async function mtrolRoll(
 
   const preparationBonus =
     Number(preparationExecution.preparationBonus ?? 0);
-
-  // Esta visual pertenece a tiradas normales MtRol.
-  // No afecta el daño localizado si ese daño no llama a mtrolRoll().
-  await mtrolMostrarDados(roll);
 
   const evaluacion =
     await mtrolEvaluarDadosMtrol(roll, {

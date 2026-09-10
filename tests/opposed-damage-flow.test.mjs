@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { getReceiptFromRuntime } from "../scripts/runtime/receipt-store.js";
 
 let randomCounter = 0;
 let messageCounter = 0;
@@ -426,14 +427,15 @@ function createAttackSkill(id, {
   danio = "1d6",
   damageResolution,
   damageMode,
-  damageCostType
+  damageCostType,
+  resolutionResult = "damage"
 } = {}) {
   return createItem({
     id,
     name: `Ataque ${id}`,
     categoria,
     actionType: "attack",
-    resolutionResult: "damage",
+    resolutionResult,
     damageType: "physical",
     effect: "damage",
     requiresOpposition: true,
@@ -490,6 +492,9 @@ const socketModule =
 const runtimeFoundation =
   await import("../scripts/runtime/runtime-foundation.js");
 
+const turnModule = await import("../scripts/combat/turn-system.js");
+const presentationModule = await import("../scripts/actions/pending-action-presentation.js");
+
 game.mtrol.actions = {
   getPendingAction: actionModule.getPendingAction,
   serializePendingAction: actionModule.serializePendingAction,
@@ -500,12 +505,15 @@ game.mtrol.actions = {
 async function createPending({
   suffix,
   attackerTotal,
+  attackerMP = 30,
   categoria,
   ejecutaDanio = true,
   danio = "1d6",
   damageResolution,
   damageMode,
   damageCostType,
+  resolutionResult,
+  activateSource = false,
   defender = null
 }) {
   const attackSkill = createAttackSkill(
@@ -516,12 +524,14 @@ async function createPending({
       danio,
       damageResolution,
       damageMode,
-      damageCostType
+      damageCostType,
+      resolutionResult
     }
   );
 
   const attacker = createActor({
     id: `attacker-${suffix}`,
+    mp: attackerMP,
     ownerIds: [attackerOwner.id],
     items: [attackSkill]
   });
@@ -531,6 +541,36 @@ async function createPending({
     ownerIds: [defenderOwner.id],
     items: [createDefenseSkill(`defense-${suffix}`)]
   });
+
+  let combatant = null;
+  if (activateSource) {
+    turnModule.configureTurnActionIntegration({
+      getPendingOppositionForActor: actionModule.getPendingOppositionForActor,
+      getReactionMovementForActor: actionModule.getReactionMovementForActor,
+      completeReactionMovementAuthoritative: actionModule.completeReactionMovementAuthoritative
+    });
+    combatant = {
+      id: `combatant-${suffix}`,
+      actor: attacker,
+      flags: { mtrol: {} },
+      getFlag(scope, key) { return this.flags[scope]?.[key]; },
+      async setFlag(scope, key, value) {
+        this.flags[scope] ??= {};
+        this.flags[scope][key] = deepClone(value);
+      }
+    };
+    Object.assign(combat, {
+      started: true,
+      round: 1,
+      turn: 0,
+      combatant,
+      combatants: [combatant],
+      turns: [combatant],
+      nextTurnCalls: 0,
+      async nextTurn() { this.nextTurnCalls += 1; }
+    });
+    await turnModule.startCombatantTurnAuthoritative(combatant, turnModule.getTurnContext());
+  }
 
   const pending =
     await actionModule.createPendingActionAuthoritative({
@@ -555,7 +595,8 @@ async function createPending({
     pending,
     attacker,
     defender: target,
-    attackSkill
+    attackSkill,
+    combatant
   };
 }
 
@@ -667,7 +708,7 @@ test("Esquiva ganadora crea un permiso reactivo independiente de un cuadro", asy
   await defend({
     pending: context.pending,
     defender: context.defender,
-    total: 12
+    total: 37
   });
   assert.deepEqual(actionModule.getReactionMovementForActor(context.defender), {
     pendingActionId: context.pending.id,
@@ -689,6 +730,30 @@ test("Esquiva perdedora no concede movimiento reactivo", async () => {
   });
   assert.equal(context.pending.reactionMovement, null);
   assert.equal(actionModule.getReactionMovementForActor(context.defender), null);
+});
+
+test("movement enfrentado ganador concede al target, conserva turno y publica snapshot", async t => {
+  const context = await createPending({
+    suffix: "canonical-target-movement",
+    attackerTotal: 27,
+    resolutionResult: "movement",
+    activateSource: true,
+    ejecutaDanio: false,
+    danio: ""
+  });
+  t.after(() => {
+    for (const key of ["started", "round", "turn", "combatant", "combatants", "turns", "nextTurn"]) {
+      delete combat[key];
+    }
+  });
+  await defend({ pending: context.pending, defender: context.defender, total: 4 });
+  const current = actionModule.getPendingAction(context.pending.id);
+  assert.equal(current.winnerResolutionResult, "movement");
+  assert.equal(current.movementGrant.granted, 2);
+  assert.equal(current.movementGrant.targetActorUuid, context.defender.uuid);
+  assert.equal(turnModule.getGrantedMovement(context.defender).remaining, 2);
+  assert.equal(combat.nextTurnCalls, 0);
+  assert.match(resolutionMessageFor(current.id).content, new RegExp(`${context.defender.name} obtiene 2 cuadro\\(s\\) de movimiento`));
 });
 
 test("declaración de respuesta persiste antes de tirar y recovery conserva su preset", async () => {
@@ -933,18 +998,15 @@ test("doble ejecucion aplica dano sin armadura una sola vez", async () => {
 test("Explosión declarativa cobra el Básico adicional sólo al ejecutar daño y bloquea doble click", async () => {
   const context = await createPending({
     suffix: "configured-phased-cost",
+    categoria: "hechizo",
+    attackerMP: 10,
     attackerTotal: 9,
     damageResolution: "onOppositionWin",
     damageMode: "enabled",
     damageCostType: "basic"
   });
 
-  context.attackSkill.system.categoria = "hechizo";
-  context.attackSkill.system.nivel = 1;
-  context.attacker.system.vitales.mp.value = 10;
-  context.attacker.system.vitales.mp.max = 10;
 
-  await mpModule.procesarConsumoMP(context.attacker, context.attackSkill);
   assert.equal(context.attacker.system.vitales.mp.value, 9, "la fase principal cobra Hechizo Nivel 1");
 
   await defend({
@@ -982,6 +1044,7 @@ test("Explosión declarativa cobra el Básico adicional sólo al ejecutar daño 
 test("Competencia con Básico cobra al activar y la resolución no duplica el +1", async () => {
   const context = await createPending({
     suffix: "competence-basic-on-activation",
+    attackerMP: 10,
     attackerTotal: 9,
     categoria: "competencia",
     damageResolution: "onOppositionWin",
@@ -989,13 +1052,10 @@ test("Competencia con Básico cobra al activar y la resolución no duplica el +1
     damageCostType: "basic"
   });
 
-  context.attacker.system.vitales.mp.value = 10;
-  context.attacker.system.vitales.mp.max = 10;
-
-  const activation = await mpModule.procesarConsumoMP(
-    context.attacker,
-    context.attackSkill
-  );
+  const activation = getReceiptFromRuntime(
+    combat.flags.mtrol.runtime,
+    context.pending.activationCostTransactionId
+  ).result;
   assert.equal(activation.costoStack, 1);
   assert.equal(activation.costoBasico, 1);
   assert.equal(activation.costoTotal, 2);
@@ -1023,17 +1083,15 @@ test("Competencia con Básico cobra al activar y la resolución no duplica el +1
 test("perder oposición no cobra el costo adicional configurado", async () => {
   const context = await createPending({
     suffix: "configured-loss",
+    categoria: "hechizo",
+    attackerMP: 10,
     attackerTotal: 3,
     damageResolution: "onOppositionWin",
     damageMode: "enabled",
     damageCostType: "basic"
   });
 
-  context.attackSkill.system.categoria = "hechizo";
-  context.attackSkill.system.nivel = 1;
-  context.attacker.system.vitales.mp.value = 10;
 
-  await mpModule.procesarConsumoMP(context.attacker, context.attackSkill);
   assert.equal(context.attacker.system.vitales.mp.value, 9);
 
   await defend({
@@ -1481,4 +1539,263 @@ test.after(() => {
     ),
     "Las acciones y el dano deben sincronizarse por system.mtrol."
   );
+});
+
+async function lifecycleFixture(t, { mp = 20, category = 'combate', response = 'DODGE' } = {}) {
+  const suffix = `p0-${++randomCounter}`;
+  const item = createAttackSkill(`main-${suffix}`, { categoria: category });
+  const responseItem = response === 'COUNTERATTACK'
+    ? createItem({ id: `response-${suffix}`, categoria: 'contraataque', actionType: 'attack',
+        effect: 'damage', danio: '1d6', damageType: 'physical' })
+    : createDefenseSkill(`response-${suffix}`);
+  const actor = createActor({ id: `source-${suffix}`, items: [item], ownerIds: [attackerOwner.id], mp });
+  const target = createActor({ id: `target-${suffix}`, items: [responseItem], ownerIds: [defenderOwner.id], mp: 10 });
+  const combatant = { id: `combatant-${suffix}`, actor, flags: { mtrol: {} },
+    getFlag(scope, key) { return this.flags[scope]?.[key]; },
+    async setFlag(scope, key, value) { this.flags[scope] ??= {}; this.flags[scope][key] = deepClone(value); } };
+  game.combat = combat;
+  game.user = gmUser;
+  game.modules ??= new Map();
+  Object.assign(combat, { started: true, round: 1, turn: 0, combatant,
+    combatants: [combatant], turns: [combatant], nextTurnCalls: 0,
+    async nextTurn() { this.nextTurnCalls += 1; } });
+  turnModule.configureTurnActionIntegration({
+    getPendingOppositionForActor: actionModule.getPendingOppositionForActor,
+    getReactionMovementForActor: actionModule.getReactionMovementForActor,
+    completeReactionMovementAuthoritative: actionModule.completeReactionMovementAuthoritative
+  });
+  await turnModule.startCombatantTurnAuthoritative(combatant, turnModule.getTurnContext());
+  t.after(() => {
+    for (const key of ['started', 'round', 'turn', 'combatant', 'combatants', 'turns', 'nextTurn']) delete combat[key];
+    game.user = gmUser;
+  });
+  const payload = { id: `attempt-${suffix}`, sourceActorUuid: actor.uuid, sourceItemId: item.id,
+    targetActorUuid: target.uuid, attackerRoll: { total: 8 } };
+  return { actor, target, item, responseItem, combatant, payload };
+}
+
+test('P0 MP insuficiente rechaza intención sin Roll, pending, Card, cooldown ni acción', async t => {
+  const f = await lifecycleFixture(t, { mp: 0 });
+  const before = chatMessages.length;
+  await assert.rejects(actionModule.createPendingAction({ ...f.payload, executeRoll: true }), /MP/);
+  assert.equal(f.actor.system.vitales.mp.value, 0);
+  assert.equal(f.combatant.flags.mtrol.turnState.actionConsumed, false);
+  assert.equal(combat.flags.mtrol.runtime.pendingActions[f.payload.id], undefined);
+  assert.equal(chatMessages.length, before);
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, true);
+  assert.equal(f.item.flags?.mtrol?.cooldown, undefined);
+});
+
+test('P0 intención autoritativa tira y cobra una vez; retry y concurrencia no duplican', async t => {
+  const f = await lifecycleFixture(t);
+  const payload = { ...f.payload, executeRoll: true };
+  delete payload.attackerRoll;
+  queueRoll('1d20', 8);
+  const [first, duplicate] = await Promise.all([
+    actionModule.createPendingAction(payload), actionModule.createPendingAction(payload)
+  ]);
+  assert.equal(first.id, duplicate.id);
+  assert.equal(f.actor.system.vitales.mp.value, 15);
+  assert.equal(f.combatant.flags.mtrol.turnState.actionConsumed, true);
+  assert.equal(first.attackerRoll.total, 8);
+  assert.equal(first.damage.costoTotal, 5);
+  assert.equal((await actionModule.createPendingAction(payload)).id, first.id);
+  assert.equal(f.actor.system.vitales.mp.value, 15);
+  assert.equal(chatMessages.filter(m => m.flags?.mtrol?.pendingActionId === first.id).length, 1);
+  assert.equal(getReceiptFromRuntime(combat.flags.mtrol.runtime, first.activationTransactionId).status, 'completed');
+  for (const status of ['waiting-defense', 'resolving', 'resolved']) {
+    const snapshot = combat.flags.mtrol.runtime.pendingActions[first.id];
+    snapshot.status = status;
+    snapshot.damage.status = 'available';
+    snapshot.damage.available = true;
+    await assert.rejects(actionModule.createPendingAction({ ...payload, id: `${first.id}-${status}` }), /pendiente|consumida/);
+  }
+});
+
+test('P0 dos intenciones distintas concurrentes sólo aceptan una main action', async t => {
+  const f = await lifecycleFixture(t);
+  const results = await Promise.allSettled([
+    actionModule.createPendingAction(f.payload),
+    actionModule.createPendingAction({ ...f.payload, id: `${f.payload.id}-other` })
+  ]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(r => r.status === 'rejected').length, 1);
+  assert.equal(f.actor.system.vitales.mp.value, 15);
+});
+
+test('P0 stack se incrementa una vez por intento consolidado', async t => {
+  const f = await lifecycleFixture(t, { category: 'competencia' });
+  await actionModule.createPendingAction(f.payload);
+  await actionModule.createPendingAction(f.payload);
+  assert.equal(f.actor.system.vitales.mp.value, 19);
+  assert.equal(f.actor.flags.mtrol.mpStacks[f.item.id], 1);
+});
+
+test('P0 fallo al persistir pending conserva recibos de coste/stack y exige recovery sin publicar', async t => {
+  const f = await lifecycleFixture(t, { category: 'competencia' });
+  const original = combat.update;
+  combat.update = async function(changes) {
+    if (changes['flags.mtrol.runtime']?.pendingActions?.[f.payload.id]) throw new Error('PENDING_WRITE_FAILED');
+    return original.call(this, changes);
+  };
+  t.after(() => { combat.update = original; });
+  await assert.rejects(actionModule.createPendingAction(f.payload), e => e.reasonCode === 'RECOVERY_REQUIRED');
+  assert.equal(f.actor.system.vitales.mp.value, 19);
+  assert.equal(f.actor.flags.mtrol.mpStacks[f.item.id], 1);
+  const receipt = getReceiptFromRuntime(
+    combat.flags.mtrol.runtime,
+    `opposition.create:${f.payload.id}:activation`
+  );
+  assert.equal(receipt.status, 'recovery-required');
+  assert.ok(receipt.checkpoints['activation-cost']);
+  assert.equal(chatMessages.filter(m => m.flags?.mtrol?.pendingActionId === f.payload.id).length, 0);
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, false);
+  combat.update = original;
+  await assert.rejects(actionModule.createPendingAction({ ...f.payload, id: `${f.payload.id}-retry-other` }), /pendiente/);
+});
+
+test('P0 Counterattack ignora consumeResponse=false, cobra 5 y daño no recobra activación', async t => {
+  const f = await lifecycleFixture(t, { response: 'COUNTERATTACK' });
+  const pending = await actionModule.createPendingAction(f.payload);
+  assert.equal(turnModule.getActionGuard(f.target, f.responseItem).reactive, true);
+  const response = { pendingActionId: pending.id, defenderActorUuid: f.target.uuid,
+    defenseItemId: f.responseItem.id, defenderRoll: { total: 12 }, consumeResponse: false,
+    requestingUserId: defenderOwner.id, transactionId: `${pending.id}:response` };
+  await actionModule.attachDefenseRollAuthoritative(response);
+  await actionModule.attachDefenseRollAuthoritative(response);
+  assert.equal(f.target.system.vitales.mp.value, 5);
+  const current = actionModule.getPendingAction(pending.id);
+  assert.equal(current.damage.sourceActorUuid, f.target.uuid);
+  assert.equal(current.damage.costoTotal, 5);
+  const receipt = getReceiptFromRuntime(combat.flags.mtrol.runtime, current.responseActivationTransactionId);
+  receipt.status = 'recovery-required';
+  await assert.rejects(damageModule.executeResolvedDamageAuthoritative(pending.id,
+    { requestingUserId: defenderOwner.id }), /consolidación|revisión/);
+  assert.equal(f.target.system.vitales.mp.value, 5);
+  receipt.status = 'completed';
+
+  assert.equal(f.combatant.flags.mtrol.turnState.actionConsumed, true);
+  const card = game.messages.get(current.resolutionMessageId);
+  assert.equal(current.resolutionMessageId, current.pendingMessageId);
+  assert.match(card.content, /Respuesta: Contraataque/);
+  assert.match(card.content, new RegExp(`Ahora: ${f.target.name} debe lanzar daño`));
+  assert.doesNotMatch(card.content, /Esperando respuesta/);
+  queueRoll('1d6', 4); queueRoll('1d10', 5);
+  await damageModule.executeResolvedDamageAuthoritative(pending.id, { requestingUserId: defenderOwner.id });
+  assert.equal(f.target.system.vitales.mp.value, 5);
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, false);
+  combat.round = 2;
+  await turnModule.startCombatantTurnAuthoritative(f.combatant, turnModule.getTurnContext());
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, true);
+});
+
+test('P0 respuesta sin MP no puede omitir coste obligatorio', async t => {
+  const f = await lifecycleFixture(t, { response: 'COUNTERATTACK' });
+  const pending = await actionModule.createPendingAction(f.payload);
+  f.target.system.vitales.mp.value = 0;
+  await assert.rejects(actionModule.attachDefenseRollAuthoritative({ pendingActionId: pending.id,
+    defenderActorUuid: f.target.uuid, defenseItemId: f.responseItem.id,
+    executeRoll: true, consumeResponse: false, requestingUserId: defenderOwner.id }), /MP/);
+  assert.equal(actionModule.getPendingAction(pending.id).status, 'waiting-defense');
+});
+
+test('P0 Card usa snapshot efectivo, allowance real, estados y proyección pública', () => {
+  const pending = { id: 'card-p0', status: 'waiting-defense', sourceActorUuid: 'Actor.a', sourceActorName: 'A',
+    targetActorUuid: 'Actor.b', targetActorName: 'B', sourceItemName: 'Aliento',
+    attackerRoll: { total: 24 }, resolutionResult: 'damage', allowedResponses: ['DODGE'] };
+  const waiting = presentationModule.buildResolutionContent(pending);
+  assert.match(waiting, /A — Aliento/); assert.match(waiting, /24/); assert.match(waiting, /Debe responder/);
+  assert.match(waiting, /Esquiva/); assert.doesNotMatch(waiting, /Contraataque/);
+  Object.assign(pending, { status: 'resolved', responseItemName: 'Paso Áurico',
+    responseDeclaration: { selectedCapability: 'DODGE' }, defenderRoll: { total: 27 },
+    responseResolutionResult: 'movement', winnerResolutionResult: 'movement',
+    reactionMovement: { status: 'available', allowance: 2 }, result: { success: false },
+    shieldWear: { applied: true, remainingDefense: 987654 },
+    damage: { total: 654321, damageFinal: 123456, hpLost: 123456 } });
+  const html = presentationModule.buildResolutionContent(pending);
+  assert.match(html, /Paso Áurico/); assert.match(html, /Respuesta: Esquiva/);
+  assert.match(html, /Movimiento concedido: 2/);
+  pending.movementGrant = { targetActorName: 'B', granted: 2, remaining: 2, grantId: 'movement:card-p0' };
+  assert.match(presentationModule.buildResolutionContent(pending), /B obtiene 2 cuadro\(s\) de movimiento/);
+  assert.doesNotMatch(html, /Automática|DODGE|987654|654321|123456|Inquebrantable|Virtus|Maldición|Defensa restante/);
+  pending.status = 'cancelled';
+  assert.match(presentationModule.buildResolutionContent(pending), /OPOSICIÓN · Cancelada/);
+});
+
+test('P0 DODGE automática ejecuta en autoridad sin consumir turno futuro', async t => {
+  const f = await lifecycleFixture(t);
+  f.responseItem.system.responseCapability = ''; // Valor canónico de Automática en el modelo.
+  const future = { id: `future-${f.target.id}`, actor: f.target, flags: { mtrol: { turnState: { actionConsumed: false } } } };
+  combat.combatants.push(future);
+  const pending = await actionModule.createPendingAction(f.payload);
+  const before = f.target.system.vitales.mp.value;
+  await actionModule.declareOppositionResponseAuthoritative({ pendingActionId: pending.id,
+    defenderActorUuid: f.target.uuid, responseItemId: f.responseItem.id, requestingUserId: defenderOwner.id });
+  assert.equal(f.target.system.vitales.mp.value, before);
+  queueRoll('1d20', 12);
+  const result = await actionModule.attachDefenseRollForActor({ actor: f.target, item: f.responseItem,
+    pendingActionId: pending.id, executeRoll: true, transactionId: `${pending.id}:dodge` });
+  assert.ok(result);
+  assert.equal(f.target.system.vitales.mp.value, before - 1);
+  assert.equal(future.flags.mtrol.turnState.actionConsumed, false);
+  const current = actionModule.getPendingAction(pending.id);
+  assert.equal(current.responseDeclaration.selectedCapability, 'DODGE');
+  assert.match(game.messages.get(current.resolutionMessageId).content, /Respuesta: Esquiva/);
+});
+
+test('P0 DEFENSE permitida con acción del iniciador consumida y sin daño pendiente', async t => {
+  const f = await lifecycleFixture(t);
+  Object.assign(f.responseItem.system, { defenseType: 'shield', effect: 'block', resolutionResult: 'defense' });
+  const shield = createItem({ id: `shield-${f.target.id}`, type: 'objeto', tipoObjeto: 'escudo',
+    equipado: true, slot: 'manoIzq', defensa: 8 });
+  f.target.items.values.set(shield.id, shield);
+  f.target.system.equipamiento.manoIzq = shield.id;
+  const pending = await actionModule.createPendingAction(f.payload);
+  queueRoll('1d4', 1);
+  await actionModule.attachDefenseRollAuthoritative({ pendingActionId: pending.id,
+    defenderActorUuid: f.target.uuid, defenseItemId: f.responseItem.id,
+    defenderRoll: { total: 12 }, requestingUserId: defenderOwner.id });
+  const current = actionModule.getPendingAction(pending.id);
+  assert.equal(current.responseDeclaration.selectedCapability, 'DEFENSE');
+  assert.equal(current.damage.available, false);
+  assert.match(game.messages.get(current.resolutionMessageId).content, /Ataque evitado/);
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, false);
+});
+
+test('P0 follow-up físico permite exactamente un ataque y valida alcance canónico', async t => {
+  const f = await lifecycleFixture(t);
+  Object.assign(f.combatant.flags.mtrol.turnState, { actionConsumed: true, followUpAttackAvailable: true,
+    followUpAttackConsumed: false, movementSource: 'attribute' });
+  const scene = { grid: { type: 1, size: 100 } };
+  const source = { id: 'follow-source', uuid: `Token.${f.actor.id}`, actor: f.actor,
+    parent: scene, x: 0, y: 0, width: 1, height: 1, disposition: 1 };
+  const target = { id: 'follow-target', uuid: `Token.${f.target.id}`, actor: f.target,
+    parent: scene, x: 100, y: 0, width: 1, height: 1, disposition: -1 };
+  f.combatant.token = source;
+  uuidRegistry.set(target.uuid, target);
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).attributeFollowUp, true);
+  const pending = await actionModule.createPendingAction({ ...f.payload, targetTokenUuid: target.uuid });
+  assert.ok(pending);
+  assert.equal(f.combatant.flags.mtrol.turnState.followUpAttackConsumed, true);
+  await assert.rejects(actionModule.createPendingAction({ ...f.payload, id: `${f.payload.id}-second`, targetTokenUuid: target.uuid }), /pendiente|consumida/);
+});
+
+test('P0 cambio de Primary GM tras débito conserva intento para revisión sin Roll ni Card', async t => {
+  const f = await lifecycleFixture(t);
+  const update = f.actor.update;
+  f.actor.update = async function(changes) {
+    const result = await update.call(this, changes);
+    gmUser.active = false;
+    return result;
+  };
+  t.after(() => { gmUser.active = true; });
+  await assert.rejects(actionModule.createPendingAction({ ...f.payload, executeRoll: true }), e => e.reasonCode === 'RECOVERY_REQUIRED');
+  gmUser.active = true;
+  assert.equal(f.actor.system.vitales.mp.value, 15);
+  assert.equal(chatMessages.filter(m => m.flags?.mtrol?.pendingActionId === f.payload.id).length, 0);
+  assert.equal(getReceiptFromRuntime(
+    combat.flags.mtrol.runtime,
+    `opposition.create:${f.payload.id}:activation`
+  ).status, 'recovery-required');
+  assert.equal(turnModule.getActionGuard(f.actor, f.item).allowed, false);
 });

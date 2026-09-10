@@ -1,7 +1,6 @@
 import {
   mtrolEvaluarDadosMtrol,
-  mtrolCalcularTotalBaseSinCriticos,
-  mtrolMostrarDados
+  mtrolCalcularTotalBaseSinCriticos
 } from "../rolls/dice-engine.js";
 
 import {
@@ -47,8 +46,6 @@ export async function rollMtrolInitiative(actor) {
 
   const preparationBonus =
     Number(preparationExecution.preparationBonus ?? 0);
-
-  await mtrolMostrarDados(mainRoll);
 
   const evaluacion =
     await mtrolEvaluarDadosMtrol(mainRoll);
@@ -120,8 +117,6 @@ export async function rollMtrolInitiative(actor) {
 
   const secondaryRoll =
     await new Roll("1d10").evaluate();
-
-  await mtrolMostrarDados(secondaryRoll);
 
   const secondaryChatRolls =
     await mtrolPrepareChatRolls({

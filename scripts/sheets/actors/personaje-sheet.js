@@ -86,7 +86,6 @@ import {
   buildCombatLibraryViewModel
 } from "../../combat/combat-library-view-model.js";
 
-import { getItemAbilityDamageConfig } from "../../actions/ability-config.js";
 import { adjudicateLevelDifferenceModifier } from "../../actions/gm-roll-modifier-service.js";
 
 import {
@@ -2173,6 +2172,14 @@ export class PersonajeSheet extends ActorSheet {
   }
 
   async _onCompetenciaRoll(event) {
+    if (this._mtrolCompetenciaExecution) return this._mtrolCompetenciaExecution;
+    const operation = this._dispatchCompetenciaRoll(event);
+    this._mtrolCompetenciaExecution = operation;
+    try { return await operation; }
+    finally { this._mtrolCompetenciaExecution = null; }
+  }
+
+  async _dispatchCompetenciaRoll(event) {
     const slot = Number(event.currentTarget?.dataset?.specialSlot ?? 0);
     if (![1, 2].includes(slot)) return this._executeCompetenciaRoll(event);
 
@@ -2321,6 +2328,31 @@ export class PersonajeSheet extends ActorSheet {
       return;
     }
 
+    // The attempt is created before any Roll. An unknown ACK retains it for retry.
+    if (turnGuard.reactive || actionDefinition.requiresOpposition) {
+      this._mtrolOppositionAttempts ??= new Map();
+      const key = `${actor.uuid}:${item.id}:${turnGuard.opposition?.id ?? targetToken?.id ?? targetToken?.uuid ?? "target"}`;
+      const attemptId = this._mtrolOppositionAttempts.get(key) ?? foundry.utils.randomID();
+      this._mtrolOppositionAttempts.set(key, attemptId);
+      try {
+        const result = turnGuard.reactive
+          ? await attachDefenseRollForActor({ actor, item, pendingActionId: turnGuard.opposition.id,
+              transactionId: `opposition.respond:${attemptId}`, executeRoll: true, dharmaSpend,
+              specialContext, selectedCapability: item.system?.responseCapability ?? null,
+              mode: item.system?.responseMode ?? null })
+          : await createPendingActionFromCompetencia({ actor, item, targetToken,
+              id: attemptId, executeRoll: true, dharmaSpend, specialContext,
+              declaredMode: actionMode, actionModifiers: contextualModifiers.initial,
+              damage: { modifiers: contextualModifiers.damage } });
+        if (result) this._mtrolOppositionAttempts.delete(key);
+        return result;
+      } catch (error) {
+        if (!["RECOVERY_REQUIRED", "ACK_UNKNOWN"].includes(error.reasonCode)) this._mtrolOppositionAttempts.delete(key);
+        ui.notifications.warn(error.message);
+        return false;
+      } finally { this._updatePreparedDharmaState(actionKey, null); }
+    }
+
     try {
       resultado = await resolverCompetencia({
         actor,
@@ -2340,26 +2372,8 @@ export class PersonajeSheet extends ActorSheet {
     const {
       targetActor,
       consumoMP,
-      costoTotal,
-      danioFormula,
-      resultadoCompetencia,
-      rollModifiers
+      resultadoCompetencia
     } = resultado;
-
-    if (turnGuard.reactive) {
-      const oppositionResult = await attachDefenseRollForActor({
-        actor,
-        item,
-        defenderRoll: resultadoCompetencia,
-        pendingActionId: turnGuard.opposition?.id ?? null,
-        specialContext,
-        consumeResponse: true,
-        selectedCapability: item.system?.responseCapability ?? null,
-        mode: item.system?.responseMode ?? null
-      });
-
-      return oppositionResult;
-    }
 
     if (item.system?.actionType === "defense") {
       const defenseResult =
@@ -2382,7 +2396,8 @@ export class PersonajeSheet extends ActorSheet {
 
     const isMovementAction = actionMode === "movement" ||
       kindOverride === "movement" ||
-      item.system?.actionType === "movement";
+      item.system?.actionType === "movement" ||
+      actionDefinition.resolutionResult === "movement";
 
     if (resultadoCompetencia?.pifia && !actionDefinition.requiresOpposition) {
       await this._finalizarConsumoCompetencia({
@@ -2410,52 +2425,6 @@ export class PersonajeSheet extends ActorSheet {
         targetActor,
         targetToken
       });
-      return;
-    }
-
-    const damageConfig =
-      getItemAbilityDamageConfig(item, {
-        requiresOpposition: actionDefinition.requiresOpposition
-      });
-    const hasDamage =
-      Boolean(danioFormula) && damageConfig.executesDamage;
-    const damageContext = {
-      available: hasDamage,
-      formula: danioFormula,
-      flatValue: Number.isFinite(Number(danioFormula)) ? Number(danioFormula) : null,
-      localized: item.system?.usaDanioLocalizado !== false,
-      costoTotal,
-      modifiers: contextualModifiers.damage
-    };
-
-    if (actionDefinition.requiresOpposition) {
-      const pendingAction = await createPendingActionFromCompetencia({
-        actor,
-        item,
-        targetToken,
-        attackerRoll: resultadoCompetencia,
-        declaredMode: actionMode,
-        actionModifiers: rollModifiers,
-        damage: damageContext
-      });
-
-      if (pendingAction) {
-        await this._finalizarConsumoCompetencia({
-          actor,
-          item,
-          consumoMP,
-          resultadoCompetencia,
-          specialContext,
-          pendingResolutionId: pendingAction.id
-        });
-
-        ui.notifications.info(
-          `${item.name} espera una defensa manual.`
-        );
-
-        return;
-      }
-
       return;
     }
 

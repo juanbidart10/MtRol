@@ -47,6 +47,7 @@ import {
 } from "./follow-up-policy.js";
 
 import { logger } from "../utils/logger.js";
+import { traceMovement } from "./movement-trace.js";
 import { installCombatTracker } from "./turn-tracker-adapter.js";
 import { advanceTurnOnce, clearTurnAdvanceLocks } from "./turn-advance-service.js";
 import {
@@ -206,11 +207,55 @@ function isGrantedMovementCurrent(movement, context = getTurnContext()) {
     Number(movement.remaining ?? 0) > 0;
 }
 
+function readMovementGrantLedger(combatant) {
+  const stored = combatantFlag(combatant, MTROL_GRANTED_MOVEMENT_FLAG);
+  if (!stored) return {};
+  if (stored.version === 2 && stored.grants && typeof stored.grants === "object") {
+    return { ...stored.grants };
+  }
+  return stored.id ? { [stored.id]: stored } : {};
+}
+
+async function writeMovementGrantLedger(combatant, grants) {
+  const entries = Object.entries(grants ?? {}).filter(([, grant]) => grant?.id);
+  return setGrantedMovement(combatant, entries.length
+    ? { version: 2, grants: Object.fromEntries(entries) }
+    : null);
+}
+
+function currentExternalGrants(actor = null, context = getTurnContext()) {
+  return Object.values(readMovementGrantLedger(context.combatant))
+    .filter(grant => grant.kind !== "self" && isGrantedMovementCurrent(grant, context))
+    .filter(grant => !actor || sameActor(actor, grant.targetActorUuid))
+    .sort((a, b) => Number(a.grantedAt ?? 0) - Number(b.grantedAt ?? 0) ||
+      String(a.id).localeCompare(String(b.id)));
+}
+
 export function getGrantedMovement(actor = null, context = getTurnContext()) {
-  const movement = combatantFlag(context.combatant, MTROL_GRANTED_MOVEMENT_FLAG);
-  if (!isGrantedMovementCurrent(movement, context)) return null;
-  if (actor && !sameActor(actor, movement.targetActorUuid)) return null;
-  return movement;
+  const grants = currentExternalGrants(actor, context);
+  if (!grants.length) return null;
+  const targetActorUuid = actor?.uuid ?? grants[0].targetActorUuid;
+  const selected = actor
+    ? grants
+    : grants.filter(grant => grant.targetActorUuid === targetActorUuid);
+  return {
+    id: selected.length === 1
+      ? selected[0].id
+      : `grant-bundle:${context.combatId}:${context.round}:${context.turn}:${targetActorUuid}`,
+    grantIds: selected.map(grant => grant.id),
+    targetActorUuid,
+    targetTokenUuid: selected.every(grant => grant.targetTokenUuid === selected[0].targetTokenUuid)
+      ? selected[0].targetTokenUuid
+      : null,
+    sourceCombatantId: context.combatant?.id,
+    combatId: context.combatId,
+    round: context.round,
+    turn: context.turn,
+    granted: selected.reduce((sum, grant) => sum + Number(grant.granted ?? 0), 0),
+    remaining: selected.reduce((sum, grant) => sum + Number(grant.remaining ?? 0), 0),
+    spent: selected.reduce((sum, grant) => sum + Number(grant.spent ?? 0), 0),
+    status: "available"
+  };
 }
 
 export function getEnemiesInAttackRange(actor, token = null, context = getTurnContext()) {
@@ -259,6 +304,75 @@ export function getAvailableMovement(actor, token = null, {
 
 async function setGrantedMovement(combatant, movement) {
   return writeCombatantFlag(combatant, MTROL_GRANTED_MOVEMENT_FLAG, movement);
+}
+
+export async function applyCanonicalMovementGrantAuthoritative({
+  sourceActorUuid,
+  targetActorUuid = null,
+  targetTokenUuid = null,
+  sourceItemUuid = null,
+  resolution = {},
+  grantId
+} = {}, {
+  requestingUserId = game.user?.id
+} = {}) {
+  if (!isPrimaryActiveGM()) throw new Error("La concesión de movimiento requiere al Primary GM.");
+  const sourceActor = await resolveActorByUuid(sourceActorUuid);
+  if (!sourceActor || !userOwnsActor(sourceActor, requestingUserId)) {
+    throw new Error("El usuario no controla al Actor que concede movimiento.");
+  }
+  const context = getTurnContext();
+  if (!context.combat || !sameActor(context.actor, sourceActorUuid)) {
+    throw new Error("La concesión no pertenece al turno activo.");
+  }
+  const stableGrantId = String(grantId ?? "").trim();
+  if (!stableGrantId) throw new Error("La concesión de movimiento requiere grantId estable.");
+  const targetUuid = targetActorUuid ?? sourceActorUuid;
+  const targetActor = await resolveActorByUuid(targetUuid);
+  if (!targetActor) throw new Error("No se encontró el Actor destinatario del movimiento.");
+  const ledger = readMovementGrantLedger(context.combatant);
+  const existing = ledger[stableGrantId];
+  if (existing) return { changed: false, movementGrant: { ...existing } };
+
+  const granted = movementFromFinalResult(resolution);
+  const self = sameActor(sourceActor, targetUuid);
+  const record = {
+    id: stableGrantId,
+    grantId: stableGrantId,
+    kind: self ? "self" : "target",
+    sourceActorUuid: sourceActor.uuid,
+    sourceCombatantId: context.combatant.id,
+    targetActorUuid: targetActor.uuid,
+    targetActorName: targetActor.name ?? "Actor",
+    targetTokenUuid,
+    sourceItemUuid,
+    combatId: context.combatId,
+    round: context.round,
+    turn: context.turn,
+    granted,
+    remaining: granted,
+    spent: 0,
+    status: granted > 0 ? "available" : "empty",
+    grantedAt: Date.now()
+  };
+
+  if (self) {
+    const current = getCombatantTurnState(context.combatant);
+    const next = grantExtraMovement(current, resolution, {
+      fullAction: true,
+      source: "movement-action"
+    }).state;
+    await writeTurnState(context.combatant, next);
+  } else {
+    const current = getCombatantTurnState(context.combatant);
+    if (!current.actionConsumed) {
+      await writeTurnState(context.combatant, { ...current, actionConsumed: true });
+    }
+  }
+
+  ledger[stableGrantId] = record;
+  await writeMovementGrantLedger(context.combatant, ledger);
+  return { changed: true, movementGrant: { ...record } };
 }
 
 function warnMovementOnce(tokenDocument, userId, code, message) {
@@ -558,7 +672,7 @@ export async function startCombatantTurnAuthoritative(combatant, context = getTu
   return writeTurnState(combatant, state);
 }
 
-export function getActionGuard(actor, item = null, { kindOverride = null } = {}) {
+export function getActionGuard(actor, item = null, { kindOverride = null, actionAttemptId = null } = {}) {
   const context = getTurnContext();
   const kind = ["offensive", "movement"].includes(kindOverride)
     ? kindOverride
@@ -593,6 +707,24 @@ export function getActionGuard(actor, item = null, { kindOverride = null } = {})
   if (reactive) {
     return { allowed: true, kind, reason: null, reactive: true, opposition };
   }
+
+  const runtime = context.combat.getFlag?.("mtrol", "runtime") ?? context.combat.flags?.mtrol?.runtime ?? {};
+  const reserved = Object.values(runtime.receipts ?? {}).some(receipt =>
+    ["opposition.activation", "opposition.response-activation"].includes(receipt.command) && receipt.actorUuid === actor?.uuid &&
+    receipt.transactionId !== actionAttemptId &&
+    !["completed"].includes(receipt.status) &&
+    !(receipt.status === "failed" && ["no-effects", "rolled-back"].includes(receipt.failureSafety))
+  );
+  const pendingMain = Object.values(runtime.pendingActions ?? {}).some(pending =>
+    pending.sourceActorUuid === actor?.uuid && (!actionAttemptId || pending.activationTransactionId !== actionAttemptId) &&
+    (["waiting-defense", "resolving", "recovery-required"].includes(pending.status) ||
+      (pending.status === "resolved" && pending.damage?.available === true &&
+        ["available", "rolling"].includes(pending.damage?.status)))
+  );
+  if (reserved || pendingMain) return {
+    allowed: false, kind, reactive: false,
+    reason: "La acción anterior todavía está pendiente o requiere revisión del GM."
+  };
 
   const state = getCombatantTurnState(context.combatant);
   if (!isCurrentState(context, context.combatant, state)) {
@@ -661,7 +793,8 @@ async function finalizeTurnUseAuthoritative({
   pendingResolutionId = null,
   pendingResolutionIds = [],
   targetActorUuid = null,
-  targetTokenUuid = null
+  targetTokenUuid = null,
+  actionAttemptId = null
 } = {}, {
   requestingUserId = game.user?.id
 } = {}) {
@@ -685,7 +818,11 @@ async function finalizeTurnUseAuthoritative({
     }
   }
 
-  const guard = getActionGuard(actor, item, { kindOverride });
+  if (!kindOverride && item.system?.resolutionResult === "movement") {
+    kindOverride = "movement";
+  }
+
+  const guard = getActionGuard(actor, item, { kindOverride, actionAttemptId });
   if (!guard.allowed) throw new Error(guard.reason);
 
   const context = getTurnContext();
@@ -701,6 +838,24 @@ async function finalizeTurnUseAuthoritative({
 
   const combatant = context.combatant;
   const state = getCombatantTurnState(combatant);
+  const resolutionIds = [pendingResolutionId, ...pendingResolutionIds]
+    .filter(Boolean)
+    .map(String)
+    .filter((value, index, values) => values.indexOf(value) === index);
+  if (guard.kind === "movement" && resolutionIds.length) {
+    const next = consumeOffensiveAction(state);
+    await writeTurnState(combatant, next);
+    await setTurnResolutionState(combatant, {
+      ids: resolutionIds,
+      actorUuid: actor.uuid,
+      itemUuid: item.uuid,
+      combatId: context.combatId,
+      round: context.round,
+      turn: context.turn,
+      pending: true
+    });
+    return { kind: guard.kind, state: next, deferredMovementGrant: true };
+  }
   if (guard.kind === "movement") {
     const targetIsSelf = !isTransferableMovementBuff(item) ||
       !targetActorUuid || sameActor(actor, targetActorUuid);
@@ -708,31 +863,16 @@ async function finalizeTurnUseAuthoritative({
     const movementSource = specialContext?.mode === "movement"
       ? "orb"
       : isTransferableMovementBuff(item) ? "spell" : "movement-action";
-    const nextState = targetIsSelf
-      ? grantExtraMovement(state, resolution, { fullAction: true, source: movementSource }).state
-      : { ...normalizeTurnState(state), actionConsumed: true, movementSource };
-    await writeTurnState(combatant, nextState);
-    if (!targetIsSelf && grantedAmount > 0) {
-      await setGrantedMovement(combatant, {
-        id: `movement:${item.uuid}:${context.combatId}:${context.round}:${context.turn}`,
-        sourceActorUuid: actor.uuid,
-        sourceCombatantId: combatant.id,
-        targetActorUuid,
-        targetTokenUuid,
-        sourceItemUuid: item.uuid,
-        sourceType: "movement-buff",
-        combatId: context.combatId,
-        round: context.round,
-        turn: context.turn,
-        granted: grantedAmount,
-        remaining: grantedAmount,
-        spent: 0,
-        status: "available",
-        grantedAt: Date.now()
-      });
-    } else {
-      await setGrantedMovement(combatant, null);
-    }
+    const grantId = `movement:${pendingResolutionId ?? actionAttemptId ?? item.uuid}:${context.combatId}:${context.round}:${context.turn}`;
+    const applied = await applyCanonicalMovementGrantAuthoritative({
+      sourceActorUuid: actor.uuid,
+      targetActorUuid: targetIsSelf ? actor.uuid : targetActorUuid,
+      targetTokenUuid,
+      sourceItemUuid: item.uuid,
+      resolution,
+      grantId
+    }, { requestingUserId });
+    const nextState = getCombatantTurnState(combatant);
     const ended = grantedAmount === 0;
     if (ended) await advanceCurrentTurnOnce(context, {
       reason: "movement-action-empty",
@@ -743,6 +883,7 @@ async function finalizeTurnUseAuthoritative({
       granted: grantedAmount,
       grantedTo: targetIsSelf ? actor.uuid : targetActorUuid,
       grantType: targetIsSelf ? "turn" : "granted",
+      movementGrant: applied.movementGrant,
       state: nextState,
       ended
     };
@@ -751,10 +892,6 @@ async function finalizeTurnUseAuthoritative({
   if (guard.kind === "offensive" || guard.kind === "normal") {
     const next = consumeOffensiveAction(state);
     await writeTurnState(combatant, next);
-    const resolutionIds = [pendingResolutionId, ...pendingResolutionIds]
-      .filter(Boolean)
-      .map(String)
-      .filter((value, index, values) => values.indexOf(value) === index);
     await setTurnResolutionState(combatant, resolutionIds.length
       ? {
           ids: resolutionIds,
@@ -777,7 +914,8 @@ export async function finalizeResolvedCompetenciaUse(actor, item, resolution, {
   pendingResolutionId = null,
   pendingResolutionIds = [],
   targetActorUuid = null,
-  targetTokenUuid = null
+  targetTokenUuid = null,
+  actionAttemptId = null
 } = {}) {
   if (!activeCombat()) return null;
   if (game.user?.isGM) {
@@ -789,7 +927,8 @@ export async function finalizeResolvedCompetenciaUse(actor, item, resolution, {
       pendingResolutionId,
       pendingResolutionIds,
       targetActorUuid,
-      targetTokenUuid
+      targetTokenUuid,
+      actionAttemptId
     });
   }
   const response = await requestPrimaryGM("mtrolFinalizeTurnUse", {
@@ -947,7 +1086,24 @@ function movementCollides(tokenDocument, changes = {}) {
 }
 
 export function validateTurnMovement(tokenDocument, changes, options = {}, userId = game.user?.id) {
-  if (options?.mtrolMovementInternal === true && getUser(userId)?.isGM) return true;
+  const contextAtEntry = getTurnContext();
+  const entryState = getCombatantTurnState(contextAtEntry.combatant);
+  traceMovement("MOVEMENT_PREUPDATE_ENTER", {
+    userId, actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid,
+    originX: tokenDocument?.x, originY: tokenDocument?.y,
+    destinationX: changes?.x ?? tokenDocument?.x, destinationY: changes?.y ?? tokenDocument?.y,
+    baseBefore: entryState.baseMovementRemaining, extraBefore: entryState.extraMovementRemaining,
+    movementSpentBefore: entryState.movementSpent,
+    metadataFound: Boolean(options?.mtrolTurnMovement), internal: options?.mtrolMovementInternal === true
+  });
+  if (options?.mtrolMovementInternal === true && getUser(userId)?.isGM) {
+    traceMovement("MOVEMENT_INTERNAL_UPDATE_IGNORED", {
+      userId, tokenUuid: tokenDocument?.uuid, actorUuid: tokenDocument?.actor?.uuid,
+      transactionId: options?.mtrolMovementTransactionId ?? null,
+      reason: options?.mtrolMovementOperation ?? "authoritative-internal-update"
+    });
+    return true;
+  }
   const cost = movementCost(tokenDocument, changes);
   if (cost <= 0) return true;
   if (getUser(userId)?.isGM) return true;
@@ -1021,6 +1177,12 @@ export function validateTurnMovement(tokenDocument, changes, options = {}, userI
     return false;
   }
   const spent = spendMovement(available.state, cost);
+  traceMovement("MOVEMENT_VALIDATE_RESULT", {
+    userId, actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid,
+    allowed: spent.allowed, distance: cost,
+    movementSource: available.state?.movementSource === "attribute" ? "ATTRIBUTE" : "TURN",
+    available: available.remaining, reason: spent.allowed ? null : "MOVEMENT_INSUFFICIENT"
+  });
   if (!spent.allowed) {
     logger.warnOnce("MOVEMENT", "movement validation rejected", {
       tokenUuid: tokenDocument?.uuid ?? null,
@@ -1054,7 +1216,18 @@ export function validateTurnMovement(tokenDocument, changes, options = {}, userI
     tokenUuid: tokenDocument.uuid,
     userId
   });
+  traceMovement("MOVEMENT_RESERVATION_CREATED", {
+    transactionId: movement.transactionId, userId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid: tokenDocument.uuid, reservationKey: available.combatant.id,
+    originX: movement.from.x, originY: movement.from.y,
+    destinationX: movement.to.x, destinationY: movement.to.y,
+    distance: cost, round: context.round, turn: context.turn
+  });
   options.mtrolTurnMovement = movement;
+  traceMovement("MOVEMENT_METADATA_ATTACHED", {
+    transactionId: movement.transactionId, userId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid: tokenDocument.uuid, metadataFound: true, movement: { ...movement }
+  });
   return true;
 }
 
@@ -1165,9 +1338,38 @@ async function commitTurnMovementAuthoritative({ tokenUuid, movement } = {}, {
       movement.combatId !== context.combatId || movement.round !== context.round || movement.turn !== context.turn) {
     return null;
   }
-  const spent = spendMovement(getCombatantTurnState(combatant), movement.cost);
+  const before = getCombatantTurnState(combatant);
+  traceMovement("MOVEMENT_SPEND_BEGIN", {
+    transactionId: movement.transactionId, requestingUserId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid, distance: movement.cost, source: movement.source,
+    baseBefore: before.baseMovementRemaining, extraBefore: before.extraMovementRemaining,
+    movementSpentBefore: before.movementSpent
+  });
+  const spent = spendMovement(before, movement.cost);
   if (!spent.allowed) throw new Error("El movimiento supera los cuadros restantes.");
+  traceMovement("MOVEMENT_SPEND_RESULT", {
+    transactionId: movement.transactionId, requestingUserId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid, baseAfter: spent.state.baseMovementRemaining,
+    extraAfter: spent.state.extraMovementRemaining,
+    movementSpentAfter: spent.state.movementSpent
+  });
+  traceMovement("MOVEMENT_TURNSTATE_WRITE_BEGIN", {
+    transactionId: movement.transactionId, requestingUserId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid, baseAfter: spent.state.baseMovementRemaining,
+    extraAfter: spent.state.extraMovementRemaining,
+    movementSpentAfter: spent.state.movementSpent
+  });
   const persisted = await writeTurnState(combatant, spent.state);
+  const readBack = getCombatantTurnState(combatant);
+  traceMovement("MOVEMENT_TURNSTATE_WRITE_DONE", {
+    transactionId: movement.transactionId, requestingUserId, actorUuid: tokenDocument.actor.uuid,
+    tokenUuid, baseAfter: readBack.baseMovementRemaining,
+    extraAfter: readBack.extraMovementRemaining,
+    movementSpentAfter: readBack.movementSpent,
+    roundTripMatches: readBack.baseMovementRemaining === persisted.baseMovementRemaining &&
+      readBack.extraMovementRemaining === persisted.extraMovementRemaining &&
+      readBack.movementSpent === persisted.movementSpent
+  });
   if (persisted.actionConsumed && movementRemaining(persisted) === 0 && !getGrantedMovement(null, context)) {
     if (persisted.movementSource === "attribute") {
       return resolveAttributeMovementEndAuthoritative({
@@ -1197,7 +1399,7 @@ async function commitGrantedMovementAuthoritative({ tokenUuid, movement } = {}, 
   }
   const context = getTurnContext();
   const current = getGrantedMovement(tokenDocument.actor, context);
-  if (!current || current.id !== movement.id ||
+  if (!current || (current.id !== movement.id && !current.grantIds?.includes(movement.id)) ||
       movement.combatId !== context.combatId || movement.round !== context.round ||
       movement.turn !== context.turn || movement.sourceCombatantId !== context.combatant?.id) {
     throw new Error("La concesión de movimiento ya no está disponible.");
@@ -1209,25 +1411,34 @@ async function commitGrantedMovementAuthoritative({ tokenUuid, movement } = {}, 
   if (cost > Number(current.remaining ?? 0)) {
     throw new Error("El movimiento supera los cuadros concedidos restantes.");
   }
-  const remaining = Number(current.remaining) - cost;
-  const next = {
-    ...current,
-    remaining,
-    spent: Number(current.spent ?? 0) + cost,
-    updatedAt: Date.now()
-  };
-  if (remaining > 0) {
-    await setGrantedMovement(context.combatant, next);
-    return next;
+  const ledger = readMovementGrantLedger(context.combatant);
+  let pendingCost = cost;
+  for (const grant of currentExternalGrants(tokenDocument.actor, context)) {
+    if (pendingCost <= 0) break;
+    const spent = Math.min(Number(grant.remaining ?? 0), pendingCost);
+    const remaining = Number(grant.remaining ?? 0) - spent;
+    if (remaining > 0) {
+      ledger[grant.id] = {
+        ...grant,
+        remaining,
+        spent: Number(grant.spent ?? 0) + spent,
+        status: "available",
+        updatedAt: Date.now()
+      };
+    } else {
+      delete ledger[grant.id];
+    }
+    pendingCost -= spent;
   }
-  next.status = "used";
-  next.closedAt = Date.now();
-  await setGrantedMovement(context.combatant, null);
-  await advanceCurrentTurnOnce(context, {
-    reason: "granted-movement-exhausted",
-    completionId: current.id
-  });
-  return next;
+  await writeMovementGrantLedger(context.combatant, ledger);
+  const next = getGrantedMovement(tokenDocument.actor, context);
+  if (!getGrantedMovement(null, context)) {
+    await advanceCurrentTurnOnce(context, {
+      reason: "granted-movement-exhausted",
+      completionId: current.id
+    });
+  }
+  return next ?? { ...current, remaining: 0, spent: Number(current.spent ?? 0) + cost, status: "used" };
 }
 
 export async function completeGrantedMovementAuthoritative({ movementId = null, reason = "skipped" } = {}, {
@@ -1243,7 +1454,11 @@ export async function completeGrantedMovementAuthoritative({ movementId = null, 
   if (!getUser(requestingUserId)?.isGM && !userOwnsActor(targetActor, requestingUserId)) {
     throw new Error("Sólo el Actor autorizado o el GM pueden cerrar este movimiento.");
   }
-  await setGrantedMovement(context.combatant, null);
+  const ledger = readMovementGrantLedger(context.combatant);
+  for (const grant of currentExternalGrants(null, context)) {
+    delete ledger[grant.id];
+  }
+  await writeMovementGrantLedger(context.combatant, ledger);
   localGrantedMovementReservations.delete(current.id);
   return advanceCurrentTurnOnce(context, {
     reason: `granted-movement-${reason}`,
@@ -1321,7 +1536,27 @@ export async function applyMovementConsumptionAuthoritative({
 }
 
 export async function commitTurnMovement(tokenDocument, options = {}, userId = game.user?.id, changes = {}) {
-  if (options?.mtrolMovementInternal === true && getUser(userId)?.isGM) return null;
+  const metadataFound = Boolean(options?.mtrolTurnMovement);
+  const context = getTurnContext();
+  const combatant = getCombatantForToken(tokenDocument, context.combat);
+  const reservationFound = Boolean(combatant?.id && localMovementReservations.get(combatant.id));
+  traceMovement("MOVEMENT_UPDATE_HOOK_ENTER", {
+    transactionId: options?.mtrolTurnMovement?.transactionId ?? options?.mtrolMovementTransactionId ?? null,
+    userId, actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid,
+    destinationX: changes?.x ?? tokenDocument?.x, destinationY: changes?.y ?? tokenDocument?.y,
+    tokenLocalX: tokenDocument?.x, tokenLocalY: tokenDocument?.y,
+    tokenDocumentX: tokenDocument?._source?.x ?? tokenDocument?.x,
+    tokenDocumentY: tokenDocument?._source?.y ?? tokenDocument?.y,
+    metadataFound, reservationFound, internal: options?.mtrolMovementInternal === true
+  });
+  if (options?.mtrolMovementInternal === true && getUser(userId)?.isGM) {
+    traceMovement("MOVEMENT_INTERNAL_UPDATE_IGNORED", {
+      transactionId: options?.mtrolMovementTransactionId ?? null, userId,
+      actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid,
+      reason: options?.mtrolMovementOperation ?? "authoritative-internal-update"
+    });
+    return null;
+  }
   const grantedMovement = options?.mtrolGrantedMovement;
   if (grantedMovement) {
     if (game.user?.isGM && isPrimaryActiveGM()) {
@@ -1365,7 +1600,16 @@ export async function commitTurnMovement(tokenDocument, options = {}, userId = g
       localGrantedMovementReservations.delete(reactionMovement.id);
     }
   }
-  const movement = options?.mtrolTurnMovement ?? getReservedTurnMovement(tokenDocument, changes, userId);
+  if (!metadataFound) traceMovement("MOVEMENT_METADATA_MISSING", {
+    userId, actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid, reservationFound
+  });
+  const reservedMovement = metadataFound ? null : getReservedTurnMovement(tokenDocument, changes, userId);
+  if (!metadataFound) traceMovement("MOVEMENT_RESERVATION_LOOKUP", {
+    transactionId: reservedMovement?.transactionId ?? null, userId,
+    actorUuid: tokenDocument?.actor?.uuid, tokenUuid: tokenDocument?.uuid,
+    reservationKey: combatant?.id ?? null, found: Boolean(reservedMovement)
+  });
+  const movement = options?.mtrolTurnMovement ?? reservedMovement;
   if (!movement || getUser(userId)?.isGM) return null;
   try {
     if (game.user?.isGM && isPrimaryActiveGM()) {
@@ -1374,6 +1618,11 @@ export async function commitTurnMovement(tokenDocument, options = {}, userId = g
       });
     }
     if (game.user?.id !== userId) return null;
+    traceMovement("MOVEMENT_SOCKET_SEND", {
+      transactionId: movement.transactionId, userId, actorUuid: tokenDocument.actor?.uuid,
+      tokenUuid: tokenDocument.uuid, originX: movement.from?.x, originY: movement.from?.y,
+      destinationX: movement.to?.x, destinationY: movement.to?.y, distance: movement.cost
+    });
     const response = await requestPrimaryGM("mtrolCommitTurnMovement", {
       tokenUuid: tokenDocument.uuid,
       movement
@@ -1382,6 +1631,12 @@ export async function commitTurnMovement(tokenDocument, options = {}, userId = g
       throw new Error(response.error ?? response.result?.commandResult?.humanReason ?? "No se pudo persistir el movimiento.");
     }
     return response.result?.commandResult ?? response.result;
+  } catch (error) {
+    traceMovement("MOVEMENT_SOCKET_FAIL", {
+      transactionId: movement.transactionId, userId, actorUuid: tokenDocument.actor?.uuid,
+      tokenUuid: tokenDocument.uuid, failureReason: error?.reasonCode ?? error?.message ?? String(error)
+    });
+    throw error;
   } finally {
     localMovementReservations.delete(movement.combatantId);
   }

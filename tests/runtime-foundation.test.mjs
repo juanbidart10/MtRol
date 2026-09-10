@@ -8,9 +8,13 @@ import {
   createDefaultRuntime
 } from "../scripts/runtime/runtime-repository.js";
 import {
+  decodeReceiptKey,
+  encodeReceiptKey,
+  getReceiptFromRuntime,
   ReceiptFailedError,
   ReceiptInProgressError,
-  ReceiptStore
+  ReceiptStore,
+  setReceiptInRuntime
 } from "../scripts/runtime/receipt-store.js";
 import {
   CommandBoundaryError,
@@ -23,7 +27,20 @@ function clone(value) {
   return structuredClone(value);
 }
 
-function createCombat({ id = "combat-1", runtime = null, beforeUpdate = null } = {}) {
+function expandDotNotationDeep(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const expanded = {};
+  for (const [key, child] of Object.entries(value)) {
+    const parts = key.split(".");
+    let target = expanded;
+    for (const part of parts.slice(0, -1)) target = target[part] ??= {};
+    target[parts.at(-1)] = expandDotNotationDeep(child);
+  }
+  return expanded;
+}
+
+function createCombat({ id = "combat-1", runtime = null, beforeUpdate = null,
+  foundryDotExpansion = false } = {}) {
   return {
     id,
     flags: runtime ? { mtrol: { runtime: clone(runtime) } } : {},
@@ -31,8 +48,9 @@ function createCombat({ id = "combat-1", runtime = null, beforeUpdate = null } =
     async update(change) {
       await beforeUpdate?.(this, change);
       this.updates.push(clone(change));
+      const normalized = foundryDotExpansion ? expandDotNotationDeep(change) : null;
       this.flags.mtrol ??= {};
-      this.flags.mtrol.runtime = clone(change["flags.mtrol.runtime"]);
+      this.flags.mtrol.runtime = clone(normalized?.flags?.mtrol?.runtime ?? change["flags.mtrol.runtime"]);
       return this;
     }
   };
@@ -152,13 +170,44 @@ test("ReceiptStore devuelve el resultado previo sin repetir side effects", async
   assert.equal(receipts.get(combat, "transaction-X").status, "completed");
 });
 
+test("ReceiptStore preserva un ID con puntos bajo expansión profunda de Foundry V14", async () => {
+  const logicalId = "opposition.create:X:activation";
+  const combat = createCombat({ runtime: createDefaultRuntime(), foundryDotExpansion: true });
+  const repository = new RuntimeRepository();
+  const receipts = new ReceiptStore({ repository });
+
+  await receipts.begin(combat, logicalId, { command: "opposition.activation" });
+  await receipts.transition(combat, logicalId, "prepared");
+  assert.equal(receipts.get(combat, logicalId).status, "prepared");
+  await receipts.complete(combat, logicalId, { ok: true });
+
+  const reloaded = new ReceiptStore({ repository: new RuntimeRepository() });
+  assert.deepEqual(reloaded.get(combat, logicalId).result, { ok: true });
+  assert.equal(Object.keys(combat.flags.mtrol.runtime.receipts).every(key => !key.includes(".")), true);
+});
+
+test("receipt key codec es reversible, estable y no colisiona", () => {
+  const ids = [
+    "opposition.create:X",
+    "opposition:create:X",
+    "opposition.create:X:activation",
+    "opposition.response-activation:X:activation",
+    "oposición.create:Ñ"
+  ];
+  const keys = ids.map(encodeReceiptKey);
+  assert.equal(new Set(keys).size, ids.length);
+  assert.equal(keys.every(key => !key.includes(".")), true);
+  assert.deepEqual(keys.map(decodeReceiptKey), ids);
+  assert.deepEqual(ids.map(encodeReceiptKey), keys);
+});
+
 test("ReceiptStore identifica un receipt processing despues de perder RAM", async () => {
   const runtime = createDefaultRuntime();
-  runtime.receipts.processing = {
+  setReceiptInRuntime(runtime, "processing", {
     transactionId: "processing",
     command: "opposition.resolve",
     status: "processing"
-  };
+  });
   const combat = createCombat({ runtime });
   const receipts = new ReceiptStore({ repository: new RuntimeRepository() });
 
@@ -310,7 +359,7 @@ test("rechazo mecánico completado produce receipt estable e idempotente", async
 
   assert.deepEqual(retry, first);
   assert.equal(evaluations, 1);
-  assert.equal(repository.read(combat).receipts[envelope.transactionId].status, "completed");
+  assert.equal(getReceiptFromRuntime(repository.read(combat), envelope.transactionId).status, "completed");
 });
 
 test("MtrolLogger usa warn por defecto y permite channels de debug", () => {
@@ -461,6 +510,17 @@ test("Recovery reconstruye cache y presentacion de waiting-defense sin crear otr
       mode: "auric"
     }
   };
+  for (const pending of Object.values(runtime.pendingActions)) {
+    pending.activationTransactionId = `activation:${pending.id}`;
+    pending.activationCostTransactionId = `cost:${pending.id}`;
+    setReceiptInRuntime(runtime, pending.activationCostTransactionId, {
+      transactionId: pending.activationCostTransactionId,
+      command: "resource.mp-cost", status: "completed" });
+    setReceiptInRuntime(runtime, pending.activationTransactionId, {
+      transactionId: pending.activationTransactionId, command: "opposition.activation", status: "completed",
+      checkpoints: { "activation-cost": { costTransactionId: `cost:${pending.id}` }, "main-action-consumed": {} }
+    });
+  }
   const combat = createCombat({ id: "combat-recovery", runtime });
   const repository = new RuntimeRepository();
   const receipts = new ReceiptStore({ repository });
@@ -499,7 +559,7 @@ test("Recovery coherencia resolving completado desde receipt sin repetir efectos
     status: "resolving",
     resolutionTransactionId: "resolve-action"
   };
-  runtime.receipts["resolve-action"] = {
+  setReceiptInRuntime(runtime, "resolve-action", {
     transactionId: "resolve-action",
     command: "opposition.resolve",
     pendingActionId: "action",
@@ -511,7 +571,18 @@ test("Recovery coherencia resolving completado desde receipt sin repetir efectos
         result: { success: true }
       }
     }
-  };
+  });
+  for (const pending of Object.values(runtime.pendingActions)) {
+    pending.activationTransactionId = `activation:${pending.id}`;
+    pending.activationCostTransactionId = `cost:${pending.id}`;
+    setReceiptInRuntime(runtime, pending.activationCostTransactionId, {
+      transactionId: pending.activationCostTransactionId,
+      command: "resource.mp-cost", status: "completed" });
+    setReceiptInRuntime(runtime, pending.activationTransactionId, {
+      transactionId: pending.activationTransactionId, command: "opposition.activation", status: "completed",
+      checkpoints: { "activation-cost": { costTransactionId: `cost:${pending.id}` }, "main-action-consumed": {} }
+    });
+  }
   const combat = createCombat({ runtime });
   const repository = new RuntimeRepository();
   const coordinator = new RecoveryCoordinator({
@@ -536,12 +607,23 @@ test("Recovery marca resolving ambiguo y avisa al GM una sola vez", async () => 
     status: "resolving",
     resolutionTransactionId: "respond-action"
   };
-  runtime.receipts["respond-action"] = {
+  setReceiptInRuntime(runtime, "respond-action", {
     transactionId: "respond-action",
     command: "opposition.respond",
     pendingActionId: "action",
     status: "processing"
-  };
+  });
+  for (const pending of Object.values(runtime.pendingActions)) {
+    pending.activationTransactionId = `activation:${pending.id}`;
+    pending.activationCostTransactionId = `cost:${pending.id}`;
+    setReceiptInRuntime(runtime, pending.activationCostTransactionId, {
+      transactionId: pending.activationCostTransactionId,
+      command: "resource.mp-cost", status: "completed" });
+    setReceiptInRuntime(runtime, pending.activationTransactionId, {
+      transactionId: pending.activationTransactionId, command: "opposition.activation", status: "completed",
+      checkpoints: { "activation-cost": { costTransactionId: `cost:${pending.id}` }, "main-action-consumed": {} }
+    });
+  }
   const combat = createCombat({ runtime });
   const repository = new RuntimeRepository();
   const coordinator = new RecoveryCoordinator({
@@ -570,12 +652,23 @@ test("Recovery completa create interrumpido si la pendingAction mecanica ya exis
     id: "action",
     status: "waiting-defense"
   };
-  runtime.receipts.create = {
+  setReceiptInRuntime(runtime, "create", {
     transactionId: "create",
     command: "opposition.create",
     pendingActionId: "action",
     status: "processing"
-  };
+  });
+  for (const pending of Object.values(runtime.pendingActions)) {
+    pending.activationTransactionId = `activation:${pending.id}`;
+    pending.activationCostTransactionId = `cost:${pending.id}`;
+    setReceiptInRuntime(runtime, pending.activationCostTransactionId, {
+      transactionId: pending.activationCostTransactionId,
+      command: "resource.mp-cost", status: "completed" });
+    setReceiptInRuntime(runtime, pending.activationTransactionId, {
+      transactionId: pending.activationTransactionId, command: "opposition.activation", status: "completed",
+      checkpoints: { "activation-cost": { costTransactionId: `cost:${pending.id}` }, "main-action-consumed": {} }
+    });
+  }
   const combat = createCombat({ runtime });
   const repository = new RuntimeRepository();
   const coordinator = new RecoveryCoordinator({
@@ -589,8 +682,8 @@ test("Recovery completa create interrumpido si la pendingAction mecanica ya exis
   });
 
   assert.equal(result.runtime.pendingActions.action.status, "waiting-defense");
-  assert.equal(result.runtime.receipts.create.status, "completed");
-  assert.equal(result.runtime.receipts.create.result.pendingAction.id, "action");
+  assert.equal(getReceiptFromRuntime(result.runtime, "create").status, "completed");
+  assert.equal(getReceiptFromRuntime(result.runtime, "create").result.pendingAction.id, "action");
 });
 
 test("un cliente no autoritativo solo hidrata y nunca escribe recovery", async () => {
@@ -611,3 +704,34 @@ test("un cliente no autoritativo solo hidrata y nunca escribe recovery", async (
   assert.equal(hydrated, true);
   assert.equal(combat.updates.length, 0);
 });
+
+for (const missing of ['activation', 'activation-cost', 'response']) {
+  test(`P0 Recovery bloquea daño/oposición sin evidencia consolidada: ${missing}`, async () => {
+    const runtime = createDefaultRuntime();
+    const pending = runtime.pendingActions.action = {
+      id: 'action', status: missing === 'response' ? 'resolved' : 'waiting-defense',
+      activationTransactionId: 'activation', activationCostTransactionId: 'activation-cost',
+      damage: { available: true, status: 'available' }
+    };
+    setReceiptInRuntime(runtime, 'activation', { transactionId: 'activation', command: 'opposition.activation',
+      status: 'completed', checkpoints: {
+        'activation-cost': { costTransactionId: 'activation-cost' }, 'main-action-consumed': {}
+      } });
+    setReceiptInRuntime(runtime, 'activation-cost', { transactionId: 'activation-cost',
+      command: 'resource.mp-cost', status: 'completed' });
+    if (missing === 'response') {
+      pending.defenderRoll = { total: 12 };
+      pending.responseActivationTransactionId = 'response';
+      setReceiptInRuntime(runtime, 'response', { transactionId: 'response', pendingActionId: 'action',
+        command: 'opposition.response-activation', status: 'applying' });
+    } else delete runtime.receipts[encodeReceiptKey(missing)];
+    const combat = createCombat({ id: 'p0-recovery', runtime });
+    const repository = new RuntimeRepository();
+    const receiptStore = new ReceiptStore({ repository });
+    const coordinator = new RecoveryCoordinator({ repository, receiptStore });
+    const result = await coordinator.recover(combat, { authorityUserId: 'gm', isPrimaryGM: true });
+    assert.equal(result.runtime.pendingActions.action.status, 'recovery-required');
+    assert.equal(result.runtime.pendingActions.action.recoveryReason, 'activation-not-consolidated');
+    assert.deepEqual(result.requiredIds, ['action']);
+  });
+}

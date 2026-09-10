@@ -3,6 +3,43 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
+const RECEIPT_KEY_PREFIX = "rk1_";
+
+export function encodeReceiptKey(transactionId) {
+  if (typeof transactionId !== "string" || !transactionId) {
+    throw new TypeError("El ID lógico del receipt debe ser un string no vacío.");
+  }
+  const bytes = new TextEncoder().encode(transactionId);
+  return RECEIPT_KEY_PREFIX + Array.from(bytes, byte =>
+    byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function decodeReceiptKey(persistentKey) {
+  if (typeof persistentKey !== "string" || !persistentKey.startsWith(RECEIPT_KEY_PREFIX)) {
+    throw new TypeError("La clave persistente del receipt no usa el codec soportado.");
+  }
+  const encoded = persistentKey.slice(RECEIPT_KEY_PREFIX.length);
+  if (encoded.length % 2 !== 0 || !/^[0-9a-f]*$/.test(encoded)) {
+    throw new TypeError("La clave persistente del receipt está dañada.");
+  }
+  const bytes = new Uint8Array(encoded.match(/.{2}/g)?.map(value => Number.parseInt(value, 16)) ?? []);
+  return new TextDecoder().decode(bytes);
+}
+
+export function getReceiptFromRuntime(runtime, transactionId) {
+  if (!runtime || !transactionId) return null;
+  return runtime.receipts?.[encodeReceiptKey(transactionId)] ?? null;
+}
+
+export function setReceiptInRuntime(runtime, transactionId, receipt) {
+  if (!runtime || typeof runtime !== "object") {
+    throw new TypeError("El runtime del receipt es obligatorio.");
+  }
+  runtime.receipts ??= {};
+  runtime.receipts[encodeReceiptKey(transactionId)] = receipt;
+  return receipt;
+}
+
 export const COMBAT_RECEIPT_SCHEMA_VERSION = 1;
 export const RECEIPT_KIND_FULL = "full";
 export const RECEIPT_KIND_COMPACT = "compact";
@@ -174,7 +211,7 @@ export class ReceiptStore {
     if (!transactionId) return null;
     const { repository, target } = this.resolve(combatOrId);
     const runtime = repository.read(target);
-    return clone(runtime?.receipts?.[transactionId] ?? null);
+    return clone(getReceiptFromRuntime(runtime, transactionId));
   }
 
   async compactEligible(combatOrId, { isTransactionInFlight = () => false } = {}) {
@@ -204,12 +241,12 @@ export class ReceiptStore {
     const mutation = await resolved.repository.mutate(resolved.target, draft => {
       const beforeBytes = estimateJsonBytes(draft.receipts);
       let compacted = 0;
-      for (const [transactionId, receipt] of Object.entries(draft.receipts ?? {})) {
+      for (const [persistentKey, receipt] of Object.entries(draft.receipts ?? {})) {
         if (!canCompactReceipt(receipt, {
           pendingActions: draft.pendingActions ?? {},
           isTransactionInFlight: protectedByFlight
         })) continue;
-        draft.receipts[transactionId] = compactReceipt(receipt);
+        draft.receipts[persistentKey] = compactReceipt(receipt);
         compacted += 1;
       }
       const values = Object.values(draft.receipts ?? {});
@@ -245,9 +282,10 @@ export class ReceiptStore {
     if (existing) return { created: false, receipt: existing };
 
     const createdAt = Date.now();
+    const persistentKey = encodeReceiptKey(transactionId);
     const { repository, target } = this.resolve(combatOrId);
     const mutation = await repository.mutate(target, draft => {
-      const concurrent = draft.receipts[transactionId];
+      const concurrent = draft.receipts[persistentKey];
       if (concurrent) return { created: false, receipt: clone(concurrent) };
       const receipt = {
         receiptSchemaVersion: COMBAT_RECEIPT_SCHEMA_VERSION,
@@ -261,7 +299,7 @@ export class ReceiptStore {
         result: null,
         error: null
       };
-      draft.receipts[transactionId] = receipt;
+      draft.receipts[persistentKey] = receipt;
       return { created: true, receipt: clone(receipt) };
     });
     return mutation.value;
@@ -269,9 +307,10 @@ export class ReceiptStore {
 
   async complete(combatOrId, transactionId, result) {
     const completedAt = Date.now();
+    const persistentKey = encodeReceiptKey(transactionId);
     const { repository, target } = this.resolve(combatOrId);
     const mutation = await repository.mutate(target, draft => {
-      const receipt = draft.receipts[transactionId];
+      const receipt = draft.receipts[persistentKey];
       if (!receipt) throw new Error(`No existe receipt para ${transactionId}.`);
       if (receipt.status === "completed") return clone(receipt);
       receipt.status = "completed";
@@ -288,8 +327,9 @@ export class ReceiptStore {
     if (!transactionId) throw new Error("transactionId es obligatorio.");
     if (typeof mutator !== "function") throw new TypeError("ReceiptStore.update requiere mutator.");
     const resolved = this.resolve(target);
+    const persistentKey = encodeReceiptKey(transactionId);
     const mutation = await resolved.repository.mutate(resolved.target, draft => {
-      const receipt = draft.receipts[transactionId];
+      const receipt = draft.receipts[persistentKey];
       if (!receipt) throw new Error(`No existe receipt para ${transactionId}.`);
       const value = mutator(receipt, draft);
       receipt.updatedAt = Date.now();
@@ -308,9 +348,10 @@ export class ReceiptStore {
 
   async fail(combatOrId, transactionId, error) {
     const failedAt = Date.now();
+    const persistentKey = encodeReceiptKey(transactionId);
     const { repository, target } = this.resolve(combatOrId);
     const mutation = await repository.mutate(target, draft => {
-      const receipt = draft.receipts[transactionId];
+      const receipt = draft.receipts[persistentKey];
       if (!receipt || receipt.status === "completed") return clone(receipt ?? null);
       receipt.status = "failed";
       receipt.updatedAt = failedAt;

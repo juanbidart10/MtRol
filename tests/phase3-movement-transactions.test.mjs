@@ -51,10 +51,12 @@ const {
 const {
   commitTurnMovement,
   configureTurnActionIntegration,
+  getAvailableMovement,
   validateTurnMovement
 } = await import("../scripts/combat/turn-system.js");
 configureTurnActionIntegration(game.mtrol.actions);
 const { transactionCoordinator } = await import("../scripts/runtime/runtime-foundation.js");
+const { getReceiptFromRuntime } = await import("../scripts/runtime/receipt-store.js");
 const {
   getTransactionCommandForSocketAction,
   registerTransactionCommands
@@ -223,7 +225,7 @@ test("TURN movement se confirma una vez y el replay devuelve el mismo receipt", 
   assert.equal(fx.first.flags.mtrol.turnState.baseMovementRemaining, 0);
   assert.equal(fx.first.flags.mtrol.turnState.extraMovementRemaining, 1);
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[options.mtrolTurnMovement.transactionId].status, "completed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, options.mtrolTurnMovement.transactionId).status, "completed");
 });
 
 test("el hook del Primary GM confirma aunque el jugador cierre antes de enviar su socket", async () => {
@@ -233,7 +235,7 @@ test("el hook del Primary GM confirma aunque el jugador cierre antes de enviar s
   fx.token.x = 100;
   await commitTurnMovement(fx.token, options, "owner");
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[options.mtrolTurnMovement.transactionId].status, "completed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, options.mtrolTurnMovement.transactionId).status, "completed");
 });
 
 test("updateToken confirma desde la reserva existente si Foundry no conserva metadata", async () => {
@@ -248,26 +250,91 @@ test("updateToken confirma desde la reserva existente si Foundry no conserva met
 
   assert.equal(fx.first.flags.mtrol.turnState.baseMovementRemaining, 0);
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[transactionId].status, "completed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, transactionId).status, "completed");
   assert.equal(validateTurnMovement(fx.token, { x: 200 }, {}, "owner"), false);
 });
 
-test("el Primary GM espera de forma acotada a que su Token converja con la posición persistida", async () => {
+test("el Primary GM completa sin demora fija cuando el Token converge en 100 ms", async () => {
   const fx = fixture();
   const payload = movementPayload(fx, "movement:late-token-sync");
   fx.token.x = 50;
-  const synchronize = globalThis.setTimeout(() => { fx.token.x = 100; }, 10);
+  const synchronize = globalThis.setTimeout(() => { fx.token.x = 100; }, 100);
 
   try {
     const result = await executeMovementTransaction(payload, {
       requestingUserId: "owner",
-      positionSyncTimeoutMs: 100
+      positionSyncTimeoutMs: 5000
     });
     assert.equal(result.ok, true);
     assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
-    assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].status, "completed");
+    assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "completed");
   } finally {
     globalThis.clearTimeout(synchronize);
+  }
+});
+
+for (const delayMs of [1500, 4000]) {
+  test(`el Primary GM tolera convergencia real demorada ${delayMs} ms`, async () => {
+    const fx = fixture();
+    const payload = movementPayload(fx, `movement:late-token-sync-${delayMs}`);
+    const synchronize = globalThis.setTimeout(() => { fx.token.x = 100; }, delayMs);
+    try {
+      const result = await executeMovementTransaction(payload, {
+        requestingUserId: "owner"
+      });
+      assert.equal(result.ok, true);
+      assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
+      assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "completed");
+    } finally {
+      globalThis.clearTimeout(synchronize);
+    }
+  });
+}
+
+test("retry concurrente del mismo transactionId consume movimiento una sola vez", async () => {
+  const fx = fixture();
+  const payload = movementPayload(fx, "movement:concurrent-retry");
+  const synchronize = globalThis.setTimeout(() => { fx.token.x = 100; }, 100);
+  try {
+    const [first, retry] = await Promise.all([
+      executeMovementTransaction(payload, { requestingUserId: "owner" }),
+      executeMovementTransaction(payload, { requestingUserId: "owner" })
+    ]);
+    assert.deepEqual(retry, first);
+    assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
+  } finally {
+    globalThis.clearTimeout(synchronize);
+  }
+});
+
+test("posición autoritativa distinta del trayecto se clasifica como mismatch y no consume", async () => {
+  const fx = fixture();
+  const payload = movementPayload(fx, "movement:wrong-position");
+  fx.token.x = 0;
+  fx.token.y = 100;
+  await assert.rejects(
+    executeMovementTransaction(payload, { requestingUserId: "owner" }),
+    error => error.reasonCode === "MOVEMENT_POSITION_MISMATCH"
+  );
+  assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
+});
+
+test("cambio de turno durante la espera aborta sin consumir el turno nuevo", async () => {
+  const fx = fixture();
+  const payload = movementPayload(fx, "movement:turn-changed-while-waiting");
+  const changeTurn = globalThis.setTimeout(() => {
+    fx.combat.turn = 1;
+    fx.combat.combatant = fx.second;
+  }, 100);
+  try {
+    await assert.rejects(
+      executeMovementTransaction(payload, { requestingUserId: "owner" }),
+      error => error.reasonCode === "MOVEMENT_TURN_CHANGED"
+    );
+    assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
+    assert.equal(fx.second.flags.mtrol.turnState.movementSpent, 0);
+  } finally {
+    globalThis.clearTimeout(changeTurn);
   }
 });
 
@@ -285,8 +352,8 @@ test("timeout de sincronización aborta sin consumo ni recovery ambiguo", async 
 
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
   assert.equal(fx.token.x, 0);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].status, "failed");
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].failureSafety, "no-effects");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "failed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).failureSafety, "no-effects");
 });
 
 test("una intención adulterada se rechaza, revierte posición y no consume movimiento", async () => {
@@ -298,7 +365,7 @@ test("una intención adulterada se rechaza, revierte posición y no consume movi
   assert.equal(fx.token.x, 0);
   assert.equal(fx.first.flags.mtrol.turnState.baseMovementRemaining, 1);
   assert.equal(fx.token.updateCalls.at(-1).options.mtrolMovementOperation, "rollback");
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].status, "failed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "failed");
 });
 
 test("metadata de turno obsoleta se rechaza antes del consumo y revierte posición", async () => {
@@ -309,7 +376,7 @@ test("metadata de turno obsoleta se rechaza antes del consumo y revierte posici�
   await assert.rejects(executeMovementTransaction(payload, { requestingUserId: "owner" }), /turno.*no está activo/i);
   assert.equal(fx.token.x, 0);
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].status, "failed");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "failed");
 });
 
 test("un movimiento aplicado sobre grid no soportada revierte aunque aún no exista receipt", async () => {
@@ -321,7 +388,7 @@ test("un movimiento aplicado sobre grid no soportada revierte aunque aún no exi
   assert.equal(fx.token.x, 0);
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
   assert.equal(fx.token.updateCalls.at(-1).options.mtrolMovementOperation, "rollback");
-  assert.equal(fx.combat.flags.mtrol.runtime?.receipts?.[payload.transactionId], undefined);
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId), null);
 });
 
 test("recovery completa consumo faltante cuando la posición ya fue aplicada", async () => {
@@ -381,7 +448,7 @@ test("recovery ambiguo queda marcado para intervención y no muta estado", async
   await assert.rejects(executeMovementTransaction(payload, { requestingUserId: "owner" }), /requiere reconciliación manual/);
   assert.equal(fx.token.x, 300);
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 0);
-  assert.equal(fx.combat.flags.mtrol.runtime.receipts[payload.transactionId].status, "recovery-required");
+  assert.equal(getReceiptFromRuntime(fx.combat.flags.mtrol.runtime, payload.transactionId).status, "recovery-required");
   const warningCount = warnings.length;
   assert.deepEqual(await recoverMovementTransactions(fx.combat), {
     recoveredIds: [],
@@ -461,7 +528,7 @@ test("ATTRIBUTE, GRANTED y REACTION usan el mismo commit transaccional tipado", 
       turn: 0
     }
   }, { requestingUserId: "owner" });
-  assert.equal(granted.first.flags.mtrol.grantedMovement.remaining, 1);
+  assert.equal(getAvailableMovement(granted.other, targetToken).remaining, 1);
 
   const reaction = fixture();
   reactionMovement = {
@@ -525,9 +592,9 @@ test("transacciones distintas concurrentes sobre la misma reserva se serializan"
   assert.equal(fx.first.flags.mtrol.turnState.movementSpent, 1);
   assert.equal(fx.combat.nextTurnCalls, 1);
   assert.equal(fx.token.x, 100, "el rechazo duplicado no revierte la posición ya confirmada");
-  const receipts = fx.combat.flags.mtrol.runtime.receipts;
-  assert.equal(receipts[first.transactionId].status, "completed");
-  assert.equal(receipts[second.transactionId].status, "failed");
+  const runtime = fx.combat.flags.mtrol.runtime;
+  assert.equal(getReceiptFromRuntime(runtime, first.transactionId).status, "completed");
+  assert.equal(getReceiptFromRuntime(runtime, second.transactionId).status, "failed");
 });
 
 test("recovery limpia una reserva optimista zombie y permite revalidar", async () => {

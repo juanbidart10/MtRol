@@ -17,12 +17,7 @@ export async function createPendingActionMessage(pendingAction) {
   return ChatMessage.create({
     user: pendingAction.sourceUserId ?? game.user?.id,
     speaker: actor ? ChatMessage.getSpeaker({ actor }) : undefined,
-    content: `
-      <div class="mtrol-chat-card">
-        <h2>Accion enfrentada pendiente</h2>
-        <p><strong>${foundry.utils.escapeHTML(pendingAction.sourceItemName)}</strong> espera una defensa manual.</p>
-      </div>
-    `,
+    content: buildResolutionContent(pendingAction, pendingAction.result),
     flags: { mtrol: {
       pendingActionId: pendingAction.id,
       transactionId: pendingAction.createTransactionId ?? null,
@@ -33,7 +28,8 @@ export async function createPendingActionMessage(pendingAction) {
 
 export function findPendingActionMessage(pendingActionId, presentationType) {
   if (!pendingActionId) return null;
-  return Array.from(game.messages ?? []).find(message =>
+  const messages = game.messages?.contents ?? (game.messages?.[Symbol.iterator] ? Array.from(game.messages) : []);
+  return messages.find(message =>
     message.flags?.mtrol?.pendingActionId === pendingActionId &&
     message.flags?.mtrol?.presentationType === presentationType
   ) ?? null;
@@ -54,83 +50,62 @@ function canShowReactionMovementButton(pendingAction) {
     pendingAction.reactionMovement?.status === "available";
 }
 
-function getResolutionDescription(result = {}) {
-  switch (result.reason) {
-    case "attacker-higher": return "El ataque supera la defensa.";
-    case "defender-higher": return "La defensa bloquea el ataque.";
-    case "attacker-critical": return "El atacante obtiene un resultado crítico.";
-    case "defender-critical": return "La defensa obtiene un resultado crítico.";
-    case "attacker-fumble": return "El atacante falla de forma crítica.";
-    case "defender-fumble": return "La defensa falla de forma crítica.";
-    case "tie":
-    case "tie-attacker":
-    case "tie-defender": return "Las tiradas terminan en empate.";
-    case "cancelled": return "La resolución fue cancelada.";
-    case "timeout": return "La defensa no respondió a tiempo.";
-    case "no-defense": return "No se recibió una defensa.";
-    default: return "La resolución fue procesada.";
-  }
-}
+const RESPONSE_LABELS = { DEFENSE: "Defensa", DODGE: "Esquiva", COUNTERATTACK: "Contraataque" };
+const CONSEQUENCE_LABELS = { damage: "Daño", movement: "Movimiento", defense: "Ataque evitado",
+  utility: "Utilidad", state: "Estado", control: "Control", none: "Sin consecuencia" };
+const MODE_LABELS = { attack: "Ataque", movement: "Movimiento", "recover-mp": "Recuperar MP",
+  "astral-projection": "Proyección astral" };
 
-function getResolutionOutcomeLabel(result = {}) {
-  return result.success ? "Gana atacante" : "Gana defensor";
-}
-
-export function buildResolutionContent(pendingAction, result, rollsHTML = "") {
-  const damageStatus = pendingAction.damage?.status ?? "unavailable";
-  const damageExecutedMessage = pendingAction.damage?.rolled === true
-    ? `<p>Daño ejecutado: <strong>${escapeHTML(pendingAction.damage?.total ?? "-")}</strong>.</p>`
+export function buildResolutionContent(pendingAction, result = pendingAction.result, rollsHTML = "") {
+  const p = pendingAction;
+  const source = p.sourceActorName ?? "Iniciador";
+  const target = p.targetActorName ?? "Objetivo";
+  const capability = RESPONSE_LABELS[p.responseDeclaration?.selectedCapability] ?? "Respuesta";
+  const damageAvailable = canShowDamageButton(p, result);
+  const movementAvailable = canShowReactionMovementButton(p);
+  const status = p.status === "cancelled" ? "Cancelada"
+    : p.status === "recovery-required" ? "Requiere revisión del GM"
+    : p.status === "waiting-defense" ? "Esperando respuesta"
+    : p.status === "resolving" ? "Resolviendo oposición"
+    : damageAvailable ? "Esperando lanzamiento de daño"
+    : p.damage?.status === "rolling" ? "Lanzando daño"
+    : movementAvailable ? "Esperando movimiento o renuncia" : "Resuelta";
+  const winner = result ? (result.success ? source : target) : null;
+  const winnerItem = result ? (result.success ? p.sourceItemName : p.responseItemName ?? p.defenseItemName) : null;
+  const consequence = CONSEQUENCE_LABELS[p.winnerResolutionResult] ?? "Resultado aplicado";
+  const damageSource = p.damage?.sourceActorUuid === p.targetActorUuid ? target : source;
+  const damageTarget = p.damage?.targetActorUuid === p.sourceActorUuid ? source : target;
+  const response = p.responseDeclaration || p.defenderRoll
+    ? `<p><strong>${escapeHTML(target)} — ${escapeHTML(p.responseItemName ?? p.defenseItemName ?? "Respuesta declarada")}</strong>
+        ${escapeHTML(p.defenderRoll?.total ?? "—")}<br>Respuesta: ${escapeHTML(capability)}
+        ${p.responseResolutionResult ? `<br>Consecuencia de respuesta: ${escapeHTML(CONSEQUENCE_LABELS[p.responseResolutionResult] ?? "Resultado aplicado")}` : ""}</p>`
+    : `<p>VS <strong>${escapeHTML(target)}</strong></p>`;
+  const waiting = p.status === "waiting-defense"
+    ? `<p>Debe responder: <strong>${escapeHTML(target)}</strong></p><p>Respuestas válidas:
+        ${(p.allowedResponses ?? []).map(value => RESPONSE_LABELS[value]).filter(Boolean).map(escapeHTML).join(" · ")}</p>` : "";
+  const outcome = winner && !["cancelled", "recovery-required"].includes(p.status)
+    ? `<p>Ganador: <strong>${escapeHTML(winner)} — ${escapeHTML(winnerItem ?? "Habilidad")}</strong></p>
+       <p>Consecuencia: <strong>${escapeHTML(consequence)}</strong>${p.winnerResolutionResult === "damage" ? ` contra ${escapeHTML(damageTarget)}` : ""}</p>` : "";
+  const tie = result?.tieBreaker ? `<p>Empate · 1d10: ${escapeHTML(result.tieBreaker.total)}. Ganador: ${escapeHTML(winner)}.</p>` : "";
+  const damage = damageAvailable
+    ? `<p>Ahora: ${escapeHTML(damageSource)} debe lanzar daño contra ${escapeHTML(damageTarget)}.</p>
+       <button type="button" data-action="mtrol-resolved-damage" data-pending-action-id="${escapeHTML(p.id)}">LANZAR DAÑO</button>
+       <button type="button" data-action="mtrol-cancel-damage" data-pending-action-id="${escapeHTML(p.id)}">CANCELAR DAÑO</button>` : "";
+  const movement = movementAvailable
+    ? `<p>Movimiento concedido: ${escapeHTML(p.reactionMovement.allowance ?? 0)} cuadro(s). ${escapeHTML(target)} puede mover o renunciar.</p>
+       <button type="button" data-action="${REACTION_MOVEMENT_ACTION}" data-pending-action-id="${escapeHTML(p.id)}">NO MOVER</button>` : "";
+  const canonicalMovement = p.movementGrant?.granted > 0
+    ? `<p>${escapeHTML(p.movementGrant.targetActorName ?? "Actor")} obtiene ${escapeHTML(p.movementGrant.granted)} cuadro(s) de movimiento.</p>`
     : "";
-  const damageErrorMessage = pendingAction.damage?.error && damageStatus === "available"
-    ? `<p class="mtrol-chat-warning">No se pudo completar el daño: ${escapeHTML(pendingAction.damage.error)}</p>`
-    : "";
-  const damageButton = canShowDamageButton(pendingAction, result)
-    ? `<button type="button" data-action="mtrol-resolved-damage" data-pending-action-id="${escapeHTML(pendingAction.id)}">LANZAR DAÑO</button>`
-    : "";
-  const cancelDamageButton = canShowDamageButton(pendingAction, result)
-    ? `<button type="button" data-action="mtrol-cancel-damage" data-pending-action-id="${escapeHTML(pendingAction.id)}">CANCELAR DAÑO</button>`
-    : "";
-  const reactionMovementButton = canShowReactionMovementButton(pendingAction)
-    ? `<p>Esquiva exitosa: el objetivo puede mover 1 cuadro en cualquier dirección o renunciar.</p>
-       <button type="button" data-action="${REACTION_MOVEMENT_ACTION}" data-pending-action-id="${escapeHTML(pendingAction.id)}">NO MOVER</button>`
-    : "";
-
-  if (pendingAction.requiresOpposition !== true) {
-    return `<div class="mtrol-chat-card"><h2>DAÑO HABILITADO</h2>
-      <p><strong>${escapeHTML(pendingAction.sourceItemName)}</strong> completó su acción principal.</p>
-      ${rollsHTML}${damageExecutedMessage}${damageErrorMessage}${damageButton}</div>`;
-  }
-
-  const targetName = pendingAction.targetActorName ?? "Defensor";
-  const tieMessages = result.tieBreaker
-    ? `<p>Empate. MTROL tira 1d10 de desempate.</p>
-       <p>Resultado ${result.tieBreaker.total}: gana ${result.tieBreaker.winner === "attacker" ? "atacante" : "defensor"}.</p>`
-    : "";
-  const shieldWear = pendingAction.shieldWear ?? null;
-  const shieldWearMessages = shieldWear?.applied
-    ? `<p>MTROL tira 1d4 de desgaste: <strong>${escapeHTML(shieldWear.wear)}</strong>.</p>
-       <p>Defensa restante de ${escapeHTML(shieldWear.shieldName)}: <strong>${escapeHTML(shieldWear.remainingDefense)}</strong>.</p>
-       ${shieldWear.destroyed ? `<p><strong>${escapeHTML(shieldWear.shieldName)}</strong> se rompe y queda destruido.</p>` : ""}`
-    : "";
-  const damageWinnerName = pendingAction.damage?.sourceActorUuid === pendingAction.targetActorUuid
-    ? targetName
-    : pendingAction.sourceActorName ?? pendingAction.sourceItemName;
-  const outcomeMessage = pendingAction.winnerResolutionResult === "damage"
-    ? `${escapeHTML(damageWinnerName)} ganó la confrontación y obtuvo derecho a lanzar daño.`
-    : result.success
-    ? `${escapeHTML(pendingAction.sourceActorName ?? pendingAction.sourceItemName)} gana con consecuencia ${escapeHTML(pendingAction.winnerResolutionResult ?? "utility")}.`
-    : shieldWear?.applied
-      ? `${escapeHTML(targetName)} bloquea correctamente con ${escapeHTML(shieldWear.shieldName)}.`
-      : `${escapeHTML(targetName)} defiende correctamente.`;
-
-  return `<div class="mtrol-chat-card"><h2>RESOLUCIÓN ENFRENTADA</h2>
-    <p><strong>${escapeHTML(pendingAction.sourceItemName)}</strong> contra <strong>${escapeHTML(targetName)}</strong>.</p>
-    <p>Atacante: <strong>${result.attackerTotal}</strong> | Defensor: <strong>${result.defenderTotal}</strong></p>
-    ${rollsHTML}${tieMessages}<p>${outcomeMessage}</p>${shieldWearMessages}
-    <p>Resultado:<br><strong>${escapeHTML(getResolutionOutcomeLabel(result))}</strong>.</p>
-    <p>${escapeHTML(getResolutionDescription(result))}</p>
-    ${pendingAction.damage?.status === "cancelled" ? "<p><strong>Daño cancelado por GM.</strong></p>" : ""}
-    ${damageExecutedMessage}${damageErrorMessage}${damageButton}${cancelDamageButton}${reactionMovementButton}</div>`;
+  const error = damageAvailable && p.damage?.error ? "<p>No se pudo completar el daño. Reintentá el lanzamiento o solicitá revisión del GM.</p>" : "";
+  const shield = p.shieldWear?.destroyed ? `<p>${escapeHTML(p.shieldWear.shieldName)} se rompe y queda destruido.</p>` : "";
+  const closed = p.damage?.status === "cancelled" ? "<p>Daño cancelado por GM.</p>"
+    : p.damage?.rolled === true ? "<p>Lanzamiento de daño completado.</p>" : "";
+  return `<div class="mtrol-chat-card"><h2>OPOSICIÓN · ${escapeHTML(status)}</h2>
+    <p><strong>${escapeHTML(source)} — ${escapeHTML(p.sourceItemName)}</strong><br>Resultado: ${escapeHTML(p.attackerRoll?.total ?? "—")}
+    ${p.declaredMode ? `<br>Modo: ${escapeHTML(MODE_LABELS[p.declaredMode] ?? "Modo declarado")}` : ""}
+    <br>Consecuencia configurada: ${escapeHTML(CONSEQUENCE_LABELS[p.resolutionResult] ?? "Resultado aplicado")}</p>
+    ${response}${waiting}${rollsHTML}${tie}${outcome}${canonicalMovement}${damage}${movement}${error}${shield}${closed}</div>`;
 }
 
 function appendRestoredRollEntries(entries, serializedRolls, label) {
@@ -142,12 +117,9 @@ function appendRestoredRollEntries(entries, serializedRolls, label) {
 export async function prepareResolutionChatRolls(pendingAction, result) {
   const entries = [];
   appendRestoredRollEntries(entries, pendingAction.attackerRoll?.rolls ?? [], "Tirada atacante");
-  appendRestoredRollEntries(entries, pendingAction.defenderRoll?.rolls ?? [], "Tirada defensiva");
+  appendRestoredRollEntries(entries, pendingAction.defenderRoll?.rolls ?? [], "Tirada de respuesta");
   const tieBreakerRoll = result.tieBreaker?.roll ?? mtrolRestoreRolls(result.tieBreaker?.rollData ?? [])[0] ?? null;
   if (tieBreakerRoll) entries.push({ roll: tieBreakerRoll, label: "Desempate" });
-  const shieldWearRoll = pendingAction.shieldWear?.wearRoll ??
-    mtrolRestoreRolls(pendingAction.shieldWear?.wearRollData ?? [])[0] ?? null;
-  if (shieldWearRoll) entries.push({ roll: shieldWearRoll, label: "Desgaste de escudo" });
   return mtrolPrepareChatRolls(entries);
 }
 
@@ -164,6 +136,14 @@ export async function createResolutionMessage(pendingAction, result) {
   pendingAction.sourceActorName = actor?.name ?? "Atacante";
   pendingAction.targetActorName = target?.name ?? "Defensor";
   const chatRolls = await prepareResolutionChatRolls(pendingAction, result);
+  const existing = game.messages?.get?.(pendingAction.resolutionMessageId ?? pendingAction.pendingMessageId);
+  if (existing) {
+    pendingAction.resolutionMessageId = existing.id;
+    return existing.update({ content: buildResolutionContent(pendingAction, result, chatRolls.html),
+      rolls: chatRolls.rolls,
+      flags: { ...(existing.flags ?? {}), mtrol: { ...(existing.flags?.mtrol ?? {}),
+        presentationType: "opposition-resolution", damageStatus: pendingAction.damage?.status ?? "unavailable" } } });
+  }
   const sourceItem = actor?.items?.get?.(pendingAction.sourceItemId) ?? null;
   const resolutionState = ["attacker-fumble", "defender-fumble"].includes(result.reason)
     ? "fumble"
@@ -180,8 +160,8 @@ export async function createResolutionMessage(pendingAction, result) {
       family: result.success ? "attack" : "defense",
       state: resolutionState,
       title: "Resolución enfrentada",
-      categoryLabel: result.success ? "Ataque vencedor" : "Defensa vencedora",
-      formula: `Ataque ${result.attackerTotal} vs Defensa ${result.defenderTotal}`,
+      categoryLabel: "Oposición resuelta",
+      formula: `Iniciador ${result.attackerTotal} vs Respuesta ${result.defenderTotal}`,
       total: result.success ? result.attackerTotal : result.defenderTotal,
       icon: sourceItem?.img ?? actor?.img ?? ""
     },

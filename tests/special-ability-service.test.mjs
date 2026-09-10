@@ -120,7 +120,8 @@ test("fase 3A: integración reutiliza turnos, fórmula, daño y preparación exi
   assert.match(sheet, /selectOrbContextualMode/);
   assert.match(sheet, /resolverCompetencia\(\{[\s\S]*actionMode/);
   assert.match(turn, /validateSpecialAbilityExecution/);
-  assert.match(turn, /grantExtraMovement\(state, resolution, \{ fullAction: true, source: movementSource \}\)/);
+  assert.match(turn, /applyCanonicalMovementGrantAuthoritative/);
+  assert.match(turn, /grantExtraMovement\(current, resolution, \{[\s\S]*fullAction: true,[\s\S]*source: "movement-action"/);
   assert.match(engine, /actionMode !== "movement"/);
   assert.match(template, /data-special-slot="\{\{slot\}\}"/);
   assert.match(hooks, /installSpecialAbilityAuthorityHooks\(\)/);

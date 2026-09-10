@@ -60,7 +60,7 @@ export function registerOppositionCommands() {
       }
     );
     return { pendingAction: actions().serializePendingAction(pendingAction) };
-  }, { validate: assertUserExists });
+  }, { validate: assertUserExists, idempotent: false });
 
   commandRegistry.register("opposition.respond", async (payload, context, envelope) => {
     try {
@@ -71,6 +71,8 @@ export function registerOppositionCommands() {
         defenderRoll: payload.defenderRoll ?? null,
         specialContext: payload.specialContext ?? null,
         consumeResponse: payload.consumeResponse === true,
+        executeRoll: payload.executeRoll === true,
+        dharmaSpend: payload.dharmaSpend ?? null,
         selectedCapability: payload.selectedCapability ?? null,
         mode: payload.mode ?? null,
         requestingUserId: context.requestingUserId,
@@ -91,7 +93,7 @@ export function registerOppositionCommands() {
         pendingAction: actions().serializePendingAction(actions().getPendingAction(payload.pendingActionId))
       };
     }
-  }, { validate: assertUserExists });
+  }, { validate: assertUserExists, idempotent: false });
 
   commandRegistry.register("opposition.declare-response", async (payload, context, envelope) => {
     try {

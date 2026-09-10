@@ -43,9 +43,11 @@ import {
 export { resolveActionDefinition as getActionDefinitionFromItem } from "./action-definition-resolver.js";
 
 import {
+  applyCanonicalMovementGrantAuthoritative,
   completeResolvedTurnAction,
   finalizeResolvedCompetenciaUse,
-  getActionGuard
+  getActionGuard,
+  getAttributeFollowUpTargetGuard
 } from "../combat/turn-system.js";
 
 import {
@@ -55,8 +57,13 @@ import {
 
 import {
   commandRegistry,
-  runtimeRepository
+  runtimeRepository,
+  transactionCoordinator
 } from "../runtime/runtime-foundation.js";
+import { resolverCompetencia } from "../combat/competencia-engine.js";
+import { hasConsolidatedActivation, hasConsolidatedOpposition } from "./action-lifecycle-evidence.js";
+import { getReceiptFromRuntime } from "../runtime/receipt-store.js";
+import { findSpecialAbilitySlotForItem, validateSpecialAbilityExecution } from "../combat/special-ability-service.js";
 
 import {
   logger
@@ -70,7 +77,9 @@ import {
 import { pendingActionCache } from "./pending-action-cache.js";
 import {
   assertCanonicalOffensiveConfiguration,
-  normalizeContextualModifiers
+  normalizeContextualModifiers,
+  validateCanonicalFormula,
+  findTechnicallyCompatibleResponses
 } from "./combat-ability-policy.js";
 
 import {
@@ -206,6 +215,7 @@ function rollToData(rollData = {}) {
 }
 
 function isValidRollData(rollData = {}) {
+  if (!rollData || (rollData.total == null && rollData.roll?.total == null)) return false;
   const normalized =
     rollToData(rollData);
 
@@ -329,6 +339,7 @@ async function cleanupExpiredPendingActions() {
     pendingAction.terminalHandledAt = now;
     await persistPendingAction(pendingAction);
     broadcastPendingAction(pendingAction);
+    await updateResolutionMessage(pendingAction);
 
     if (game.user?.isGM && pendingAction.sourceActorUuid) {
       try {
@@ -449,8 +460,19 @@ function normalizeDamageContext(data = {}) {
   };
 }
 
+const presentationInFlight = new Map();
 export async function recoverPendingActionPresentation(pendingAction) {
   if (!pendingAction) return null;
+  if (presentationInFlight.has(pendingAction.id)) return presentationInFlight.get(pendingAction.id);
+  const operation = restorePendingActionPresentation(pendingAction);
+  presentationInFlight.set(pendingAction.id, operation);
+  try { return await operation; }
+  finally { presentationInFlight.delete(pendingAction.id); }
+}
+
+async function restorePendingActionPresentation(pendingAction) {
+  if (!pendingAction) return null;
+  await updateResolutionMessage(pendingAction);
   const waiting = pendingAction.status === "waiting-defense";
   const resolvedInteraction = pendingAction.status === "resolved" &&
     pendingAction.result &&
@@ -514,6 +536,8 @@ function buildPendingAction(data = {}) {
     id,
     combatId: data.combatId ?? game.combat?.id ?? null,
     createTransactionId: data.createTransactionId ?? null,
+    activationTransactionId: data.activationTransactionId ?? null,
+    activationCostTransactionId: data.activationCostTransactionId ?? null,
     resolutionTransactionId: data.resolutionTransactionId ?? null,
     sourceUserId: data.sourceUserId ?? null,
     sourceActorId: data.sourceActorId ?? null,
@@ -549,6 +573,7 @@ function buildPendingAction(data = {}) {
     responseDamage: data.responseDamage ?? null,
     responseDeclaration: data.responseDeclaration ?? null,
     reactionMovement: data.reactionMovement ?? null,
+    movementGrant: data.movementGrant ?? null,
     shieldItemId: data.shieldItemId ?? null,
     shieldItemUuid: data.shieldItemUuid ?? null,
     shieldSlot: data.shieldSlot ?? null,
@@ -581,7 +606,7 @@ function buildPendingAction(data = {}) {
   return pendingAction;
 }
 
-async function canonicalizePendingActionData(data, requestingUserId) {
+async function canonicalizePendingActionData(data, requestingUserId, actionAttemptId = null) {
   const sourceActor =
     data.sourceActorUuid
       ? await fromUuid(data.sourceActorUuid)
@@ -607,11 +632,28 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     throw new Error("La competencia atacante ya no existe.");
   }
 
-  const turnGuard = getActionGuard(sourceActor, sourceItem);
+  const turnGuard = getActionGuard(sourceActor, sourceItem, { actionAttemptId });
   if (!turnGuard.allowed) throw new Error(turnGuard.reason);
+  if (turnGuard.reactive) throw new Error("Una respuesta debe ejecutarse sobre la oposición existente.");
+  if (data.specialContext?.slot) validateSpecialAbilityExecution(sourceActor, sourceItem, data.specialContext);
+  else {
+    const special = findSpecialAbilitySlotForItem(sourceActor, sourceItem);
+    if (special?.locked) throw new Error(`${special.label} está bloqueada.`);
+    if (special?.handler === "orb-contextual") throw new Error("Usá el slot contextual de la habilidad.");
+  }
 
   const definition =
     getActionDefinitionFromItem(sourceItem, { declaredMode: data.declaredMode ?? null });
+  const initialFormula = validateCanonicalFormula(sourceItem.system?.formula || sourceItem.system?.formulaTirada, { label: "formula" });
+  if (!initialFormula.valid) throw new Error(initialFormula.errors.join(" "));
+  const targetToken = data.targetTokenUuid ? await fromUuid(data.targetTokenUuid) : null;
+  if (data.targetTokenUuid && targetToken?.actor?.uuid !== targetActor.uuid) throw new Error("El Token no coincide con el objetivo.");
+  if (turnGuard.attributeFollowUp) {
+    const followUp = getAttributeFollowUpTargetGuard(sourceActor, targetToken);
+    if (!followUp.allowed) throw new Error(followUp.reason);
+  }
+
+
 
   if (!definition.requiresOpposition) {
     throw new Error("La competencia no requiere una resolución enfrentada.");
@@ -628,6 +670,10 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     throw new Error("La acción ofensiva enfrentada no tiene actionDomain válido.");
   }
 
+  if (!definition.allowedResponses?.length || !findTechnicallyCompatibleResponses(targetActor, definition).length) {
+    throw new Error("El objetivo no tiene respuestas compatibles con la acción.");
+  }
+
   assertCanonicalOffensiveConfiguration({
     item: sourceItem,
     targetActor,
@@ -635,7 +681,7 @@ async function canonicalizePendingActionData(data, requestingUserId) {
     declaredMode: data.declaredMode ?? null
   });
 
-  if (!isValidRollData(data.attackerRoll)) {
+  if (!data.executeRoll && !isValidRollData(data.attackerRoll)) {
     throw new Error("La tirada atacante no es válida.");
   }
 
@@ -692,77 +738,77 @@ export async function createPendingActionAuthoritative(
     transactionId = null
   } = {}
 ) {
-  if (!game.user?.isGM) {
-    throw new Error("Solo el GM autoritativo puede registrar acciones pendientes.");
-  }
-
+  if (!isPrimaryActiveGM()) throw new Error("Sólo el Primary GM puede iniciar una oposición.");
   const runtimeContext = await ensurePendingActionCache(data.combatId ?? null);
-  if (!runtimeContext) throw new Error("No existe Combat activo para crear la oposicion.");
-  await cleanupExpiredPendingActions();
-
+  if (!runtimeContext) throw new Error("No existe Combat activo para crear la oposición.");
+  const actor = data.sourceActorUuid ? await fromUuid(data.sourceActorUuid) : game.actors?.get?.(data.sourceActorId);
+  if (!actor || !userCanControlActor(actor, requestingUserId)) throw new Error("El usuario no controla al iniciador.");
   const stableId = data.id ?? foundry.utils.randomID();
-  transactionId = transactionId ?? createOperationId("opposition.create", stableId);
-  data = {
-    ...data,
-    id: stableId,
-    combatId: runtimeContext.combat.id,
-    createTransactionId: transactionId
-  };
-
-  if (data.id && pendingActions.has(data.id)) {
-    const existing =
-      pendingActions.get(data.id);
-
-    const existingSourceActor =
-      existing.sourceActorUuid
-        ? await fromUuid(existing.sourceActorUuid)
-        : null;
-
-    if (!userCanControlActor(existingSourceActor, requestingUserId)) {
-      throw new Error("El usuario no controla la acción pendiente existente.");
+  transactionId ??= createOperationId("opposition.create", stableId);
+  const activationId = `${transactionId}:activation`;
+  const scope = { combat: runtimeContext.combat };
+  const previous = transactionCoordinator.get(scope, activationId);
+  if (previous && (previous.actorUuid !== actor.uuid || previous.itemId !== data.sourceItemId ||
+      previous.targetActorUuid !== data.targetActorUuid || previous.pendingActionId !== stableId)) {
+    throw new Error("La identidad del intento pertenece a otra acción.");
+  }
+  const snapshot = await transactionCoordinator.execute(scope, {
+    transactionId: activationId, command: "opposition.activation",
+    serializationKey: `main-action:${actor.uuid}`,
+    metadata: { actorUuid: actor.uuid, itemId: data.sourceItemId, targetActorUuid: data.targetActorUuid,
+      pendingActionId: stableId, requestingUserId },
+    prepare: async () => {
+      const canonical = await canonicalizePendingActionData({ ...data, id: stableId,
+        combatId: runtimeContext.combat.id, createTransactionId: transactionId }, requestingUserId, activationId);
+      const consumption = validarConsumoMP(actor, actor.items.get(canonical.sourceItemId));
+      if (!consumption?.exito) throw new Error("No hay MP suficiente para iniciar la acción.");
+      return canonical;
+    },
+    apply: async ({ prepared, checkpoint }) => {
+      if (!isPrimaryActiveGM()) throw new Error("Cambió el Primary GM; el intento requiere revisión.");
+      const item = actor.items.get(prepared.sourceItemId);
+      const consumption = validarConsumoMP(actor, item);
+      if (!consumption?.exito) throw Object.assign(new Error("No hay MP suficiente."), { transactionNoEffects: true });
+      consumption.transactionId = `${activationId}:mp`;
+      await checkpoint("activation-write-intent", { costTransactionId: consumption.transactionId });
+      const cost = await aplicarConsumoMP(actor, consumption, { item });
+      await checkpoint("activation-cost", { costTransactionId: consumption.transactionId, cost });
+      if (!isPrimaryActiveGM()) throw new Error("Cambió el Primary GM; el intento requiere revisión.");
+      let roll = prepared.attackerRoll;
+      if (prepared.executeRoll) {
+        await checkpoint("initial-roll-intent");
+        const target = prepared.targetTokenUuid ? await fromUuid(prepared.targetTokenUuid) : null;
+        const resolution = await resolverCompetencia({ actor, item,
+          targetToken: target ?? { actor: await fromUuid(prepared.targetActorUuid) },
+          dharmaSpend: prepared.dharmaSpend ?? null, actionMode: prepared.declaredMode,
+          actionAttemptId: activationId, paidConsumption: consumption,
+          rollModifiers: prepared.actionModifiers ?? [] });
+        roll = resolution?.resultadoCompetencia;
+      }
+      if (!isValidRollData(roll)) throw new Error("La tirada inicial no pudo consolidarse; requiere revisión.");
+      roll = rollToData(roll);
+      await checkpoint("initial-roll", { roll });
+      if (!isPrimaryActiveGM()) throw new Error("Cambió el Primary GM; el intento requiere revisión.");
+      await finalizeResolvedCompetenciaUse(actor, item, roll, {
+        specialContext: prepared.specialContext, pendingResolutionId: stableId, actionAttemptId: activationId
+      });
+      await checkpoint("main-action-consumed");
+      const pending = buildPendingAction({ ...prepared, attackerRoll: roll,
+        damage: { ...prepared.damage, costoTotal: cost.costoTotal },
+        activationTransactionId: activationId, activationCostTransactionId: consumption.transactionId });
+      await persistPendingAction(pending);
+      await checkpoint("pending-persisted", { pendingActionId: stableId });
+      return serializePendingAction(pending);
     }
-
-    return existing;
-  }
-
-  const canonicalData =
-    await canonicalizePendingActionData(
-      data,
-      requestingUserId
-    );
-
-  const pendingAction =
-    buildPendingAction(canonicalData);
-
-  pendingActions.set(
-    pendingAction.id,
-    pendingAction
-  );
-
-  await persistPendingAction(pendingAction);
-  logger.info("OPPOSITION", "pending action created", {
-    combatId: pendingAction.combatId,
-    pendingActionId: pendingAction.id,
-    transactionId,
-    actionDomain: pendingAction.actionDomain,
-    allowedResponses: pendingAction.allowedResponses
   });
-
-  try {
-    const message = await createPendingActionMessage(pendingAction);
-    pendingAction.pendingMessageId = message?.id ?? null;
-    pendingAction.updatedAt = Date.now();
-    await persistPendingAction(pendingAction);
-  } catch (error) {
-    logger.warn("RECOVERY", "pending action persisted without presentation", {
-      combatId: pendingAction.combatId,
-      pendingActionId: pendingAction.id,
-      transactionId,
-      error: error.message
-    });
-  }
+  if (snapshot?.ok === false) throw new Error(snapshot.reasonCode === "RECOVERY_REQUIRED"
+    ? "El intento requiere revisión del GM." : "El intento anterior fue rechazado; iniciá uno nuevo.");
+  if (!isPrimaryActiveGM()) throw new Error("La activación fue consolidada; recuperá el intento con el Primary GM actual.");
+  const current = runtimeRepository.read(runtimeContext.combat)?.pendingActions?.[stableId];
+  const pendingAction = receivePendingActionSync(current ?? snapshot);
+  try { await recoverPendingActionPresentation(pendingAction); }
+  catch (error) { logger.warn("RECOVERY", "pending action persisted without presentation", { error: error.message }); }
   broadcastPendingAction(pendingAction);
-
   return pendingAction;
 }
 
@@ -791,7 +837,12 @@ export async function createPendingAction(data = {}) {
       }
     );
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    if (data.executeRoll) throw Object.assign(new Error(response.error ?? "No se pudo confirmar la acción."), {
+      reasonCode: response.reasonCode ?? "ACK_UNKNOWN"
+    });
+    return null;
+  }
 
   return receivePendingActionSync(
     response.result?.pendingAction
@@ -805,7 +856,11 @@ export async function createPendingActionFromCompetencia({
   attackerRoll,
   damage = null,
     declaredMode = null,
-    actionModifiers = []
+    actionModifiers = [],
+    id = null,
+    executeRoll = false,
+    dharmaSpend = null,
+    specialContext = null
 } = {}) {
   const definition =
     getActionDefinitionFromItem(item, { declaredMode });
@@ -818,6 +873,7 @@ export async function createPendingActionFromCompetencia({
   }
 
   return createPendingAction({
+    ...(id ? { id } : {}), executeRoll, dharmaSpend, specialContext,
     sourceActorId: actor?.id ?? null,
     sourceActorUuid: actor?.uuid ?? null,
     sourceTokenId: getTokenId(actor?.getActiveTokens?.()[0]),
@@ -919,6 +975,7 @@ function getAvailableActionsForActor(actor) {
   return Array.from(pendingActions.values())
     .filter(pendingAction =>
       pendingAction.status === "waiting-defense" &&
+      hasConsolidatedActivation(pendingAction, runtimeRepository.read(getRuntimeCombat(pendingAction.combatId))) &&
       (
         pendingAction.targetActorId === actor.id ||
         pendingAction.targetActorUuid === actor.uuid
@@ -965,6 +1022,9 @@ export async function declareOppositionResponseAuthoritative({
   const pendingAction = pendingActions.get(pendingActionId);
   const actor = await resolveDefenderActor(pendingAction, defenderActorUuid);
   const responseItem = actor?.items?.get?.(responseItemId) ?? null;
+  if (!hasConsolidatedActivation(pendingAction, runtimeRepository.read(getRuntimeCombat(pendingAction?.combatId)))) {
+    throw new Error("La activación requiere revisión del GM.");
+  }
   const guard = actor && responseItem ? getActionGuard(actor, responseItem) : null;
   if (responseItem) {
     const responseDefinition = getActionDefinitionFromItem(responseItem, { declaredMode: mode });
@@ -1024,6 +1084,9 @@ export async function declareOppositionResponseAuthoritative({
     throw error;
   }
   if (!existing) {
+    pendingAction.responseItemId = responseItem.id;
+    pendingAction.responseItemName = responseItem.name;
+    pendingAction.responseResolutionResult = getActionDefinitionFromItem(responseItem, { declaredMode: eligibility.metadata.mode }).resolutionResult;
     pendingAction.responseDeclaration = {
       itemUuid: responseItem.uuid ?? null,
       itemId: responseItem.id,
@@ -1039,6 +1102,7 @@ export async function declareOppositionResponseAuthoritative({
     pendingAction.updatedAt = Date.now();
     await persistPendingAction(pendingAction);
     broadcastPendingAction(pendingAction);
+    await updateResolutionMessage(pendingAction);
     logger.info("OPPOSITION", "response declared", {
       combatId: pendingAction.combatId,
       pendingActionId: pendingAction.id,
@@ -1146,13 +1210,80 @@ async function validateShieldDefense(actor, defenseItem) {
   };
 }
 
-export async function attachDefenseRollAuthoritative({
+export async function attachDefenseRollAuthoritative(data = {}) {
+  if (!isPrimaryActiveGM()) throw new Error("Sólo el Primary GM puede ejecutar una respuesta.");
+  await ensurePendingActionCache();
+  const pending = pendingActions.get(data.pendingActionId) ?? getAvailableActionsForActor(
+    await fromUuid(data.defenderActorUuid ?? ""))[0];
+  if (!pending) throw new Error("No hay acciones pendientes para este defensor.");
+  if (!hasConsolidatedActivation(pending, runtimeRepository.read(getRuntimeCombat(pending.combatId)))) {
+    throw new Error("La activación requiere revisión del GM.");
+  }
+  const transactionId = `${data.transactionId ?? `opposition.respond:${pending.id}:${data.defenseItemId}`}:activation`;
+  const scope = { combat: game.combats?.get?.(pending.combatId) ?? game.combat };
+  const responder = await fromUuid(pending.targetActorUuid);
+  if (!userCanControlActor(responder, data.requestingUserId ?? game.user?.id)) throw new Error("El usuario no controla al responder.");
+  const previous = transactionCoordinator.get(scope, transactionId);
+  if (previous && (previous.actorUuid !== responder.uuid || previous.itemId !== data.defenseItemId || previous.pendingActionId !== pending.id)) {
+    throw new Error("La identidad de respuesta pertenece a otra ejecución.");
+  }
+  let touched = false;
+  const result = await transactionCoordinator.execute(scope, {
+    transactionId, command: "opposition.response-activation", serializationKey: `response:${pending.id}`,
+    metadata: { actorUuid: pending.targetActorUuid, pendingActionId: pending.id, itemId: data.defenseItemId },
+    apply: async ({ checkpoint }) => {
+      try {
+        const result = await applyDefenseRollAuthoritative({ ...data, pendingActionId: pending.id, transactionId,
+          checkpoint: async (name, value) => { touched = true; return checkpoint(name, value); } });
+        return { pendingAction: serializePendingAction(result.pendingAction),
+          resolutionResult: serializeResolutionResult(result.resolutionResult) };
+      } catch (error) {
+        if (!touched) error.transactionNoEffects = true;
+        else {
+          pending.status = "recovery-required";
+          pending.recoveryReason = error.message;
+          await persistPendingAction(pending);
+          broadcastPendingAction(pending);
+          await updateResolutionMessage(pending);
+        }
+        throw error;
+      }
+    }
+  }).catch(async error => {
+    const receipt = transactionCoordinator.get(scope, transactionId);
+    if (receipt && !(receipt.status === "failed" && receipt.failureSafety === "no-effects")) {
+      pending.status = "recovery-required";
+      pending.recoveryReason = "response-activation-not-consolidated";
+      await persistPendingAction(pending);
+      broadcastPendingAction(pending);
+      await updateResolutionMessage(pending);
+    }
+    throw error;
+  });
+  if (result?.ok === false) throw new Error("El intento de respuesta anterior falló; revisá su recibo.");
+  if (!isPrimaryActiveGM()) throw new Error("La respuesta fue consolidada; recuperá con el Primary GM actual.");
+  const latest = runtimeRepository.read(scope.combat)?.pendingActions?.[pending.id] ?? result.pendingAction;
+  const current = receivePendingActionSync(latest);
+  try {
+    await createResolutionMessage(current, current.result);
+    await persistPendingAction(current);
+  } catch (error) {
+    logger.warn("RECOVERY", "response consolidated without presentation", { error: error.message });
+  }
+  broadcastPendingAction(current);
+  return { ...result, pendingAction: serializePendingAction(current) };
+}
+
+async function applyDefenseRollAuthoritative({
   pendingActionId = null,
   defenderActorUuid = null,
   defenseItemId = null,
   defenderRoll = null,
   specialContext = null,
   consumeResponse = false,
+  executeRoll = false,
+  dharmaSpend = null,
+  checkpoint = async () => {},
   selectedCapability = null,
   mode = null,
   requestingUserId = game.user?.id,
@@ -1272,7 +1403,7 @@ export async function attachDefenseRollAuthoritative({
     throw error;
   }
 
-  if (!isValidRollData(defenderRoll)) {
+  if (!executeRoll && !isValidRollData(defenderRoll)) {
     throw new Error("La tirada defensiva no es válida.");
   }
 
@@ -1282,17 +1413,31 @@ export async function attachDefenseRollAuthoritative({
       defenseItem
     );
 
-  if (consumeResponse) {
-    const consumoMP = validarConsumoMP(actor, defenseItem);
-    if (!consumoMP?.exito) {
-      throw new Error(consumoMP?.motivo ?? "No hay MP suficiente para responder la oposición.");
-    }
-
-    await finalizeResolvedCompetenciaUse(actor, defenseItem, defenderRoll, {
-      specialContext
-    });
-    await aplicarConsumoMP(actor, consumoMP, { item: defenseItem });
+  const formulaValidation = validateCanonicalFormula(defenseItem.system?.formula || defenseItem.system?.formulaTirada, { label: "formula" });
+  if (!formulaValidation.valid) throw new Error(formulaValidation.errors.join(" "));
+  if (specialContext?.slot) validateSpecialAbilityExecution(actor, defenseItem, specialContext);
+  else if (findSpecialAbilitySlotForItem(actor, defenseItem)?.locked) throw new Error("La habilidad especial está bloqueada.");
+  // The caller cannot disable the canonical activation cost.
+  const consumoMP = validarConsumoMP(actor, defenseItem);
+  if (!consumoMP?.exito) throw new Error("No hay MP suficiente para responder la oposición.");
+  consumoMP.transactionId = `${transactionId}:mp`;
+  await checkpoint("response-write-intent", { costTransactionId: consumoMP.transactionId });
+  const responseCost = await aplicarConsumoMP(actor, consumoMP, { item: defenseItem });
+  await checkpoint("response-cost", { costTransactionId: consumoMP.transactionId });
+  if (!isPrimaryActiveGM()) throw new Error("Cambió el Primary GM; la respuesta requiere revisión.");
+  if (executeRoll) {
+    await checkpoint("response-roll-intent");
+    const resolution = await resolverCompetencia({ actor, item: defenseItem,
+      targetToken: { actor: initiatorActor }, paidConsumption: consumoMP,
+      dharmaSpend, actionMode: declaredResponse?.mode ?? mode });
+    defenderRoll = resolution?.resultadoCompetencia;
   }
+  if (!isValidRollData(defenderRoll)) throw new Error("No se pudo consolidar la tirada de respuesta.");
+  await checkpoint("response-roll", { roll: rollToData(defenderRoll) });
+  if (!isPrimaryActiveGM()) throw new Error("Cambió el Primary GM; la respuesta requiere revisión.");
+  await finalizeResolvedCompetenciaUse(actor, defenseItem, defenderRoll, { specialContext });
+  pendingAction.responseCostTransactionId = consumoMP.transactionId;
+  pendingAction.responseActivationTransactionId = transactionId;
 
   pendingAction.defenderRoll =
     rollToData(defenderRoll);
@@ -1347,6 +1492,7 @@ export async function attachDefenseRollAuthoritative({
       requiresOpposition: true,
       data: {
         declaredMode: declaredResponse?.mode ?? mode,
+        costoTotal: responseCost.costoTotal,
         sourceTokenUuid: pendingAction.targetTokenUuid,
         targetTokenUuid: pendingAction.sourceTokenUuid
       }
@@ -1372,6 +1518,7 @@ export async function attachDefenseRollAuthoritative({
 
   await persistPendingAction(pendingAction);
   broadcastPendingAction(pendingAction);
+  await updateResolutionMessage(pendingAction);
 
   logger.info("OPPOSITION", "defense attached", {
     combatId: pendingAction.combatId,
@@ -1386,7 +1533,7 @@ export async function attachDefenseRollAuthoritative({
   return await resolvePendingActionAuthoritative(
     pendingAction.id,
     {
-      requestingUserId
+      requestingUserId, deferPresentation: true
     }
   );
   } finally {
@@ -1438,6 +1585,8 @@ export async function attachDefenseRoll(pendingActionId, rollData = {}, options 
         defenderRoll: rollData,
         specialContext: options.specialContext ?? null,
         consumeResponse: options.consumeResponse === true,
+        executeRoll: options.executeRoll === true,
+        dharmaSpend: options.dharmaSpend ?? null,
         selectedCapability: options.selectedCapability ?? null,
         mode: options.mode ?? null,
         transactionId,
@@ -1466,11 +1615,16 @@ export async function attachDefenseRoll(pendingActionId, rollData = {}, options 
         defenderRoll: rollToData(rollData),
         specialContext: options.specialContext ?? null,
         consumeResponse: options.consumeResponse === true,
+        executeRoll: options.executeRoll === true,
+        dharmaSpend: options.dharmaSpend ?? null,
         selectedCapability: options.selectedCapability ?? null,
         mode: options.mode ?? null
       }
     );
 
+  if (options.executeRoll && !response.ok) throw Object.assign(new Error(response.error ?? "No se pudo confirmar la respuesta."), {
+    reasonCode: response.reasonCode ?? "ACK_UNKNOWN"
+  });
   return processAuthoritativeResponse(response);
 }
 
@@ -1546,7 +1700,10 @@ export async function attachDefenseRollForActor({
   specialContext = null,
   consumeResponse = false,
   selectedCapability = null,
-  mode = null
+  mode = null,
+  transactionId = null,
+  executeRoll = false,
+  dharmaSpend = null
 } = {}) {
   if (!actor || !item || item.type !== "competencia") return null;
 
@@ -1569,7 +1726,7 @@ export async function attachDefenseRollForActor({
       ...defenderRoll,
       itemId: item.id
     },
-    { specialContext, consumeResponse, selectedCapability, mode }
+    { specialContext, consumeResponse, selectedCapability, mode, transactionId, executeRoll, dharmaSpend }
   );
 }
 
@@ -1577,11 +1734,12 @@ export async function resolvePendingActionAuthoritative(
   pendingActionId,
   {
     requestingUserId = game.user?.id,
-    transactionId = null
+    transactionId = null,
+    deferPresentation = false
   } = {}
 ) {
-  if (!game.user?.isGM) {
-    throw new Error("Solo el GM autoritativo puede resolver acciones pendientes.");
+  if (!isPrimaryActiveGM()) {
+    throw new Error("Solo el Primary GM puede resolver acciones pendientes.");
   }
 
   await ensurePendingActionCache();
@@ -1602,6 +1760,16 @@ export async function resolvePendingActionAuthoritative(
     !pendingAction.defenderRoll
   ) {
     throw new Error("La acción pendiente no está lista para resolver.");
+  }
+
+  const runtime = runtimeRepository.read(getRuntimeCombat(pendingAction.combatId));
+  const responseReceipt = getReceiptFromRuntime(runtime, pendingAction.responseActivationTransactionId);
+  const paidResponse = getReceiptFromRuntime(runtime, pendingAction.responseCostTransactionId)?.status === "completed" &&
+    responseReceipt?.checkpoints?.["response-roll"] &&
+    responseReceipt?.checkpoints?.["response-cost"]?.costTransactionId === pendingAction.responseCostTransactionId;
+  if (!hasConsolidatedActivation(pendingAction, runtime) || !paidResponse ||
+      !(responseReceipt.status === "completed" || (deferPresentation && responseReceipt.status === "applying"))) {
+    throw new Error("La oposición no tiene una activación de respuesta válida para resolver.");
   }
 
   if (resolvingActions.has(pendingActionId)) {
@@ -1688,7 +1856,9 @@ export async function resolvePendingActionAuthoritative(
         resolutionId: pendingAction.id,
         actorUuid: pendingAction.targetActorUuid,
         tokenUuid: pendingAction.targetTokenUuid,
-        allowance: Math.max(0, Math.floor(Number(pendingAction.defenderRoll?.total ?? 0) / 10)),
+        allowance: pendingAction.responseDeclaration?.selectedCapability === OPPOSITION_CAPABILITIES.DODGE
+          ? 1
+          : Math.max(0, Math.floor(Number(pendingAction.defenderRoll?.total ?? 0) / 10)),
         status: "available",
         grantedAt: Date.now()
       };
@@ -1698,6 +1868,27 @@ export async function resolvePendingActionAuthoritative(
       ? pendingAction.resolutionResult
       : pendingAction.responseResolutionResult ?? "defense";
     pendingAction.winnerResolutionResult = winnerResolutionResult;
+    if (result.success && winnerResolutionResult === "movement") {
+      const sourceActor = pendingAction.sourceActorUuid
+        ? await fromUuid(pendingAction.sourceActorUuid)
+        : null;
+      const targetActor = pendingAction.targetActorUuid
+        ? await fromUuid(pendingAction.targetActorUuid)
+        : sourceActor;
+      const applied = await applyCanonicalMovementGrantAuthoritative({
+        sourceActorUuid: pendingAction.sourceActorUuid,
+        targetActorUuid: targetActor?.uuid ?? pendingAction.sourceActorUuid,
+        targetTokenUuid: pendingAction.targetTokenUuid ?? null,
+        sourceItemUuid: sourceActor?.items?.get?.(pendingAction.sourceItemId)?.uuid ?? null,
+        resolution: {
+          finalResult: Number(pendingAction.attackerRoll?.total ?? 0),
+          pifia: pendingAction.attackerRoll?.pifia === true,
+          success: true
+        },
+        grantId: `movement:${pendingAction.id}`
+      }, { requestingUserId: game.user.id });
+      pendingAction.movementGrant = applied.movementGrant;
+    }
     const entitlement = result.success ? pendingAction.damage : pendingAction.responseDamage;
     if (winnerResolutionResult === "damage" && entitlement?.available === true) {
       entitlement.id ??= `damage:${pendingAction.id}:${pendingAction.damageEntitlements.length + 1}`;
@@ -1731,6 +1922,7 @@ export async function resolvePendingActionAuthoritative(
 
     await persistPendingAction(pendingAction);
     broadcastPendingAction(pendingAction);
+    await updateResolutionMessage(pendingAction);
 
     try {
       const defenderActor =
@@ -1766,7 +1958,7 @@ export async function resolvePendingActionAuthoritative(
   broadcastPendingAction(pendingAction);
 
   try {
-    await createResolutionMessage(
+    if (!deferPresentation) await createResolutionMessage(
       pendingAction,
       result
     );
@@ -1930,6 +2122,7 @@ export async function clearPendingActionAuthoritative(
     createOperationId("opposition.cancel", pendingAction.id);
   await persistPendingAction(pendingAction);
   broadcastPendingAction(pendingAction);
+  await updateResolutionMessage(pendingAction);
 
   if (sourceActor) {
     await completeResolvedTurnAction(sourceActor, {
@@ -2105,17 +2298,27 @@ export function getPendingAction(pendingActionId) {
 }
 
 export async function updateResolutionMessage(pendingAction) {
-  if (!pendingAction?.resolutionMessageId || !pendingAction.result) return null;
+  try { return await applyResolutionMessageUpdate(pendingAction); }
+  catch (error) {
+    logger.warn("RECOVERY", "opposition presentation update failed", { pendingActionId: pendingAction?.id, error: error.message });
+    return null;
+  }
+}
+
+async function applyResolutionMessageUpdate(pendingAction) {
+  if (!pendingAction) return null;
+  const messageId = pendingAction.resolutionMessageId ?? pendingAction.pendingMessageId;
+  if (!messageId) return null;
 
   const message =
-    game.messages?.get(pendingAction.resolutionMessageId) ?? null;
+    game.messages?.get(messageId) ?? null;
 
   if (!message) return null;
 
   const chatRolls =
     await prepareResolutionChatRolls(
       pendingAction,
-      pendingAction.result
+      pendingAction.result ?? {}
     );
 
   return message.update({
@@ -2124,6 +2327,7 @@ export async function updateResolutionMessage(pendingAction) {
       pendingAction.result,
       chatRolls.html
     ),
+    rolls: chatRolls.rolls,
     flags: {
       ...(message.flags ?? {}),
       mtrol: {
@@ -2278,7 +2482,12 @@ configureActionDamageDependencies({
   persistPendingActionRuntime,
   receivePendingActionSync,
   updateResolutionMessage,
-  userCanControlActor
+  userCanControlActor,
+  assertActivationConsolidated: pending => {
+    if (!hasConsolidatedOpposition(pending, runtimeRepository.read(getRuntimeCombat(pending.combatId)))) {
+      throw new Error("La oposición requiere consolidación o revisión del GM antes del daño.");
+    }
+  }
 });
 
 configureOppositionActionOperations({

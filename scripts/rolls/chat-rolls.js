@@ -164,33 +164,7 @@ export async function mtrolCreateRollMessage(data = {}, options = {}) {
         }
       : baseMessageData;
 
-  const dice3d =
-    hasRolls ? game.dice3d : null;
-
-  if (!dice3d) {
-    return ChatMessage.create(messageData, options);
-  }
-
-  // Estas tiradas ya fueron mostradas por mtrolMostrarDados. Dice So Nice
-  // expone este interruptor para evitar que su hook de ChatMessage las anime
-  // una segunda vez al persistirlas en message.rolls.
-  const hadOwnSetting =
-    Object.hasOwn(dice3d, "messageHookDisabled");
-
-  const previousSetting =
-    dice3d.messageHookDisabled;
-
-  dice3d.messageHookDisabled =
-    true;
-
-  try {
-    return await ChatMessage.create(messageData, options);
-  } finally {
-    if (hadOwnSetting) {
-      dice3d.messageHookDisabled =
-        previousSetting;
-    } else {
-      delete dice3d.messageHookDisabled;
-    }
-  }
+  // El ChatMessage es la fuente canónica de visualización. Dice So Nice
+  // observa sus Rolls una sola vez en cada cliente conectado.
+  return ChatMessage.create(messageData, options);
 }

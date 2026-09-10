@@ -35,6 +35,7 @@ game.mtrol.actions.getReactionMovementForActor = actor =>
   reactionMovement?.actorUuid === actor?.uuid ? reactionMovement : null;
 
 const {
+  applyCanonicalMovementGrantAuthoritative,
   canMove,
   canPrepare,
   completeResolvedTurnAction,
@@ -520,6 +521,83 @@ test("buff de movilidad sobre tercero crea GRANTED MOVEMENT sin tocar iniciativa
   assert.equal(getGrantedMovement(defender), null);
   assert.equal(combat.nextTurnCalls, 1);
   assert.deepEqual(getCombatantTurnState(second), futureBefore);
+});
+
+test("consecuencia movement canónica acumula grants estables por target sin tocar su turno futuro", async () => {
+  const { attacker, defender, first, second, combat } = scenario();
+  const third = actor(`third-${Math.random()}`, "owner-b");
+  const defenderBefore = structuredClone(getCombatantTurnState(second));
+
+  const firstGrant = await applyCanonicalMovementGrantAuthoritative({
+    sourceActorUuid: attacker.uuid,
+    targetActorUuid: defender.uuid,
+    resolution: { finalResult: 27, success: true },
+    grantId: "resolution:movement-one"
+  }, { requestingUserId: "owner-a" });
+  await applyCanonicalMovementGrantAuthoritative({
+    sourceActorUuid: attacker.uuid,
+    targetActorUuid: defender.uuid,
+    resolution: { finalResult: 31, success: true },
+    grantId: "resolution:movement-two"
+  }, { requestingUserId: "owner-a" });
+  await applyCanonicalMovementGrantAuthoritative({
+    sourceActorUuid: attacker.uuid,
+    targetActorUuid: third.uuid,
+    resolution: { finalResult: 19, success: true },
+    grantId: "resolution:movement-third"
+  }, { requestingUserId: "owner-a" });
+  const retry = await applyCanonicalMovementGrantAuthoritative({
+    sourceActorUuid: attacker.uuid,
+    targetActorUuid: defender.uuid,
+    resolution: { finalResult: 27, success: true },
+    grantId: "resolution:movement-one"
+  }, { requestingUserId: "owner-a" });
+
+  assert.equal(firstGrant.movementGrant.granted, 2);
+  assert.equal(retry.changed, false);
+  assert.equal(getGrantedMovement(defender).remaining, 5);
+  assert.equal(getGrantedMovement(third).remaining, 1);
+  assert.equal(getCombatantTurnState(first).actionConsumed, true);
+  assert.deepEqual(getCombatantTurnState(second), defenderBefore);
+  assert.equal(combat.nextTurnCalls, 0);
+
+  combat.turn = 1;
+  combat.combatant = second;
+  assert.equal(getGrantedMovement(defender), null);
+  assert.deepEqual(getCombatantTurnState(second), defenderBefore);
+});
+
+test("consecuencia movement propia suma extra una vez y conserva el turno", async () => {
+  const { attacker, first, combat } = scenario();
+  const payload = {
+    sourceActorUuid: attacker.uuid,
+    targetActorUuid: attacker.uuid,
+    resolution: { finalResult: 27, success: true },
+    grantId: "resolution:self-movement"
+  };
+  await applyCanonicalMovementGrantAuthoritative(payload, { requestingUserId: "owner-a" });
+  await applyCanonicalMovementGrantAuthoritative(payload, { requestingUserId: "owner-a" });
+  const state = getCombatantTurnState(first);
+  assert.equal(state.baseMovementRemaining, 1);
+  assert.equal(state.extraMovementRemaining, 2);
+  assert.equal(state.actionConsumed, true);
+  assert.equal(combat.nextTurnCalls, 0);
+});
+
+test("resolutionResult movement basta para contenido moderno aunque actionType sea utility", async () => {
+  const { attacker, first, combat } = scenario();
+  const modern = item(attacker, "modern-movement", "utility");
+  modern.system.resolutionResult = "movement";
+  const result = await turnSocketOperations.finalizeTurnUseAuthoritative({
+    actorUuid: attacker.uuid,
+    itemId: modern.id,
+    resolution: { finalResult: 27, success: true },
+    actionAttemptId: "modern-movement-attempt"
+  }, { requestingUserId: "owner-a" });
+  assert.equal(result.granted, 2);
+  assert.equal(getCombatantTurnState(first).extraMovementRemaining, 2);
+  assert.equal(getCombatantTurnState(first).actionConsumed, true);
+  assert.equal(combat.nextTurnCalls, 0);
 });
 
 test("GRANTED MOVEMENT agotado avanza una sola vez y resultado menor a 10 no crea concesión", async () => {
