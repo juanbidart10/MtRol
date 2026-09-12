@@ -31,7 +31,7 @@ for (const selected of [[], ["OFFENSIVE"], ["DEFENSE", "REACTION"], ["DODGE", "R
     const current = sheet({ capabilities: selected, resolutionResult: "utility", responseCapability: selected.includes("DEFENSE") ? "DEFENSE" : null });
     const context = current.getData();
     assert.deepEqual(context.capabilityOptions.filter(option => option.selected).map(option => option.value), selected);
-    assert.deepEqual(context.capabilityGroups.flatMap(group => group.options.map(option => option.value)), capabilities);
+    assert.deepEqual(context.capabilityGroups.flatMap(group => group.options.map(option => option.value)), capabilities.filter(value => value !== "MOVEMENT"));
     const form = submitChips(context.capabilityOptions.filter(option => option.selected).map(option => option.value));
     if (selected.length === capabilities.length) form["system.responseCapability"] = "DEFENSE";
     const saved = await current._updateObject(null, form);
@@ -50,8 +50,8 @@ test("historical capability order survives saving without changes", async () => 
 
 test("unchecking removes stale capability and selecting adds the new one", async () => {
   const current = sheet({ capabilities: ["OFFENSIVE", "REACTION"] });
-  await current._updateObject(null, submitChips(["OFFENSIVE", "MOVEMENT"]));
-  assert.deepEqual(current.item.system.capabilities, ["OFFENSIVE", "MOVEMENT"]);
+  await current._updateObject(null, submitChips(["OFFENSIVE"]));
+  assert.deepEqual(current.item.system.capabilities, ["OFFENSIVE"]);
 });
 
 test("empty explicit capabilities render empty even with legacy offensive behavior", async () => {

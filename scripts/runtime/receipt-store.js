@@ -3,6 +3,41 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
+function canonicalize(value, seen = new Set(), { arrayEntry = false } = {}) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (["undefined", "function", "symbol"].includes(typeof value)) return arrayEntry ? null : undefined;
+  if (typeof value === "bigint") throw new TypeError("El payload del receipt no admite BigInt.");
+  if (typeof value !== "object") return value;
+  if (seen.has(value)) throw new TypeError("El payload del receipt no puede contener referencias circulares.");
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map(entry => canonicalize(entry, seen, { arrayEntry: true }));
+    }
+    const normalized = {};
+    for (const key of Object.keys(value).sort()) {
+      const child = canonicalize(value[key], seen);
+      if (child !== undefined) normalized[key] = child;
+    }
+    return normalized;
+  } finally {
+    seen.delete(value);
+  }
+}
+
+export function canonicalizeReceiptPayload(payload) {
+  return JSON.stringify(canonicalize(payload));
+}
+
+export async function createReceiptFingerprint(payload) {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle?.digest) throw new Error("SHA-256 no está disponible para identificar el receipt.");
+  const bytes = new TextEncoder().encode(canonicalizeReceiptPayload(payload));
+  const digest = new Uint8Array(await subtle.digest("SHA-256", bytes));
+  return `sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const RECEIPT_KEY_PREFIX = "rk1_";
 
 export function encodeReceiptKey(transactionId) {
@@ -119,6 +154,7 @@ export function compactReceipt(receipt) {
     kind: RECEIPT_KIND_COMPACT,
     transactionId: receipt.transactionId,
     command: receipt.command,
+    ...(receipt.fingerprint ? { fingerprint: receipt.fingerprint } : {}),
     pendingActionId: receipt.pendingActionId ?? null,
     status: receipt.status,
     createdAt: Number(receipt.createdAt ?? 0) || null,
@@ -187,6 +223,22 @@ export class ReceiptFailedError extends Error {
   }
 }
 
+export class ReceiptIdentityConflictError extends Error {
+  constructor(transactionId, {
+    expectedCommand = null,
+    receivedCommand = null,
+    conflict = "identity"
+  } = {}) {
+    super(`La identidad del receipt ${transactionId} no coincide con la operación persistida.`);
+    this.name = "ReceiptIdentityConflictError";
+    this.reasonCode = "RECEIPT_IDENTITY_CONFLICT";
+    this.transactionId = transactionId;
+    this.expectedCommand = expectedCommand;
+    this.receivedCommand = receivedCommand;
+    this.conflict = conflict;
+  }
+}
+
 export class ReceiptStore {
   constructor({ repository, logger = null, compactCompletedReceipts = false } = {}) {
     if (!repository) throw new Error("ReceiptStore requiere RuntimeRepository.");
@@ -194,6 +246,41 @@ export class ReceiptStore {
     this.logger = logger;
     this.compactCompletedReceipts = compactCompletedReceipts === true;
     this.inFlight = new Map();
+  }
+
+  assertIdentity(receipt, { transactionId, command, fingerprint } = {}) {
+    if (!receipt) return;
+    if (receipt.command && command && receipt.command !== command) {
+      this.logger?.warn?.("RECEIPT", "receipt command identity conflict", {
+        command,
+        transactionId,
+        reasonCode: "RECEIPT_IDENTITY_CONFLICT"
+      });
+      throw new ReceiptIdentityConflictError(transactionId, {
+        expectedCommand: receipt.command,
+        receivedCommand: command,
+        conflict: "command"
+      });
+    }
+    if (receipt.fingerprint && receipt.fingerprint !== fingerprint) {
+      this.logger?.warn?.("RECEIPT", "receipt payload identity conflict", {
+        command,
+        transactionId,
+        reasonCode: "RECEIPT_IDENTITY_CONFLICT"
+      });
+      throw new ReceiptIdentityConflictError(transactionId, {
+        expectedCommand: receipt.command ?? null,
+        receivedCommand: command ?? null,
+        conflict: "fingerprint"
+      });
+    }
+    if (!receipt.fingerprint && fingerprint) {
+      this.logger?.warnOnce?.("RECEIPT", "legacy receipt replay without payload fingerprint", {
+        command,
+        transactionId,
+        reasonCode: "RECEIPT_LEGACY_IDENTITY"
+      });
+    }
   }
 
   resolve(target) {
@@ -292,6 +379,7 @@ export class ReceiptStore {
         kind: RECEIPT_KIND_FULL,
         transactionId,
         command: metadata.command ?? null,
+        ...(metadata.fingerprint ? { fingerprint: metadata.fingerprint } : {}),
         pendingActionId: metadata.pendingActionId ?? null,
         status: "processing",
         createdAt,
@@ -365,15 +453,21 @@ export class ReceiptStore {
   async execute(combatOrId, {
     transactionId,
     command,
+    fingerprint = null,
     pendingActionId = null
   } = {}, operation) {
     if (!transactionId) throw new Error("transactionId es obligatorio.");
     const resolved = this.resolve(combatOrId);
     const inFlightKey = `${resolved.scopeId}:${transactionId}`;
-    if (this.inFlight.has(inFlightKey)) return this.inFlight.get(inFlightKey);
+    if (this.inFlight.has(inFlightKey)) {
+      const pending = this.inFlight.get(inFlightKey);
+      this.assertIdentity(pending, { transactionId, command, fingerprint });
+      return pending.task;
+    }
 
     const task = (async () => {
       const existing = this.get(combatOrId, transactionId);
+      this.assertIdentity(existing, { transactionId, command, fingerprint });
       const compactReplay = replayCompactReceipt(existing);
       if (compactReplay.handled) return compactReplay.result;
       if (existing?.status === "completed") {
@@ -389,9 +483,11 @@ export class ReceiptStore {
 
       const begun = await this.begin(combatOrId, transactionId, {
         command,
+        fingerprint,
         pendingActionId
       });
       if (!begun.created) {
+        this.assertIdentity(begun.receipt, { transactionId, command, fingerprint });
         if (begun.receipt?.status === "completed") return clone(begun.receipt.result);
         if (begun.receipt?.status === "processing") {
           throw new ReceiptInProgressError(transactionId);
@@ -411,7 +507,7 @@ export class ReceiptStore {
       }
     })();
 
-    this.inFlight.set(inFlightKey, task);
+    this.inFlight.set(inFlightKey, { task, command, fingerprint });
     try {
       return await task;
     } finally {

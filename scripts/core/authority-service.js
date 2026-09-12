@@ -18,6 +18,8 @@ export class AuthorityService {
   } = {}) {
     this.getUsers = getUsers;
     this.getCurrentUser = getCurrentUser;
+    this._authorityGeneration = 0;
+    this._authoritySignature = null;
   }
 
   resolveUser(userId) {
@@ -33,6 +35,34 @@ export class AuthorityService {
 
   isPrimaryGM(userId = this.getCurrentUser()?.id) {
     return Boolean(userId && this.resolvePrimaryGM()?.id === userId);
+  }
+
+  createWriteContext() {
+    const primary = this.resolvePrimaryGM();
+    if (!primary) throw new AuthorityBoundaryError("No existe Primary GM activo.", "NOT_PRIMARY_GM");
+    const signature = `${primary.id}:${values(this.getUsers()).filter(user => user?.isGM === true && user?.active === true).map(user => user.id).sort().join(",")}`;
+    if (signature !== this._authoritySignature) { this._authoritySignature = signature; this._authorityGeneration += 1; }
+    return Object.freeze({
+      authorityUserId: String(primary.id),
+      generation: `${this._authorityGeneration}:${signature}`,
+      issuedAt: Date.now()
+    });
+  }
+
+  validateWriteContext(context) {
+    if (!context?.authorityUserId || !context?.generation) {
+      throw new AuthorityBoundaryError("Falta contexto de escritura autoritativo.", "WRITE_CONTEXT_MISSING");
+    }
+    const primary = this.resolvePrimaryGM();
+    const activeGMs = values(this.getUsers()).filter(user => user?.isGM === true && user?.active === true)
+      .map(user => user.id).sort().join(",");
+    const signature = primary ? `${primary.id}:${activeGMs}` : null;
+    if (signature !== this._authoritySignature) { this._authoritySignature = signature; this._authorityGeneration += 1; }
+    const generation = signature ? `${this._authorityGeneration}:${signature}` : null;
+    if (!primary || String(primary.id) !== String(context.authorityUserId) || generation !== context.generation) {
+      throw new AuthorityBoundaryError("La autoridad cambió; se bloquean nuevos efectos.", "AUTHORITY_CONTEXT_STALE");
+    }
+    return true;
   }
 
   ownsActor(actor, userId) {

@@ -70,19 +70,6 @@
               </select>
             </div>
 
-            <div class="mtrol-field">
-              <label>Rol</label>
-              <select name="system.rol">
-                <option value="" {{#unless system.rol}}selected{{/unless}}>Sin definir</option>
-                <option value="offensive" {{#if (eq system.rol "offensive")}}selected{{/if}}>Ofensivo</option>
-                <option value="defensive" {{#if (eq system.rol "defensive")}}selected{{/if}}>Defensivo</option>
-                <option value="control" {{#if (eq system.rol "control")}}selected{{/if}}>Control</option>
-                <option value="support" {{#if (eq system.rol "support")}}selected{{/if}}>Soporte</option>
-                <option value="utility" {{#if (eq system.rol "utility")}}selected{{/if}}>Utilidad</option>
-                <option value="mobility" {{#if (eq system.rol "mobility")}}selected{{/if}}>Movilidad</option>
-              </select>
-            </div>
-
             {{#if showOrbAssociation}}
               <div class="mtrol-field wide">
                 <label>Orbe asociado</label>
@@ -129,18 +116,8 @@
 
           <div class="mtrol-competencia-grid">
 
-            <div class="mtrol-field wide">
-              <label>Identidad canónica</label>
-              <select name="system.actionIdentity">
-                <option value="">Derivar de categoría</option>
-                {{#each actionIdentityOptions}}
-                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
-                {{/each}}
-              </select>
-            </div>
-
             <fieldset class="mtrol-field wide mtrol-response-group mtrol-mechanics-choices" data-mtrol-capabilities>
-              <legend>Capacidades</legend>
+              <legend>Capacidades de esta habilidad</legend>
               <input type="hidden" name="mtrolCapabilityControls" value="true" />
               {{#each capabilityGroups}}
               <div class="mtrol-capability-row">
@@ -157,6 +134,8 @@
               {{/each}}
             </fieldset>
 
+<p class="mtrol-field wide" role="status" data-mtrol-reaction-warning {{#unless legacyConfiguration.missingReaction}}hidden{{/unless}}>Esta habilidad declara una respuesta reactiva pero no posee la propiedad Reacción.</p>
+<p class="mtrol-field wide" role="status" data-mtrol-preset-warning {{#unless legacyConfiguration.invalidPreset}}hidden{{/unless}}>El tipo de respuesta guardado no es compatible con las capacidades actuales. Se conserva sin cambios.</p>
             <fieldset class="mtrol-field wide mtrol-response-group mtrol-mechanics-choices" data-mtrol-consequence>
               <legend>Consecuencia al ganar</legend>
               <div class="mtrol-choice-group">
@@ -171,39 +150,6 @@
               <small data-mtrol-resolution-help aria-live="polite">{{resolutionHelp}}</small>
             </fieldset>
 
-            <div class="mtrol-field wide">
-              <label>Comportamiento legacy</label>
-              <select name="system.actionType">
-                <option value="attack" {{#if (eq system.actionType "attack")}}selected{{/if}}>Ataque</option>
-                <option value="basicAttack" {{#if (eq system.actionType "basicAttack")}}selected{{/if}}>Ataque basico</option>
-                <option value="combatSkill" {{#if (eq system.actionType "combatSkill")}}selected{{/if}}>Habilidad de combate</option>
-                <option value="control" {{#if (eq system.actionType "control")}}selected{{/if}}>Control</option>
-                <option value="damage" {{#if (eq system.actionType "damage")}}selected{{/if}}>Dano</option>
-                <option value="heal" {{#if (eq system.actionType "heal")}}selected{{/if}}>Curacion</option>
-                <option value="buff" {{#if (eq system.actionType "buff")}}selected{{/if}}>Buff</option>
-                <option value="debuff" {{#if (eq system.actionType "debuff")}}selected{{/if}}>Debuff</option>
-                <option value="summon" {{#if (eq system.actionType "summon")}}selected{{/if}}>Invocacion</option>
-                <option value="utility" {{#if (eq system.actionType "utility")}}selected{{/if}}>Utilidad</option>
-                <option value="movement" {{#if (eq system.actionType "movement")}}selected{{/if}}>Movimiento</option>
-                <option value="channel" {{#if (eq system.actionType "channel")}}selected{{/if}}>Canalizacion</option>
-                <option value="defense" {{#if (eq system.actionType "defense")}}selected{{/if}}>Defensa</option>
-              </select>
-            </div>
-
-            {{#if (eq system.actionType "defense")}}
-            <div class="mtrol-field wide">
-              <label>Tipo de defensa</label>
-              <select name="system.defenseType">
-                <option value="shield" {{#if (eq system.defenseType "shield")}}selected{{/if}}>Escudo</option>
-                <option value="dodge" {{#if (eq system.defenseType "dodge")}}selected{{/if}}>Esquiva</option>
-                <option value="parry" {{#if (eq system.defenseType "parry")}}selected{{/if}}>Parada</option>
-                <option value="resistance" {{#if (eq system.defenseType "resistance")}}selected{{/if}}>Resistencia</option>
-                <option value="will" {{#if (eq system.defenseType "will")}}selected{{/if}}>Voluntad</option>
-                <option value="custom" {{#if (eq system.defenseType "custom")}}selected{{/if}}>Custom</option>
-              </select>
-            </div>
-            {{/if}}
-
             <label class="mtrol-toggle">
               <span>Requiere objetivo</span>
               <input type="checkbox"
@@ -211,8 +157,8 @@
                      {{checked system.requiresTarget}} />
             </label>
 
-            <div class="mtrol-field">
-              <label>Dominio ofensivo</label>
+            <div class="mtrol-field" data-mtrol-action-domain {{#unless legacyConfiguration.showActionDomain}}hidden{{/unless}}>
+              <label>Dominio de la habilidad</label>
               <select name="system.actionDomain">
                 <option value="">Sin configurar</option>
                 <option value="PHYSICAL" {{#if (eq system.actionDomain "PHYSICAL")}}selected{{/if}}>Físico</option>
@@ -220,17 +166,17 @@
               </select>
             </div>
 
-            <div class="mtrol-field">
-              <label>Dominio de respuesta</label>
+            <div class="mtrol-field" data-mtrol-response-domain {{#unless legacyConfiguration.showResponseDomain}}hidden{{/unless}}>
+              <label>Dominio de contraataque</label>
               <select name="system.responseDomain">
-                <option value="">No aplica</option>
+                <option value="">Usar dominio de la habilidad</option>
                 <option value="PHYSICAL" {{#if (eq system.responseDomain "PHYSICAL")}}selected{{/if}}>Físico</option>
                 <option value="MAGICAL" {{#if (eq system.responseDomain "MAGICAL")}}selected{{/if}}>Mágico</option>
               </select>
             </div>
 
             <fieldset class="mtrol-field wide mtrol-response-group">
-              <legend>Respuestas permitidas</legend>
+              <legend>Respuestas permitidas al objetivo</legend>
               <small>¿Cómo puede reaccionar el objetivo ante esta acción?</small>
               <input type="hidden" name="mtrolResponseControls" value="true" />
               <div class="mtrol-response-options">
@@ -271,10 +217,29 @@
                        name="system.requiresOpposition"
                        {{checked showOppositionType}} {{#if oppositionRequired}}disabled{{/if}} />
               </label>
-              <small data-mtrol-opposition-required {{#unless oppositionRequired}}hidden{{/unless}}>Obligatorio para acciones ofensivas que conceden daño.</small>
+              <small data-mtrol-opposition-required {{#unless oppositionRequired}}hidden{{/unless}}>Obligatoria por Daño</small>
             </div>
 
-            <div class="mtrol-field wide" data-mtrol-context="opposition" {{#unless showOppositionType}}hidden{{/unless}}>
+            <details class="mtrol-field wide" data-mtrol-compatibility><summary>Avanzado / Compatibilidad</summary><div class="mtrol-competencia-grid">
+<div class="mtrol-field wide">
+              <label>Comportamiento legacy</label>
+              <select name="system.actionType">
+                <option value="attack" {{#if (eq system.actionType "attack")}}selected{{/if}}>Ataque</option>
+                <option value="basicAttack" {{#if (eq system.actionType "basicAttack")}}selected{{/if}}>Ataque basico</option>
+                <option value="combatSkill" {{#if (eq system.actionType "combatSkill")}}selected{{/if}}>Habilidad de combate</option>
+                <option value="control" {{#if (eq system.actionType "control")}}selected{{/if}}>Control</option>
+                <option value="damage" {{#if (eq system.actionType "damage")}}selected{{/if}}>Dano</option>
+                <option value="heal" {{#if (eq system.actionType "heal")}}selected{{/if}}>Curacion</option>
+                <option value="buff" {{#if (eq system.actionType "buff")}}selected{{/if}}>Buff</option>
+                <option value="debuff" {{#if (eq system.actionType "debuff")}}selected{{/if}}>Debuff</option>
+                <option value="summon" {{#if (eq system.actionType "summon")}}selected{{/if}}>Invocacion</option>
+                <option value="utility" {{#if (eq system.actionType "utility")}}selected{{/if}}>Utilidad</option>
+                <option value="movement" {{#if (eq system.actionType "movement")}}selected{{/if}}>Movimiento</option>
+                <option value="channel" {{#if (eq system.actionType "channel")}}selected{{/if}}>Canalizacion</option>
+                <option value="defense" {{#if (eq system.actionType "defense")}}selected{{/if}}>Defensa</option>
+              </select><small>Compatibilidad de comportamiento interno. No modificar salvo que conozcas el uso específico de esta habilidad.</small>
+            </div>
+<div class="mtrol-field wide" data-mtrol-legacy-opposition {{#unless legacyConfiguration.showOpposition}}hidden{{/unless}}>
               <label>Tipo de oposicion</label>
               <select name="system.oppositionType">
                 <option value="free" {{#if (eq system.oppositionType "free")}}selected{{/if}}>Libre</option>
@@ -286,20 +251,30 @@
                 <option value="custom" {{#if (eq system.oppositionType "custom")}}selected{{/if}}>Custom</option>
               </select>
             </div>
-
-          </div>
-        </section>
-      </div>
-
-      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="efectos">
-        <section class="mtrol-competencia-section">
-          <header>
-            <h2>Efectos</h2>
-          </header>
-
-          <div class="mtrol-competencia-grid">
-
-            <div class="mtrol-field wide">
+<div class="mtrol-field wide">
+              <label>Tipo de defensa</label>
+              <select name="system.defenseType">
+                <option value="shield" {{#if (eq system.defenseType "shield")}}selected{{/if}}>Escudo</option>
+                <option value="dodge" {{#if (eq system.defenseType "dodge")}}selected{{/if}}>Esquiva</option>
+                <option value="parry" {{#if (eq system.defenseType "parry")}}selected{{/if}}>Parada</option>
+                <option value="resistance" {{#if (eq system.defenseType "resistance")}}selected{{/if}}>Resistencia</option>
+                <option value="will" {{#if (eq system.defenseType "will")}}selected{{/if}}>Voluntad</option>
+                <option value="custom" {{#if (eq system.defenseType "custom")}}selected{{/if}}>Custom</option>
+              </select>
+            </div>
+<div class="mtrol-field">
+              <label>Rol</label>
+              <select name="system.rol">
+                <option value="" {{#unless system.rol}}selected{{/unless}}>Sin definir</option>
+                <option value="offensive" {{#if (eq system.rol "offensive")}}selected{{/if}}>Ofensivo</option>
+                <option value="defensive" {{#if (eq system.rol "defensive")}}selected{{/if}}>Defensivo</option>
+                <option value="control" {{#if (eq system.rol "control")}}selected{{/if}}>Control</option>
+                <option value="support" {{#if (eq system.rol "support")}}selected{{/if}}>Soporte</option>
+                <option value="utility" {{#if (eq system.rol "utility")}}selected{{/if}}>Utilidad</option>
+                <option value="mobility" {{#if (eq system.rol "mobility")}}selected{{/if}}>Movilidad</option>
+              </select>
+            </div>
+<div class="mtrol-field wide">
               <label>Efecto principal</label>
               <select name="system.effect">
                 <option value="none" {{#if (eq system.effect "none")}}selected{{/if}}>Ninguno</option>
@@ -320,6 +295,28 @@
                 <option value="mpRecovery" {{#if (eq system.effect "mpRecovery")}}selected{{/if}}>MP recovery</option>
               </select>
             </div>
+<div class="mtrol-field wide">
+              <label>Identidad canónica</label>
+              <select name="system.actionIdentity">
+                <option value="">Derivar de categoría</option>
+                {{#each actionIdentityOptions}}
+                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+            </div>
+<div class="mtrol-field wide" data-mtrol-inherited {{#unless legacyConfiguration.inherited}}hidden{{/unless}}><strong>Capacidades heredadas de configuración anterior</strong><small>Raw: <span data-mtrol-capabilities-raw>{{legacyConfiguration.raw}}</span></small><small>Efectivas: <span data-mtrol-capabilities-effective>{{legacyConfiguration.effective}}</span></small></div>
+</div></details>
+          </div>
+        </section>
+      </div>
+
+      <div class="tab mtrol-competencia-tab" data-group="competencia" data-tab="efectos">
+        <section class="mtrol-competencia-section">
+          <header>
+            <h2>Efectos</h2>
+          </header>
+
+          <div class="mtrol-competencia-grid">
 
             <div class="mtrol-field">
               <label>Duracion</label>
@@ -403,22 +400,8 @@
                      {{checked system.usaDanioLocalizado}} />
             </label>
 
-              <div class="mtrol-field wide">
-                <label>Resolución de Daño</label>
-                <select name="system.damageResolution">
-                  <option value="onOppositionWin" {{#if (eq damageConfig.resolution "onOppositionWin")}}selected{{/if}}>Al ganar oposición</option>
-                </select>
-              </div>
-
               <div class="mtrol-field">
-                <label>Modo</label>
-                <select name="system.damageMode">
-                  <option value="enabled" {{#if (eq damageConfig.mode "enabled")}}selected{{/if}}>Lanzamiento manual</option>
-                </select>
-              </div>
-
-              <div class="mtrol-field">
-                <label>Tipo de Resolución</label>
+                <label>Costo adicional de daño</label><small>Al ganar la oposición, se habilita el lanzamiento manual de daño.</small>
                 <select name="system.damageCostType">
                   <option value="none" {{#if (eq damageConfig.costType "none")}}selected{{/if}}>Sin costo adicional</option>
                   <option value="basic" {{#if (eq damageConfig.costType "basic")}}selected{{/if}}>Básico</option>

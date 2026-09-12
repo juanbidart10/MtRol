@@ -123,6 +123,7 @@ import {
 
 import { registerTransactionCommands } from "../runtime/transaction-commands.js";
 import { registerTradeCommands } from "../runtime/trade-commands.js";
+import { registerGroundCommands } from "../runtime/ground-commands.js";
 import { registerStateCommands } from "../runtime/state-commands.js";
 import { registerProgressionCommands } from "../runtime/progression-commands.js";
 import { registerActionCommands } from "../runtime/action-commands.js";
@@ -132,12 +133,15 @@ import { mtrolRoll } from "../rolls/mtrol-rolls.js";
 import { authorityService } from "./authority-service.js";
 import { integrationObservability } from "./integration-observability.js";
 import { registerTradeRuntimeSetting } from "../trade/trade-runtime-repository.js";
+import { registerGroundCanvasLayer } from "../ground/ground-canvas-renderer.js";
 
 // =========================
 // INIT MTROL
 // =========================
 
 export async function initMtrol() {
+
+  registerGroundCanvasLayer();
 
   // =========================
   // ACTOR MODELS
@@ -270,6 +274,7 @@ export async function initMtrol() {
   registerOppositionCommands();
   registerTransactionCommands();
   registerTradeCommands();
+  registerGroundCommands();
   registerStateCommands();
   registerProgressionCommands();
   registerActionCommands();

@@ -6,7 +6,10 @@ const { fields } = foundry.data;
 
 export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
 
-  static migrateData(source) {
+  static migrateData(source, options = {}) {
+    // Foundry also migrates update patches. Missing patch fields are not
+    // missing legacy data: leave them to the existing document.
+    if (options.partial) return super.migrateData(source, options);
     source ??= {};
     const hasDamageFormula =
       typeof source?.danio === "string" && source.danio.trim().length > 0;
@@ -53,7 +56,7 @@ export class CompetenciaDataModel extends foundry.abstract.TypeDataModel {
         : [];
     }
 
-    return super.migrateData(source);
+    return super.migrateData(source, options);
   }
 
   static defineSchema() {

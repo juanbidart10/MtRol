@@ -218,7 +218,9 @@ export class TradeSessionStore {
     resolveRealQuantity = null,
     resolveOfferItem = null,
     onSessionCreated = null,
-    repository = null
+    repository = null,
+    reservationLedger = null,
+    authorityService = null
   } = {}) {
     this.idFactory = idFactory;
     this.now = now;
@@ -226,6 +228,8 @@ export class TradeSessionStore {
     this.resolveOfferItem = resolveOfferItem;
     this.onSessionCreated = onSessionCreated;
     this.repository = repository;
+    this.reservationLedger = reservationLedger;
+    this.authorityService = authorityService;
     this.sessions = new Map();
     this.activeSessionByActor = new Map();
     this.reservationsByItem = new Map();
@@ -264,7 +268,14 @@ export class TradeSessionStore {
 
   async hydrateFromPersistence() {
     if (!this.repository) return this.listSessions({ activeOnly: true });
-    return this.hydrateRuntime(await this.repository.ensure());
+    let runtime = await this.repository.ensure();
+    this.reservationLedger?.hydrate?.(runtime);
+    if (this.reservationLedger) {
+      await this.#reconcileLegacyReservations(runtime);
+      runtime = await this.repository.ensure();
+      this.reservationLedger.hydrate(runtime);
+    }
+    return this.hydrateRuntime(runtime);
   }
 
   async #persistRuntime() {
@@ -472,10 +483,20 @@ export class TradeSessionStore {
               quantity: entry.quantity
             })
           : null;
-        const availability = await this.getAvailability(participant.actorUuid, entry, {
-          sessionId: session.id
-        });
-        if (entry.quantity > availability.availableIncludingSession) {
+        if (resolved?.itemUuid) entry.itemUuid = String(resolved.itemUuid);
+        if (resolved?.itemId) entry.itemId = String(resolved.itemId);
+        if (!entry.itemUuid && this.reservationLedger) {
+          throw new Error("No se pudo determinar el itemUuid canónico de la reserva Trade.");
+        }
+        const realQuantity = Number(await this.resolveRealQuantity?.({
+          actorUuid: participant.actorUuid,
+          itemUuid: entry.itemUuid,
+          itemId: entry.itemId
+        }));
+        if (!Number.isFinite(realQuantity) || realQuantity < 0) {
+          throw new RangeError("La cantidad real del Item no es válida.");
+        }
+        if (entry.quantity > realQuantity) {
           throw new Error("La cantidad ofrecida supera la disponibilidad real del Item.");
         }
         if (resolved?.publicSnapshot) publicEntries.push(clone(resolved.publicSnapshot));
@@ -484,6 +505,14 @@ export class TradeSessionStore {
       if (offersEqual(session.offers[participantKey], normalizedEntries) && !hadInvalidEntries) {
         return session.toObject();
       }
+
+      await this.#mutateOfferCapacity({
+        session,
+        participantKey,
+        participant,
+        desiredEntries: normalizedEntries,
+        commandOperationId: operationId
+      });
 
       session.offers[participantKey] = clone(normalizedEntries);
       session.publicOffers[participantKey] = publicEntries;
@@ -555,10 +584,14 @@ export class TradeSessionStore {
       if (session.state === TRADE_SESSION_STATES.EXECUTING) {
         throw new Error("Una ejecución en curso no puede cancelarse manualmente.");
       }
+      if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) {
+        throw new Error("Una sesión en recovery no puede liberar reservas automáticamente.");
+      }
       if ([TRADE_SESSION_STATES.COMPLETED, TRADE_SESSION_STATES.INVALID].includes(session.state)) {
         throw new Error("La sesión ya terminó y no puede cancelarse.");
       }
 
+      await this.#releaseCanonicalCapacity(session, operationId);
       this.#finishSession(session, TRADE_SESSION_STATES.CANCELLED);
       session.cancelledByUserId = String(requestingUserId);
       session.cancelledByRole = "PLAYER";
@@ -579,9 +612,13 @@ export class TradeSessionStore {
       if (session.state === TRADE_SESSION_STATES.EXECUTING) {
         throw new Error("Una ejecución en curso no puede cancelarse manualmente.");
       }
+      if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) {
+        throw new Error("Una sesión en recovery no puede liberar reservas automáticamente.");
+      }
       if ([TRADE_SESSION_STATES.COMPLETED, TRADE_SESSION_STATES.INVALID].includes(session.state)) {
         throw new Error("La sesión ya terminó y no puede cancelarse.");
       }
+      await this.#releaseCanonicalCapacity(session, operationId);
       this.#finishSession(session, TRADE_SESSION_STATES.CANCELLED);
       session.cancelledByUserId = normalizeRequiredString(requestingUserId, "GM que cancela");
       session.cancelledByRole = "GM";
@@ -798,9 +835,13 @@ export class TradeSessionStore {
       if (session.state === TRADE_SESSION_STATES.EXECUTING) {
         throw new Error("Una sesión EXECUTING debe resolverse por su coordinador transaccional.");
       }
+      if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) {
+        throw new Error("Una sesión en recovery no puede liberar reservas automáticamente.");
+      }
       const terminalState = state === TRADE_SESSION_STATES.CANCELLED
         ? TRADE_SESSION_STATES.CANCELLED
         : TRADE_SESSION_STATES.INVALID;
+      await this.#releaseCanonicalCapacity(session, operationId);
       this.#finishSession(session, terminalState, reason);
       return session.toObject();
     });
@@ -817,6 +858,10 @@ export class TradeSessionStore {
       if ([TRADE_SESSION_STATES.COMPLETED, TRADE_SESSION_STATES.CANCELLED].includes(session.state)) {
         throw new Error("La sesión ya terminó y no puede invalidarse.");
       }
+      if ([TRADE_SESSION_STATES.EXECUTING, TRADE_SESSION_STATES.RECOVERY_REQUIRED].includes(session.state)) {
+        throw new Error("La sesión requiere resolución transaccional y no puede liberar reservas automáticamente.");
+      }
+      await this.#releaseCanonicalCapacity(session, operationId);
       this.#finishSession(session, TRADE_SESSION_STATES.INVALID, reason);
       return session.toObject();
     });
@@ -936,6 +981,184 @@ export class TradeSessionStore {
   #recordOperation(session, operationId) {
     if (!session.appliedOperations.includes(operationId)) {
       session.appliedOperations.push(operationId);
+    }
+  }
+
+  async #mutateOfferCapacity({ session, participantKey, participant, desiredEntries, commandOperationId }) {
+    if (!this.reservationLedger) return null;
+
+    await this.reservationLedger.hydrateFromPersistence?.();
+    const prefix = `trade:${session.id}:${participantKey}:`;
+    const current = this.reservationLedger.list().filter(record =>
+      record.domain === "trade" &&
+      record.actorUuid === participant.actorUuid &&
+      (record.evidence?.sessionId === session.id && record.evidence?.participantKey === participantKey ||
+        record.operationId.startsWith(prefix))
+    );
+    const currentByItem = new Map(current.map(record => [record.itemUuid, record]));
+    const desiredByItem = new Map(desiredEntries.map(entry => [entry.itemUuid, entry]));
+    const operations = [];
+    const evidence = { sessionId: session.id, participantKey };
+
+    for (const entry of desiredEntries) {
+      const operationId = `${prefix}${entry.itemUuid}`;
+      const record = currentByItem.get(entry.itemUuid) ?? this.reservationLedger.get(operationId);
+      if (!record) {
+        operations.push({
+          type: "CREATE", operationId, domain: "trade",
+          actorUuid: participant.actorUuid, itemUuid: entry.itemUuid,
+          quantity: entry.quantity, evidence
+        });
+      } else if (record.state === "RESERVED" && Number(record.quantity) !== entry.quantity) {
+        operations.push({ type: "REPLACE", operationId, expectedRevision: record.revision, quantity: entry.quantity, evidence });
+      } else if (record.state === "RELEASED") {
+        operations.push({ type: "REACQUIRE", operationId, expectedRevision: record.revision, quantity: entry.quantity, evidence });
+      } else if (record.state !== "RESERVED") {
+        const error = new Error("El estado durable de la reserva no permite modificar la oferta.");
+        error.reasonCode = "RESERVATION_STATE_CONFLICT";
+        throw error;
+      }
+    }
+
+    for (const record of current) {
+      if (desiredByItem.has(record.itemUuid) || record.state === "RELEASED") continue;
+      if (record.state !== "RESERVED") {
+        const error = new Error("El estado durable de la reserva no permite modificar la oferta.");
+        error.reasonCode = "RESERVATION_STATE_CONFLICT";
+        throw error;
+      }
+      operations.push({
+        type: "RELEASE", operationId: record.operationId,
+        expectedRevision: record.revision, evidence
+      });
+    }
+
+    if (!operations.length) return { changed: false, idempotent: true, reservations: [] };
+    operations.sort((left, right) => left.operationId.localeCompare(right.operationId));
+    const desiredIntent = desiredEntries.map(entry => ({ itemUuid: entry.itemUuid, quantity: entry.quantity }));
+    const mutationFingerprint = operationFingerprint("trade-offer-capacity", {
+      sessionId: session.id,
+      participantKey,
+      actorUuid: participant.actorUuid,
+      desired: desiredIntent
+    });
+    const authorityContext = this.authorityService?.createWriteContext?.() ?? null;
+    return this.reservationLedger.mutateReservationSet({
+      mutationId: `trade-offer:${session.id}:${participantKey}:${normalizeRequiredString(commandOperationId, "operationId")}`,
+      mutationFingerprint,
+      operations
+    }, {
+      authorityContext,
+      realQuantity: (actorUuid, itemUuid) => this.resolveRealQuantity({ actorUuid, itemUuid })
+    });
+  }
+
+  async #releaseCanonicalCapacity(session, commandOperationId) {
+    if (!this.reservationLedger) return null;
+    await this.reservationLedger.hydrateFromPersistence?.();
+    const records = this.reservationLedger.list().filter(record =>
+      record.domain === "trade" &&
+      record.evidence?.sessionId === session.id &&
+      record.state === "RESERVED"
+    );
+    if (!records.length) return { changed: false, idempotent: true, reservations: [] };
+    const operations = records
+      .map(record => ({
+        type: "RELEASE",
+        operationId: record.operationId,
+        expectedRevision: record.revision,
+        evidence: { sessionId: session.id, releaseReason: "trade-session-cancelled" }
+      }))
+      .sort((left, right) => left.operationId.localeCompare(right.operationId));
+    const mutationId = `trade-cancel:${session.id}:${normalizeRequiredString(commandOperationId, "operationId")}`;
+    const authorityContext = this.authorityService?.createWriteContext?.() ?? null;
+    return this.reservationLedger.mutateReservationSet({
+      mutationId,
+      mutationFingerprint: operationFingerprint("trade-cancel-capacity", {
+        sessionId: session.id,
+        reservationIds: operations.map(operation => operation.operationId)
+      }),
+      operations
+    }, {
+      authorityContext,
+      realQuantity: (actorUuid, itemUuid) => this.resolveRealQuantity({ actorUuid, itemUuid })
+    });
+  }
+
+  async #reconcileLegacyReservations(runtime) {
+    const authorityContext = this.authorityService?.createWriteContext?.() ?? null;
+    for (const rawSession of Object.values(runtime.sessions ?? {})) {
+      if (!rawSession?.id || !ACTIVE_STATES.has(rawSession.state)) continue;
+      for (const legacy of rawSession.reservations ?? []) {
+        const participantKey = String(legacy?.participantKey ?? "");
+        const participant = rawSession.participants?.[participantKey];
+        const itemUuid = String(legacy?.itemUuid ?? "").trim();
+        const quantity = Number(legacy?.quantity);
+        const offer = rawSession.offers?.[participantKey]?.find(entry =>
+          String(entry?.itemUuid ?? "") === itemUuid && Number(entry?.quantity) === quantity
+        );
+        const unequivocal = TRADE_PARTICIPANT_KEYS.includes(participantKey) &&
+          participant?.actorUuid === legacy?.actorUuid && itemUuid &&
+          Number.isInteger(quantity) && quantity > 0 && Boolean(offer);
+        if (!unequivocal) continue;
+
+        const operationId = `trade:${rawSession.id}:${participantKey}:${itemUuid}`;
+        const canonical = this.reservationLedger.get(operationId);
+        if (canonical) {
+          if (canonical.domain !== "trade" || canonical.actorUuid !== legacy.actorUuid ||
+              canonical.itemUuid !== itemUuid || canonical.state !== "RESERVED" ||
+              Number(canonical.quantity) !== quantity) {
+            await this.reservationLedger.quarantineResource({
+              actorUuid: legacy.actorUuid,
+              itemUuid,
+              reason: "LEGACY_RESERVATION_CONFLICT",
+              evidence: {
+                sessionId: rawSession.id,
+                participantKey,
+                legacyQuantity: quantity,
+                ledgerQuantity: canonical.quantity,
+                ledgerState: canonical.state
+              }
+            }, { authorityContext });
+          }
+          continue;
+        }
+
+        const mutationId = `trade-legacy-import:${rawSession.id}:${participantKey}:${itemUuid}`;
+        const mutationFingerprint = operationFingerprint("trade-legacy-import", {
+          sessionId: rawSession.id, participantKey,
+          actorUuid: legacy.actorUuid, itemUuid, quantity
+        });
+        try {
+          await this.reservationLedger.mutateReservationSet({
+            mutationId,
+            mutationFingerprint,
+            operations: [{
+              type: "CREATE", operationId, domain: "trade",
+              actorUuid: legacy.actorUuid, itemUuid, quantity,
+              evidence: { sessionId: rawSession.id, participantKey, migratedFromLegacyProjection: true }
+            }]
+          }, {
+            authorityContext,
+            realQuantity: (actorUuid, canonicalItemUuid) =>
+              this.resolveRealQuantity({ actorUuid, itemUuid: canonicalItemUuid })
+          });
+        } catch (error) {
+          if (error?.reasonCode !== "RESERVATION_CAPACITY_CONFLICT" &&
+              !/Cantidad no disponible/i.test(error?.message ?? "")) throw error;
+          await this.reservationLedger.quarantineResource({
+            actorUuid: legacy.actorUuid,
+            itemUuid,
+            reason: "LEGACY_RESERVATION_CONFLICT",
+            evidence: {
+              sessionId: rawSession.id,
+              participantKey,
+              legacyQuantity: quantity,
+              importFailure: error.reasonCode ?? "RESERVATION_CAPACITY_CONFLICT"
+            }
+          }, { authorityContext });
+        }
+      }
     }
   }
 

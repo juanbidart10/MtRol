@@ -33,6 +33,31 @@ const CAPABILITY_LABELS = {
   OFFENSIVE: "Ofensiva", DEFENSE: "Defensa", DODGE: "Esquiva",
   COUNTERATTACK: "Contraataque", REACTION: "Reacción", MOVEMENT: "Movimiento"
 };
+const VISIBLE_CAPABILITIES = Object.values(OPPOSITION_CAPABILITIES)
+  .filter(value => value !== OPPOSITION_CAPABILITIES.MOVEMENT);
+
+function mergeVisibleCapabilities(previous, selected) {
+  return [...previous.filter(value => !VISIBLE_CAPABILITIES.includes(value) || selected.includes(value)),
+    ...selected.filter(value => !previous.includes(value))];
+}
+
+function legacyConfiguration(item) {
+  const definition = getOppositionActionDefinition(item);
+  const raw = item.system?.capabilities ?? [];
+  const reactive = DEFAULT_ALLOWED_RESPONSES.filter(value => definition.capabilities.includes(value));
+  const preset = item.system?.responseCapability;
+  return {
+    inherited: raw.length === 0 && definition.capabilities.length > 0,
+    raw: JSON.stringify(raw), effective: JSON.stringify(definition.capabilities),
+    showOpposition: definition.legacyMapped || definition.capabilities.length === 0,
+    missingReaction: reactive.length > 0 && !definition.capabilities.includes("REACTION"),
+    invalidPreset: preset != null && preset !== "" && !reactive.includes(preset),
+    showResponseDomain: definition.capabilities.includes("COUNTERATTACK"),
+    showActionDomain: getItemResolutionResult(item) === "damage" ||
+      definition.allowedResponses.includes("COUNTERATTACK") ||
+      definition.capabilities.includes("COUNTERATTACK") || Boolean(item.system?.actionDomain)
+  };
+}
 const RESOLUTION_PRESENTATION = {
   damage: { label: "Daño", help: "Al ganar, obtiene derecho a Lanzar Daño." },
   defense: { label: "Defensa", help: "Al ganar, evita la acción enemiga." },
@@ -158,6 +183,7 @@ export class CompetenciaSheet extends ItemSheet {
     context.oppositionRequired = getItemResolutionResult(this.item) === "damage";
     context.showOppositionType = context.oppositionRequired || this.item.system?.requiresOpposition === true;
     context.responseConfiguration = responseConfiguration(this.item);
+    context.legacyConfiguration = legacyConfiguration(this.item);
     context.showDamageConfiguration = this.item.system?.resolutionResult === "damage";
     context.showOrbAssociation = this.item.system?.categoria === "hechizo";
     const definition = getOppositionActionDefinition(this.item);
@@ -179,7 +205,7 @@ export class CompetenciaSheet extends ItemSheet {
     const properties = [OPPOSITION_CAPABILITIES.REACTION, OPPOSITION_CAPABILITIES.MOVEMENT];
     context.capabilityGroups = [
       { label: "Tipo", options: context.capabilityOptions.filter(option => !properties.includes(option.value)) },
-      { label: "Propiedades", options: context.capabilityOptions.filter(option => properties.includes(option.value)) }
+      { label: "Propiedades", options: context.capabilityOptions.filter(option => option.value === "REACTION") }
     ];
     const resolutionResult = this.item.system?.resolutionResult ?? getItemResolutionResult(this.item);
     context.resolutionOptions = MTROL_RESOLUTION_RESULTS.map(value => ({
@@ -242,14 +268,10 @@ export class CompetenciaSheet extends ItemSheet {
       }
       const oppositionHelp = root.querySelector('[data-mtrol-opposition-required]');
       if (oppositionHelp) oppositionHelp.hidden = !mandatory;
-      const requiresOpposition = opposition?.checked === true;
-      const oppositionRegion = root.querySelector('[data-mtrol-context="opposition"]');
       const damageRegion = root.querySelector('[data-mtrol-context="damage"]');
-      const resolution = root.querySelector('[name="system.damageResolution"]');
       const costType = root.querySelector('[name="system.damageCostType"]')?.value;
       const additionalCost = root.querySelector('[data-mtrol-damage-additional-cost]');
 
-      if (oppositionRegion) oppositionRegion.hidden = !requiresOpposition;
       if (damageRegion) damageRegion.hidden = resolutionResult !== "damage";
 
       if (additionalCost) {
@@ -265,11 +287,29 @@ export class CompetenciaSheet extends ItemSheet {
       const region = root.querySelector('[data-mtrol-response-type]');
       if (!capabilities.length || !region) return;
       const radios = Array.from(region.querySelectorAll('input[type="radio"]'));
-      const config = responseConfiguration({ system: {
+      const preview = { system: {
         ...this.item.system,
-        capabilities: Array.from(capabilities).filter(input => input.checked).map(input => input.dataset.mtrolCapability),
-        responseCapability: radios.find(radio => radio.checked)?.value ?? ""
-      } });
+        capabilities: mergeVisibleCapabilities(this.item.system?.capabilities ?? [],
+          Array.from(capabilities).filter(input => input.checked).map(input => input.dataset.mtrolCapability)),
+        allowedResponses: Array.from(root.querySelectorAll('[name^="mtrolAllowedResponse."]'))
+          .filter(input => input.checked).map(input => input.name.slice("mtrolAllowedResponse.".length)),
+        resolutionResult: root.querySelector('[name="system.resolutionResult"]:checked')?.value ?? this.item.system?.resolutionResult,
+        responseCapability: radios.find(radio => radio.checked && !radio.disabled)?.value ?? this.item.system?.responseCapability
+      } };
+      const config = responseConfiguration(preview);
+      const legacy = legacyConfiguration(preview);
+      for (const [selector, visible] of [
+        ["reaction-warning", legacy.missingReaction], ["preset-warning", legacy.invalidPreset],
+        ["legacy-opposition", legacy.showOpposition], ["inherited", legacy.inherited],
+        ["action-domain", legacy.showActionDomain], ["response-domain", legacy.showResponseDomain]
+      ]) {
+        const element = root.querySelector(`[data-mtrol-${selector}]`);
+        if (element) element.hidden = !visible;
+      }
+      for (const key of ["raw", "effective"]) {
+        const element = root.querySelector(`[data-mtrol-capabilities-${key}]`);
+        if (element) element.textContent = legacy[key];
+      }
       region.hidden = config.candidates.length === 0;
       region.querySelector('[data-mtrol-response-single]').hidden = config.multiple;
       region.querySelector('[data-mtrol-response-label]').textContent = config.singleLabel;
@@ -285,12 +325,22 @@ export class CompetenciaSheet extends ItemSheet {
 
     html.find('[data-mtrol-capability]')
       .on("change.mtrolResponseConfiguration", refreshResponseFields);
+    html.find('[name="system.resolutionResult"], [name="system.responseCapability"], [name^="mtrolAllowedResponse."]')
+      .on("change.mtrolLegacyConfiguration", refreshResponseFields);
 
     html.find('[name="system.requiresOpposition"], [name="system.ejecutaDanio"], [name="system.damageCostType"], [name="system.resolutionResult"]')
       .on("change.mtrolAbilityContext", refreshContextualFields);
 
     refreshContextualFields();
     refreshResponseFields();
+    // Compare with the rendered form, whose derived values can differ from
+    // persisted legacy data. An unchanged control is not an edit.
+    if (this.form) {
+      this._renderedSubmission = {
+        item: this.item,
+        data: foundry.utils.duplicate(this._getSubmitData())
+      };
+    }
   }
 
   async _updateObject(event, formData) {
@@ -299,11 +349,36 @@ export class CompetenciaSheet extends ItemSheet {
       return false;
     }
 
+    formData = foundry.utils.duplicate(formData);
+    const baseline = this._renderedSubmission;
+    if (baseline?.item === this.item) {
+      const changed = key => JSON.stringify(formData[key]) !== JSON.stringify(baseline.data[key]);
+      const groups = [
+        ["mtrolCapabilityControls", "mtrolCapability."],
+        ["mtrolResponseControls", "mtrolAllowedResponse."]
+      ];
+      const keep = new Set();
+      for (const [marker, prefix] of groups) {
+        const keys = [...new Set([...Object.keys(formData), ...Object.keys(baseline.data)])]
+          .filter(key => key.startsWith(prefix));
+        if (keys.some(changed)) {
+          keep.add(marker);
+          keys.forEach(key => keep.add(key));
+        }
+      }
+      for (const key of Object.keys(formData)) {
+        if (!keep.has(key) && !changed(key)) delete formData[key];
+      }
+    }
+    if (!Object.keys(formData).length) return {};
+
     if (Object.hasOwn(formData, "mtrolCapabilityControls")) {
-      formData["system.capabilities"] = serializeCheckedChoices(
-        formData, "mtrolCapability", Object.values(OPPOSITION_CAPABILITIES),
-        this.item.system?.capabilities ?? getOppositionActionDefinition(this.item).capabilities
-      );
+      const selected = VISIBLE_CAPABILITIES.filter(value =>
+        [true, "true", "on"].includes(formData[`mtrolCapability.${value}`]));
+      formData["system.capabilities"] = mergeVisibleCapabilities(this.item.system?.capabilities ?? [], selected);
+      for (const key of Object.keys(formData)) {
+        if (key.startsWith("mtrolCapability.")) delete formData[key];
+      }
       delete formData.mtrolCapabilityControls;
     }
     if (Object.hasOwn(formData, "system.resolutionResult") && !MTROL_RESOLUTION_RESULTS.includes(formData["system.resolutionResult"])) {
@@ -321,10 +396,15 @@ export class CompetenciaSheet extends ItemSheet {
       if (key.startsWith("system.")) submittedSystem[key.slice(7)] = value;
     }
     const response = responseConfiguration({ system: submittedSystem });
-    if (response.candidates.length <= 1) {
-      formData["system.responseCapability"] = response.candidates[0] ?? null;
-    } else {
-      const selected = response.options.find(option => option.selected);
+    const editsCapabilities = Object.hasOwn(formData, "system.capabilities");
+    const editsResponse = Object.hasOwn(formData, "system.responseCapability");
+    if (editsResponse && formData["system.responseCapability"] === "") {
+      formData["system.responseCapability"] = null;
+    }
+    if (editsResponse && formData["system.responseCapability"] === null) {
+      // Nullable means explicitly clearing a preset is valid.
+    } else if (editsResponse) {
+      const selected = response.options.find(option => option.available && option.value === formData["system.responseCapability"]);
       if (!selected) {
         const message = "Elegí el tipo de respuesta de esta habilidad antes de guardar.";
         ui.notifications.warn(message);
@@ -334,37 +414,42 @@ export class CompetenciaSheet extends ItemSheet {
     }
 
     if (
-      formData["system.rol"] === "" ||
-      formData["system.rol"] === undefined
+      Object.hasOwn(formData, "system.rol") &&
+      (formData["system.rol"] === "" || formData["system.rol"] === undefined)
     ) {
       formData["system.rol"] = null;
     }
 
     const damageSourceAttribute = formData["system.damageSourceAttribute"];
-    if (damageSourceAttribute === "" || damageSourceAttribute === undefined) {
-      formData["system.damageSourceAttribute"] = null;
-    } else if (!MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damageSourceAttribute)) {
-      throw new Error("El atributo de origen del daño no pertenece al registro canónico.");
+    if (Object.hasOwn(formData, "system.damageSourceAttribute")) {
+      if (damageSourceAttribute === "" || damageSourceAttribute === undefined || damageSourceAttribute === null) {
+        formData["system.damageSourceAttribute"] = null;
+      } else if (!MTROL_EFFECT_ATTRIBUTE_KEYS.includes(damageSourceAttribute)) {
+        throw new Error("El atributo de origen del daño no pertenece al registro canónico.");
+      }
     }
 
     const category = String(
       formData["system.categoria"] ?? this.item.system?.categoria ?? ""
     );
     const rawOrbType = formData["system.orbType"];
-    if (category !== "hechizo") {
-      formData["system.orbType"] = null;
-    } else if (rawOrbType === "" || rawOrbType === undefined || rawOrbType === null) {
-      formData["system.orbType"] = null;
-    } else if (!MTROL_ORB_IDS.includes(rawOrbType)) {
-      throw new Error("El tipo de Orbe del hechizo no pertenece al registro canónico.");
+    if (Object.hasOwn(formData, "system.orbType")) {
+      if (category !== "hechizo" || rawOrbType === "" || rawOrbType === undefined || rawOrbType === null) {
+        formData["system.orbType"] = null;
+      } else if (!MTROL_ORB_IDS.includes(rawOrbType)) {
+        throw new Error("El tipo de Orbe del hechizo no pertenece al registro canónico.");
+      }
     }
 
     if (getItemResolutionResult({ system: submittedSystem }) === "damage") {
-      formData["system.requiresOpposition"] = true;
-      formData["system.ejecutaDanio"] = true;
+      for (const key of ["system.requiresOpposition", "system.ejecutaDanio"]) {
+        if (Object.hasOwn(formData, "system.resolutionResult") || Object.hasOwn(formData, key)) {
+          formData[key] = true;
+        }
+      }
     }
-    formData["system.damageResolution"] = "onOppositionWin";
-    formData["system.damageMode"] = "enabled";
+    if (Object.hasOwn(formData, "system.damageResolution")) formData["system.damageResolution"] = "onOppositionWin";
+    if (Object.hasOwn(formData, "system.damageMode")) formData["system.damageMode"] = "enabled";
 
     return super._updateObject(event, formData);
   }

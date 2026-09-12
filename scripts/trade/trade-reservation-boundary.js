@@ -1,13 +1,18 @@
 let reservationProvider = () => 0;
+let globalReservationProvider = () => 0;
 
-export function configureTradeReservationBoundary({ getReservedQuantity } = {}) {
+export function configureTradeReservationBoundary({ getReservedQuantity, getGlobalReservedQuantity } = {}) {
   reservationProvider = typeof getReservedQuantity === "function"
     ? getReservedQuantity
+    : () => 0;
+  globalReservationProvider = typeof getGlobalReservedQuantity === "function"
+    ? getGlobalReservedQuantity
     : () => 0;
 }
 
 export function getTradeReservedQuantity(actorUuid, itemReference) {
-  return Math.max(0, Number(reservationProvider(actorUuid, itemReference) ?? 0));
+  return Math.max(0, Number(reservationProvider(actorUuid, itemReference) ?? 0) +
+    Number(globalReservationProvider(actorUuid, itemReference) ?? 0));
 }
 
 export function getTradeEffectiveAvailability(actorUuid, item, realQuantity) {

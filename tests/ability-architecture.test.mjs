@@ -73,8 +73,8 @@ test("la Item Sheet expone Rol, costo calculado y UI contextual sin Elemento/Rar
   assert.match(template, /name="system\.rol"/);
   assert.doesNotMatch(template, /name="system\.costeMP"/);
   assert.match(template, /Costo Base/i);
-  assert.match(template, /name="system\.damageResolution"/);
-  assert.match(template, /name="system\.damageMode"/);
+  assert.doesNotMatch(template, /name="system\.damageResolution"/);
+  assert.doesNotMatch(template, /name="system\.damageMode"/);
   assert.match(template, /name="system\.damageCostType"/);
   assert.doesNotMatch(template, /name="system\.elemento"/);
   assert.doesNotMatch(template, /name="system\.rareza"/);

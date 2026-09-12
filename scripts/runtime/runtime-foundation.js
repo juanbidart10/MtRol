@@ -5,6 +5,7 @@ import { CommandRegistry } from "./command-registry.js";
 import { RecoveryCoordinator } from "./recovery-coordinator.js";
 import { ActorRuntimeRepository } from "./actor-runtime-repository.js";
 import { TransactionCoordinator } from "./transaction-coordinator.js";
+import { authorityService } from "../core/authority-service.js";
 
 export const runtimeRepository = new RuntimeRepository({ logger });
 export const receiptStore = new ReceiptStore({
@@ -20,6 +21,7 @@ export const actorReceiptStore = new ReceiptStore({
 export const transactionCoordinator = new TransactionCoordinator({
   combatReceiptStore: receiptStore,
   actorReceiptStore,
+  authority: authorityService,
   logger,
   relatedScopes: scope => {
     if (!scope.actor) return [];

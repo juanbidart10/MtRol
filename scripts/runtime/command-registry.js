@@ -1,4 +1,5 @@
 import { integrationObservability } from "../core/integration-observability.js";
+import { createReceiptFingerprint } from "./receipt-store.js";
 
 const COMMAND_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/;
 
@@ -115,9 +116,11 @@ export class CommandRegistry {
     const receiptTarget = typeof definition.receiptTarget === "function"
       ? await definition.receiptTarget(envelope.payload ?? {}, context, envelope)
       : definition.receiptTarget ?? envelope.combatId;
+    const fingerprint = await createReceiptFingerprint(envelope.payload ?? {});
     return this.receiptStore.execute(receiptTarget, {
       transactionId: envelope.transactionId,
       command: envelope.command,
+      fingerprint,
       pendingActionId: envelope.payload?.pendingActionId ?? envelope.payload?.pendingAction?.id ?? null
     }, execute);
   }

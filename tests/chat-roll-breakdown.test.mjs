@@ -593,7 +593,7 @@ test("system.json conserva la versión declarada de release", async () => {
     )
   );
 
-  assert.equal(system.version, "1.4.1");
+  assert.equal(system.version, "1.4.2");
 });
 
 test.after(() => {

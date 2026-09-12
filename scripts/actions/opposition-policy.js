@@ -157,25 +157,11 @@ export function evaluateOppositionResponseEligibility({
   guard = null,
   logger = null
 } = {}) {
-  const definition = getOppositionActionDefinition(item, { logger });
-  const preset = String(
-    selectedCapability ?? item?.system?.responseCapability ?? ""
-  ).trim().toUpperCase();
-  const candidates = definition.capabilities.filter(capability =>
-    pendingAction?.allowedResponses?.includes(capability)
-  );
-  const selected = preset || (candidates.length === 1 ? candidates[0] : null);
-  const metadata = {
-    actionType: definition.actionType,
-    capabilities: definition.capabilities,
-    actionDomain: pendingAction?.actionDomain ?? null,
-    responseDomain: definition.responseDomain,
-    allowedResponses: Array.from(pendingAction?.allowedResponses ?? []),
-    mode: mode ?? null,
-    itemUuid: item?.uuid ?? null,
-    legacyMapped: definition.legacyMapped
-  };
-
+  const result = evaluateOppositionResponsePolicy({
+    actionDefinition: pendingAction, actor, item, selectedCapability, mode, logger
+  });
+  const selected = result.selectedCapability;
+  const metadata = result.metadata;
   if (!pendingAction?.id) return invalid(selected, "NO_PENDING_ACTION", "No existe una oposición activa.", metadata);
   if (pendingAction.status !== "waiting-defense") {
     return invalid(selected, "OPPOSITION_NOT_WAITING", "La oposición ya no admite respuestas.", metadata);
@@ -189,6 +175,46 @@ export function evaluateOppositionResponseEligibility({
   if (!item || item.type !== "competencia") {
     return invalid(selected, "INVALID_RESPONSE_ITEM", "La acción de respuesta no existe o no es utilizable.", metadata);
   }
+  if (result.reasonCode === "AMBIGUOUS_RESPONSE_CAPABILITY") return result;
+  if (guard && (!guard.allowed || (guard.reactive && guard.opposition?.id !== pendingAction.id))) {
+    return invalid(selected, "ACTION_GUARD_REJECTED", guard.reason ?? "La acción no pertenece a esta oposición.", metadata);
+  }
+  return result;
+}
+
+// Shared mechanical policy. Preflight has an action definition but no pending
+// action yet; the authority additionally validates target, state and guard.
+export function evaluateOppositionResponsePolicy({
+  actionDefinition,
+  actor,
+  item,
+  selectedCapability = null,
+  mode = null,
+  logger = null
+} = {}) {
+  const definition = getOppositionActionDefinition(item, { logger });
+  const rawPreset = String(
+    selectedCapability ?? item?.system?.responseCapability ?? ""
+  ).trim().toUpperCase();
+  const preset = rawPreset === "AUTO" ? "" : rawPreset;
+  const candidates = definition.capabilities.filter(capability =>
+    actionDefinition?.allowedResponses?.includes(capability)
+  );
+  const selected = preset || (candidates.length === 1 ? candidates[0] : null);
+  const metadata = {
+    actionType: definition.actionType,
+    capabilities: definition.capabilities,
+    actionDomain: actionDefinition?.actionDomain ?? null,
+    responseDomain: definition.responseDomain,
+    allowedResponses: Array.from(actionDefinition?.allowedResponses ?? []),
+    mode: mode ?? null,
+    itemUuid: item?.uuid ?? null,
+    legacyMapped: definition.legacyMapped
+  };
+
+  if (!item || item.type !== "competencia") {
+    return invalid(selected, "INVALID_RESPONSE_ITEM", "La acción de respuesta no existe o no es utilizable.", metadata);
+  }
   if (!preset && candidates.length > 1) {
     return invalid(
       null,
@@ -197,28 +223,25 @@ export function evaluateOppositionResponseEligibility({
       metadata
     );
   }
-  if (guard && (!guard.allowed || (guard.reactive && guard.opposition?.id !== pendingAction.id))) {
-    return invalid(selected, "ACTION_GUARD_REJECTED", guard.reason ?? "La acción no pertenece a esta oposición.", metadata);
-  }
   if (!selected || !definition.capabilities.includes(selected)) {
     return invalid(selected, "CAPABILITY_NOT_DECLARED", "La acción no declara una capacidad reactiva válida.", metadata);
   }
   if (!definition.capabilities.includes(OPPOSITION_CAPABILITIES.REACTION)) {
     return invalid(selected, "REACTION_NOT_DECLARED", "La acción no está configurada como reacción.", metadata);
   }
-  if (!pendingAction.allowedResponses?.includes(selected)) {
+  if (!actionDefinition?.allowedResponses?.includes(selected)) {
     return invalid(selected, "RESPONSE_NOT_ALLOWED", "La oposición no permite este tipo de respuesta.", metadata);
   }
 
   if (selected === OPPOSITION_CAPABILITIES.COUNTERATTACK) {
-    if (!pendingAction.actionDomain || !definition.responseDomain) {
+    if (!actionDefinition.actionDomain || !definition.responseDomain) {
       return invalid(selected, "COUNTERATTACK_DOMAIN_MISSING", "El contraataque no tiene un dominio mecánico válido.", metadata);
     }
-    if (pendingAction.actionDomain !== definition.responseDomain) {
+    if (actionDefinition.actionDomain !== definition.responseDomain) {
       return invalid(
         selected,
         "COUNTERATTACK_DOMAIN_MISMATCH",
-        `No puedes contraatacar un ataque ${pendingAction.actionDomain === "MAGICAL" ? "mágico" : "físico"} con una respuesta ${definition.responseDomain === "MAGICAL" ? "mágica" : "física"}.`,
+        `No puedes contraatacar un ataque ${actionDefinition.actionDomain === "MAGICAL" ? "mágico" : "físico"} con una respuesta ${definition.responseDomain === "MAGICAL" ? "mágica" : "física"}.`,
         metadata
       );
     }

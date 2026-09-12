@@ -443,6 +443,7 @@
   color: #f6ebcc;
 }
 
+.mtrol-competencia-sheet [hidden],
 .mtrol-competencia-sheet .mtrol-response-group[hidden],
 .mtrol-competencia-sheet .mtrol-response-group [hidden],
 .mtrol-competencia-sheet .mtrol-field [data-mtrol-opposition-required][hidden] {
@@ -627,4 +628,21 @@
   .mtrol-competencia-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.mtrol-competencia-sheet details[data-mtrol-compatibility] {
+  display: block;
+}
+
+.mtrol-competencia-sheet [data-mtrol-compatibility] > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 600;
+}
+
+.mtrol-competencia-sheet [data-mtrol-reaction-warning],
+.mtrol-competencia-sheet [data-mtrol-preset-warning] {
+  border-left: 3px solid #bc913e;
+  padding: 8px 12px;
+  margin: 0;
 }

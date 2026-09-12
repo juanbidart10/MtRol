@@ -53,14 +53,14 @@ test("historical array order is preserved and serialized false is not selected",
 });
 
 for (const capability of [null, ...responses]) {
-  test(`response display and persistence derive zero/one capability: ${capability}`, async () => {
+  test(`response display derives zero/one capability without persisting: ${capability}`, async () => {
     const current = sheet({ capabilities: capability ? [capability, "REACTION"] : ["OFFENSIVE"] });
     const config = current.getData().responseConfiguration;
     assert.deepEqual(config.candidates, capability ? [capability] : []);
     assert.equal(config.multiple, false);
     assert.equal(Boolean(config.singleLabel), Boolean(capability));
     const result = await current._updateObject(null, {});
-    assert.equal(result["system.responseCapability"], capability);
+    assert.deepEqual(result, {});
   });
 }
 
@@ -79,19 +79,17 @@ test("multiple responses offer only compatible radios and persist an independent
   assert.deepEqual(current.item.system, system);
 });
 
-test("removing the selected capability derives the sole remaining response", async () => {
-  const current = sheet({ capabilities: ["DEFENSE", "DODGE", "REACTION"], responseCapability: "DODGE" });
-  const result = await current._updateObject(null, {
-    "system.capabilities": ["DEFENSE", "REACTION"], "system.responseCapability": "DODGE"
-  });
-  assert.equal(result["system.responseCapability"], "DEFENSE");
+test("removing a capability preserves the stored preset for warning, without auto-fix", async () => {
+ const current = sheet({ capabilities: ["DEFENSE", "DODGE", "REACTION"], responseCapability: "DODGE" });
+ const result = await current._updateObject(null, {"system.capabilities": ["DEFENSE", "REACTION"]});
+ assert.equal(Object.hasOwn(result, "system.responseCapability"), false);
 });
 
 for (const preset of [null, "", "auto", "Automática", ...responses]) {
-  test(`historical preset ${JSON.stringify(preset)} opens and saves with one response`, async () => {
+  test(`historical preset ${JSON.stringify(preset)} is preserved without editing`, async () => {
     const current = sheet({ capabilities: ["DODGE", "REACTION"], responseCapability: preset });
     assert.equal(current.getData().responseConfiguration.singleLabel, "Esquiva");
-    assert.equal((await current._updateObject(null, {}))["system.responseCapability"], "DODGE");
+    assert.deepEqual(await current._updateObject(null, {}), {});
   });
 }
 
@@ -99,7 +97,8 @@ test("multiple responses without a compatible preset require an explicit selecti
   for (const preset of [null, "", "auto", "Automática", "COUNTERATTACK"]) {
     const current = sheet({ capabilities: ["DEFENSE", "DODGE", "REACTION"], responseCapability: preset });
     assert.equal(current.getData().responseConfiguration.options.some(option => option.selected), false);
-    await assert.rejects(current._updateObject(null, {}), /Elegí el tipo de respuesta/);
+    assert.deepEqual(await current._updateObject(null, {}), {});
+    assert.equal(Object.hasOwn(await current._updateObject(null, { "system.capabilities": ["DEFENSE", "DODGE", "REACTION"] }), "system.responseCapability"), false);
     assert.equal((await current._updateObject(null, { "system.responseCapability": "DODGE" }))["system.responseCapability"], "DODGE");
   }
 });

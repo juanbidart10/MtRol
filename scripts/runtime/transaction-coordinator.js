@@ -16,12 +16,13 @@ export class TransactionRecoveryRequiredError extends Error {
 }
 
 export class TransactionCoordinator {
-  constructor({ combatReceiptStore, actorReceiptStore, logger = null, relatedScopes = () => [], notify = null } = {}) {
+  constructor({ combatReceiptStore, actorReceiptStore, logger = null, relatedScopes = () => [], notify = null, authority = null } = {}) {
     this.combatReceiptStore = combatReceiptStore;
     this.actorReceiptStore = actorReceiptStore;
     this.logger = logger;
     this.relatedScopes = relatedScopes;
     this.notify = notify;
+    this.authority = authority;
     this.inFlight = new Map();
     this.operationQueues = new Map();
   }
@@ -88,6 +89,7 @@ export class TransactionCoordinator {
     apply,
     reconcile = null,
     serializationKey = null
+    ,authorityContext = null
   } = {}) {
     if (!transactionId || typeof apply !== "function") {
       throw new TypeError("TransactionCoordinator requiere transactionId y apply.");
@@ -140,7 +142,11 @@ export class TransactionCoordinator {
       if (existing?.status === "failed") return clone(existing.result);
 
       this.assertNoBlockingTransaction(scope, { transactionId, command, metadata });
-      await store.begin(target, transactionId, { command });
+      const assertAuthority = () => authorityContext
+        ? this.authority?.validateWriteContext(authorityContext)
+        : true;
+      assertAuthority();
+      await store.begin(target, transactionId, { command, authorityContext: clone(authorityContext) });
       await store.transition(target, transactionId, "prepared", clone(metadata));
       let applyEntered = false;
       try {
@@ -149,13 +155,14 @@ export class TransactionCoordinator {
           prepared: clone(prepared),
           checkpoints: {}
         });
-        const checkpoint = async (name, data = {}) => store.update(target, transactionId, receipt => {
+        const checkpoint = async (name, data = {}) => { assertAuthority(); return store.update(target, transactionId, receipt => {
           receipt.checkpoints ??= {};
           receipt.checkpoints[name] = { at: Date.now(), ...clone(data) };
           return receipt;
-        });
+        }); };
         applyEntered = true;
-        const result = await apply({ prepared, checkpoint, transactionId });
+        const result = await apply({ prepared, checkpoint, transactionId, assertAuthority });
+        assertAuthority();
         await store.transition(target, transactionId, "applied", { result: clone(result) });
         await store.complete(target, transactionId, result);
         return clone(result);
@@ -193,7 +200,7 @@ export class TransactionCoordinator {
           }, { key: `failure-persistence:${transactionId}` });
         }
         if (needsRecovery) {
-          error.reasonCode = "RECOVERY_REQUIRED";
+          error.reasonCode ??= "RECOVERY_REQUIRED";
           (this.logger?.errorOnce ?? this.logger?.error)?.call(this.logger, "RECOVERY", "transaction requires review", {
             command, transactionId, resourceKey: this.recoveryKey(scope, command, metadata), error: error.message
           }, { key: `recovery-required:${transactionId}` });

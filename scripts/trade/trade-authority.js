@@ -17,7 +17,8 @@ import {
   TradeSessionStore
 } from "./trade-session-service.js";
 import {
-  tradeRuntimeRepository
+  tradeRuntimeRepository,
+  sharedReservationLedger
 } from "./trade-runtime-repository.js";
 import { configureTradeReservationBoundary } from "./trade-reservation-boundary.js";
 
@@ -98,6 +99,8 @@ async function resolveOfferTradeItem(reference) {
 
   return {
     realQuantity: quantityAnalysis.effectiveValue,
+    itemUuid: item.uuid,
+    itemId: item.id,
     publicSnapshot: buildPublicTradeItemSnapshot(item, reference.quantity)
   };
 }
@@ -105,12 +108,16 @@ async function resolveOfferTradeItem(reference) {
 export const tradeSessionStore = new TradeSessionStore({
   resolveRealQuantity: resolveRealTradeQuantity,
   resolveOfferItem: resolveOfferTradeItem,
-  repository: tradeRuntimeRepository
+  repository: tradeRuntimeRepository,
+  reservationLedger: sharedReservationLedger,
+  authorityService
 });
 
+sharedReservationLedger.setAuthorityService(authorityService);
+
 configureTradeReservationBoundary({
-  getReservedQuantity: (actorUuid, itemReference) =>
-    tradeSessionStore.getReservedQuantity(actorUuid, itemReference)
+  getGlobalReservedQuantity: (actorUuid, itemReference) =>
+    sharedReservationLedger.reservedQuantity(actorUuid, itemReference?.itemUuid ?? itemReference?.itemId)
 });
 
 function requirePrimaryGM() {

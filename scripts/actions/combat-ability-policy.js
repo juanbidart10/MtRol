@@ -1,7 +1,6 @@
 import { MTROL_EFFECT_ATTRIBUTE_KEYS } from "../effects/effect-types.js";
 import {
-  getOppositionActionDefinition,
-  OPPOSITION_CAPABILITIES
+  evaluateOppositionResponsePolicy
 } from "./opposition-policy.js";
 
 const ATTRIBUTE_REFERENCE = /@atributos\.([A-Za-z0-9_]+)/g;
@@ -101,18 +100,9 @@ export function appendModifiersToFormula(formula, modifiers = []) {
 }
 
 export function findTechnicallyCompatibleResponses(targetActor, actionDefinition) {
-  const allowed = new Set(actionDefinition?.allowedResponses ?? []);
-  const domain = actionDefinition?.actionDomain ?? null;
-  return Array.from(targetActor?.items ?? []).filter(item => {
-    if (item?.type !== "competencia") return false;
-    const response = getOppositionActionDefinition(item);
-    const capability = response.capabilities.some(value => allowed.has(value));
-    if (!capability || !response.capabilities.includes(OPPOSITION_CAPABILITIES.REACTION)) return false;
-    const usesCounterattack = response.capabilities.some(value =>
-      value === OPPOSITION_CAPABILITIES.COUNTERATTACK && allowed.has(value)
-    );
-    return !usesCounterattack || Boolean(domain && response.responseDomain === domain);
-  });
+  return Array.from(targetActor?.items ?? []).filter(item =>
+    evaluateOppositionResponsePolicy({ actionDefinition, actor: targetActor, item }).valid
+  );
 }
 
 export function assertCanonicalOffensiveConfiguration({ item, targetActor, definition, declaredMode = null }) {

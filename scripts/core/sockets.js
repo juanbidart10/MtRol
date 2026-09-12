@@ -45,6 +45,10 @@ import {
   dispatchTradeSocketCommand,
   getTradeCommandForSocketAction
 } from "../runtime/trade-commands.js";
+import {
+  dispatchGroundSocketCommand,
+  getGroundCommandForSocketAction
+} from "../runtime/ground-commands.js";
 
 import { logger } from "../utils/logger.js";
 import { dispatchOrbSocketCommand, getOrbCommandForSocketAction } from "../runtime/orb-commands.js";
@@ -168,6 +172,14 @@ export function registerMtrolSockets() {
     if (getTradeCommandForSocketAction(request.action)) {
       await respondWithResult(request, async () => {
         const dispatched = await dispatchTradeSocketCommand(request);
+        return dispatched.result;
+      });
+      return;
+    }
+
+    if (getGroundCommandForSocketAction(request.action)) {
+      await respondWithResult(request, async () => {
+        const dispatched = await dispatchGroundSocketCommand(request);
         return dispatched.result;
       });
       return;

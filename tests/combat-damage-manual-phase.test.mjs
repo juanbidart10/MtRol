@@ -130,7 +130,7 @@ test("desempate muestra overlay efímero y conserva 1–5/6–10", async () => {
   }
 });
 
-test("system.json mantiene versión 1.4.1", async () => {
+test("system.json mantiene versión 1.4.2", async () => {
   const system = JSON.parse(await readFile(new URL("../system.json", import.meta.url), "utf8"));
-  assert.equal(system.version, "1.4.1");
+  assert.equal(system.version, "1.4.2");
 });

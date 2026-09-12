@@ -13,6 +13,10 @@ export function createDefaultTradeRuntime() {
     sessions: {},
     operationReceipts: {},
     receipts: {},
+    // Canonical shared inventory reservation ledger. Trade projects this data.
+    reservations: {},
+    reservationMutations: {},
+    resourceCapacityQuarantines: {},
     authority: {
       gmUserId: null,
       epoch: null,
@@ -43,6 +47,9 @@ export function normalizeTradeRuntime(value) {
       ? source.operationReceipts
       : {},
     receipts: source.receipts && typeof source.receipts === "object" ? source.receipts : {},
+    reservations: source.reservations && typeof source.reservations === "object" ? source.reservations : {},
+    reservationMutations: source.reservationMutations && typeof source.reservationMutations === "object" ? source.reservationMutations : {},
+    resourceCapacityQuarantines: source.resourceCapacityQuarantines && typeof source.resourceCapacityQuarantines === "object" ? source.resourceCapacityQuarantines : {},
     authority: { ...base.authority, ...(source.authority ?? {}) },
     recovery: { ...base.recovery, ...(source.recovery ?? {}) }
   };
@@ -147,10 +154,12 @@ export class TradeRuntimeRepository {
 }
 
 export const tradeRuntimeRepository = new TradeRuntimeRepository({ logger });
+export const sharedReservationLedger = new SharedReservationLedger({ repository: tradeRuntimeRepository });
 export const tradeReceiptScope = createReceiptScope(
   tradeRuntimeRepository,
   tradeRuntimeRepository.target,
   "trade-runtime"
 );
 import { createReceiptScope } from "../runtime/receipt-store.js";
+import { SharedReservationLedger } from "../runtime/shared-reservation-ledger.js";
 import { logger } from "../utils/logger.js";

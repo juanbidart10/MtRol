@@ -33,6 +33,7 @@ import {
 import { registerFoundryHookAdapters } from "./hook-dispatcher.js";
 import { actorRuntimeRepository } from "../runtime/runtime-foundation.js";
 import { logger } from "../utils/logger.js";
+import { registerGroundCanvasHooks } from "../ground/ground-canvas-renderer.js";
 
 let actorRuntimeCacheHooksRegistered = false;
 
@@ -63,6 +64,7 @@ function registerActorRuntimeCacheLifecycleHooks() {
 
 export function registerHooks() {
   registerFoundryHookAdapters();
+  registerGroundCanvasHooks();
   registerActorRuntimeCacheLifecycleHooks();
   registrarHooksPesoMtrol();
   registerMtrolSequencerHooks();
