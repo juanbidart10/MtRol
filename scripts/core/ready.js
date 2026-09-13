@@ -29,6 +29,8 @@ import {
 } from "../utils/logger.js";
 
 import { recoverMovementTransactions } from "../combat/movement-service.js";
+import { createGroundReceiptScope } from "../ground/ground-receipt-scope.js";
+import { recoverGroundDropTransaction } from "../runtime/ground-commands.js";
 
 import {
   migrateCompetencyTechnicalIds
@@ -72,6 +74,18 @@ async function recoverActiveCombatRuntime() {
   });
 }
 
+async function recoverGroundRuntime() {
+  return recoveryCoordinator.recoverGroundTransactions(game.scenes, {
+    isPrimaryGM: isPrimaryActiveGM(),
+    readRuntime: scene => {
+      const scope = createGroundReceiptScope(scene.id);
+      return scope.repository.read(scope.target);
+    },
+    recoverTransaction: (sceneId, transactionId) => recoverGroundDropTransaction(sceneId, transactionId),
+    notify: message => ui.notifications?.warn?.(message)
+  });
+}
+
 function installRuntimeRecoveryHooks() {
   if (recoveryHooksInstalled) return;
   recoveryHooksInstalled = true;
@@ -85,6 +99,7 @@ function installRuntimeRecoveryHooks() {
         await recoverActiveCombatRuntime();
         await recoverMovementTransactions(game.combat);
         await recoverActorRuntime();
+        await recoverGroundRuntime();
       } catch (error) {
         logger.error("RECOVERY", "authority change recovery failed", {
           combatId: game.combat?.id ?? null,
@@ -120,4 +135,5 @@ export async function readyMtrol() {
   await recoverActiveCombatRuntime();
   await recoverMovementTransactions(game.combat);
   await recoverActorRuntime();
+  await recoverGroundRuntime();
 }

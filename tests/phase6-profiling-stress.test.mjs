@@ -38,7 +38,8 @@ const {
 const { MtrolLogger } = await import("../scripts/utils/logger.js");
 const {
   requestPrimaryGM,
-  handleSocketResponse
+  handleSocketResponse,
+  SOCKET_TIMEOUT_REASON_CODE
 } = await import("../scripts/core/socket-requests.js");
 const { TradeSessionStore } = await import("../scripts/trade/trade-session-service.js");
 const { TradeAuditService } = await import("../scripts/trade/trade-audit-service.js");
@@ -335,6 +336,28 @@ test("ActorRuntimeRepository: receipts acotados y cache reconstruible observable
     cacheAfterLifecycle,
     residualQueues: repository.mutationQueues.size
   })));
+});
+
+test("socket timeout expone reasonCode estable y permite suprimir la advertencia prematura", async () => {
+  let warnings = 0;
+  const originalWarn = globalThis.ui.notifications.warn;
+  globalThis.ui.notifications.warn = () => { warnings += 1; };
+  try {
+    const response = await requestPrimaryGM("mtrolTimeout", {}, {
+      timeoutMs: 1,
+      transactionId: "socket-timeout",
+      notifyOnTimeout: false
+    });
+    assert.deepEqual(response, {
+      ok: false,
+      error: "El GM no respondió a tiempo. La acción no fue resuelta.",
+      reasonCode: SOCKET_TIMEOUT_REASON_CODE,
+      result: null
+    });
+    assert.equal(warnings, 0);
+  } finally {
+    globalThis.ui.notifications.warn = originalWarn;
+  }
 });
 
 test("socket burst real completa todas las Promises sin respuestas flotantes", async t => {

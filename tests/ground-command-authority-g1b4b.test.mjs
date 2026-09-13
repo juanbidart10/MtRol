@@ -134,11 +134,14 @@ const reconcileEnvelope = (transactionId, repairPlan, extra = {}) => ({
   payload: { sceneId: "scene-a", groundId: GROUND_ID, repairPlan, ...extra }
 });
 
-test("G1B.4B registers only ground.inspect and ground.reconcile on the existing registry", async () => {
+test("Ground commands preserve G1B.4B inspect/reconcile and add the G3A drop boundary", async () => {
   const fx = await fixture();
+  assert.equal(fx.registry.has("ground.drop"), true);
   assert.equal(fx.registry.has("ground.inspect"), true);
   assert.equal(fx.registry.has("ground.reconcile"), true);
-  assert.deepEqual([...fx.registry.handlers.keys()].sort(), ["ground.inspect", "ground.reconcile"]);
+  assert.deepEqual([...fx.registry.handlers.keys()].sort(), ["ground.drop", "ground.inspect", "ground.reconcile"]);
+  assert.equal(fx.registry.handlers.get("ground.drop").idempotent, false);
+  assert.equal(fx.registry.handlers.get("ground.drop").scope, "world");
   assert.equal(fx.registry.handlers.get("ground.inspect").idempotent, false);
   assert.equal(fx.registry.handlers.get("ground.reconcile").idempotent, true);
   assert.equal(fx.registry.handlers.get("ground.reconcile").scope, "world");
@@ -374,7 +377,7 @@ test("existing socket listener authenticates sender and keeps nested caller spoo
   }
 });
 
-test("source integration adds no namespace, listener, Primary selector, public service facade, or gameplay command", async () => {
+test("source integration adds no namespace, listener, Primary selector, public service facade, or pickup command", async () => {
   const [sockets, init, commands] = await Promise.all([
     readFile(new URL("../scripts/core/sockets.js", import.meta.url), "utf8"),
     readFile(new URL("../scripts/core/init.js", import.meta.url), "utf8"),
@@ -386,5 +389,6 @@ test("source integration adds no namespace, listener, Primary selector, public s
   assert.doesNotMatch(sockets, /system\.mtrol\.ground/);
   assert.match(init, /registerGroundCommands\(\)/);
   assert.doesNotMatch(init, /game\.mtrol\.ground/);
-  assert.doesNotMatch(commands, /resolvePrimaryGM|GroundAuthorityService|GroundManager|ground\.drop|ground\.pickup/);
+  assert.match(commands, /ground\.drop/);
+  assert.doesNotMatch(commands, /resolvePrimaryGM|GroundAuthorityService|GroundManager|ground\.pickup/);
 });

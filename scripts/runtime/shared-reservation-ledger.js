@@ -12,6 +12,19 @@ const resourceKey = (actorUuid, itemUuid) => `${encodeURIComponent(required(acto
 const stableValue = value => Array.isArray(value) ? value.map(stableValue) : value && typeof value === "object"
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stableValue(value[key])])) : value;
 const evidenceFingerprint = value => JSON.stringify(stableValue(value));
+const LEGAL_TRANSITIONS = Object.freeze({
+  [RESERVATION_STATES.RESERVED]: Object.freeze([
+    RESERVATION_STATES.RESERVED, RESERVATION_STATES.COMMITTING,
+    RESERVATION_STATES.RELEASED, RESERVATION_STATES.RECOVERY_REQUIRED
+  ]),
+  [RESERVATION_STATES.COMMITTING]: Object.freeze([
+    RESERVATION_STATES.COMMITTED, RESERVATION_STATES.ROLLED_BACK,
+    RESERVATION_STATES.RECOVERY_REQUIRED
+  ]),
+  [RESERVATION_STATES.RECOVERY_REQUIRED]: Object.freeze([
+    RESERVATION_STATES.COMMITTED, RESERVATION_STATES.ROLLED_BACK
+  ])
+});
 
 export function reservationFingerprint({ domain, actorUuid, itemUuid, quantity, payload = null } = {}) {
   return JSON.stringify({ domain: required(domain, "domain"), actorUuid: required(actorUuid, "actorUuid"), itemUuid: required(itemUuid, "itemUuid"), quantity: qty(quantity), payload });
@@ -98,7 +111,9 @@ export class SharedReservationLedger {
 
       for (const operation of operations) {
         const record = operation.type?.toUpperCase() === "CREATE" ? operation : draft[operation.operationId];
-        if (record && quarantineDraft[resourceKey(record.actorUuid, record.itemUuid)]?.state === "ACTIVE") {
+        const recoveryTransition = operation.type?.toUpperCase() === "TRANSITION" &&
+          operation.state === RESERVATION_STATES.RECOVERY_REQUIRED;
+        if (record && !recoveryTransition && quarantineDraft[resourceKey(record.actorUuid, record.itemUuid)]?.state === "ACTIVE") {
           throw errorWithCode("La capacidad del recurso está en cuarentena.", "CAPACITY_QUARANTINED");
         }
       }
@@ -156,10 +171,26 @@ export class SharedReservationLedger {
           };
           continue;
         }
+        if (type === "TRANSITION") {
+          const state = required(operation.state, "estado de reserva");
+          if (!Object.values(RESERVATION_STATES).includes(state)) {
+            throw errorWithCode("Estado de reserva inválido.", "RESERVATION_STATE_INVALID");
+          }
+          if (current.state !== state && !LEGAL_TRANSITIONS[current.state]?.includes(state)) {
+            throw errorWithCode("Transición de reserva no permitida.", "RESERVATION_STATE_CONFLICT");
+          }
+          simulated[operation.operationId] = current.state === state ? clone(current) : {
+            ...clone(current), state, revision: Number(current.revision) + 1,
+            evidence: operation.evidence ? { ...current.evidence, ...clone(operation.evidence) } : clone(current.evidence),
+            updatedAt: this.now()
+          };
+          continue;
+        }
         throw errorWithCode(`Tipo de mutación de reserva no soportado: ${type}.`, "RESERVATION_MUTATION_TYPE_INVALID");
       }
 
-      const resourceKeys = [...new Set(operations.map(operation => {
+      const capacityOperations = operations.filter(operation => operation.type?.toUpperCase() !== "TRANSITION");
+      const resourceKeys = [...new Set(capacityOperations.map(operation => {
         const record = simulated[operation.operationId] ?? draft[operation.operationId];
         return `${record.actorUuid}\u0000${record.itemUuid}`;
       }))];
@@ -265,11 +296,6 @@ export class SharedReservationLedger {
     });
   }
   async transition(operationId, state, { authorityContext = null, evidence = null } = {}) {
-    const legal = {
-      [RESERVATION_STATES.RESERVED]: [RESERVATION_STATES.RESERVED, RESERVATION_STATES.COMMITTING, RESERVATION_STATES.RELEASED, RESERVATION_STATES.RECOVERY_REQUIRED],
-      [RESERVATION_STATES.COMMITTING]: [RESERVATION_STATES.COMMITTED, RESERVATION_STATES.ROLLED_BACK, RESERVATION_STATES.RECOVERY_REQUIRED],
-      [RESERVATION_STATES.RECOVERY_REQUIRED]: [RESERVATION_STATES.COMMITTED, RESERVATION_STATES.ROLLED_BACK]
-    };
     if (!Object.values(RESERVATION_STATES).includes(state)) throw new Error("Estado de reserva inválido.");
     return this.#mutate(async (draft, _mutationDraft, quarantineDraft) => {
       const r = draft[required(operationId, "operationId")]; if (!r) throw new Error("La reserva no existe.");
@@ -278,7 +304,7 @@ export class SharedReservationLedger {
       if (quarantineDraft[resourceKey(r.actorUuid, r.itemUuid)]?.state === "ACTIVE" && state !== RESERVATION_STATES.RECOVERY_REQUIRED) {
         throw errorWithCode("La capacidad del recurso está en cuarentena.", "CAPACITY_QUARANTINED");
       }
-      if (!legal[r.state]?.includes(state)) throw errorWithCode("Transición de reserva no permitida.", "RESERVATION_STATE_CONFLICT");
+      if (!LEGAL_TRANSITIONS[r.state]?.includes(state)) throw errorWithCode("Transición de reserva no permitida.", "RESERVATION_STATE_CONFLICT");
       r.state = state; r.revision += 1; r.updatedAt = this.now(); if (evidence) r.evidence = { ...r.evidence, ...clone(evidence) }; return r;
     });
   }

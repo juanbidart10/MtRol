@@ -274,6 +274,9 @@ export class TradeSessionStore {
       await this.#reconcileLegacyReservations(runtime);
       runtime = await this.repository.ensure();
       this.reservationLedger.hydrate(runtime);
+      await this.#reconcileCanonicalReservationLifecycle(runtime);
+      runtime = await this.repository.ensure();
+      this.reservationLedger.hydrate(runtime);
     }
     return this.hydrateRuntime(runtime);
   }
@@ -678,6 +681,9 @@ export class TradeSessionStore {
     }, async session => {
       this.#assertAuthority(session, authorityUserId);
       if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) return session.toObject();
+      await this.#transitionCanonicalCapacity(session, "RECOVERY_REQUIRED", operationId, {
+        reasonCode: String(reasonCode ?? "TRADE_STATE_AMBIGUOUS")
+      });
       session.state = TRADE_SESSION_STATES.RECOVERY_REQUIRED;
       session.recovery = {
         required: true,
@@ -709,6 +715,9 @@ export class TradeSessionStore {
       });
       if (!bothCurrent) throw new Error("Ambos participantes deben confirmar la revisión vigente.");
 
+      await this.#transitionCanonicalCapacity(session, "COMMITTING", operationId, {
+        executionId: normalizeRequiredString(executionId, "executionId")
+      });
       session.state = TRADE_SESSION_STATES.EXECUTING;
       session.updatedAt = this.now();
       session.execution = {
@@ -738,6 +747,9 @@ export class TradeSessionStore {
       if (session.execution?.executionId !== String(executionId ?? "")) {
         throw new Error("El executionId no corresponde a la ejecución activa.");
       }
+      await this.#transitionCanonicalCapacity(session, "COMMITTED", operationId, {
+        executionId: String(executionId)
+      });
       session.execution.status = TRADE_SESSION_STATES.COMPLETED;
       session.execution.completedAt = this.now();
       this.#finishSession(session, TRADE_SESSION_STATES.COMPLETED);
@@ -759,6 +771,9 @@ export class TradeSessionStore {
       if (session.execution?.executionId !== String(executionId ?? "")) {
         throw new Error("El executionId no corresponde a la ejecución activa.");
       }
+      await this.#transitionCanonicalCapacity(session, "ROLLED_BACK", operationId, {
+        executionId: String(executionId), reason: String(reason ?? "execution-failed")
+      });
       session.execution.status = TRADE_SESSION_STATES.INVALID;
       session.execution.failedAt = this.now();
       session.execution.failureReason = String(reason ?? "execution-failed");
@@ -1083,6 +1098,81 @@ export class TradeSessionStore {
       authorityContext,
       realQuantity: (actorUuid, itemUuid) => this.resolveRealQuantity({ actorUuid, itemUuid })
     });
+  }
+
+  async #transitionCanonicalCapacity(session, targetState, commandOperationId, evidence = {}) {
+    if (!this.reservationLedger) return null;
+    await this.reservationLedger.hydrateFromPersistence?.();
+    const records = this.reservationLedger.list().filter(record =>
+      record.domain === "trade" &&
+      record.evidence?.sessionId === session.id &&
+      record.state !== "RELEASED" &&
+      record.state !== targetState
+    );
+    const allowedSources = {
+      COMMITTING: new Set(["RESERVED"]),
+      RECOVERY_REQUIRED: new Set(["RESERVED", "COMMITTING"]),
+      COMMITTED: new Set(["COMMITTING", "RECOVERY_REQUIRED"]),
+      ROLLED_BACK: new Set(["COMMITTING", "RECOVERY_REQUIRED"])
+    }[targetState];
+    const eligible = records.filter(record => allowedSources?.has(record.state));
+    if (!eligible.length) return { changed: false, idempotent: true, reservations: [] };
+    if (eligible.length !== records.length) {
+      const error = new Error("El estado durable de las reservas Trade no permite la transición de ejecución.");
+      error.reasonCode = "RESERVATION_STATE_CONFLICT";
+      throw error;
+    }
+    const operations = eligible
+      .map(record => ({
+        type: "TRANSITION",
+        operationId: record.operationId,
+        expectedRevision: record.revision,
+        state: targetState,
+        evidence: { sessionId: session.id, ...clone(evidence) }
+      }))
+      .sort((left, right) => left.operationId.localeCompare(right.operationId));
+    const mutationId = `trade-capacity:${session.id}:${normalizeRequiredString(commandOperationId, "operationId")}:${targetState}`;
+    const authorityContext = this.authorityService?.createWriteContext?.() ?? null;
+    return this.reservationLedger.mutateReservationSet({
+      mutationId,
+      mutationFingerprint: operationFingerprint("trade-capacity-transition", {
+        sessionId: session.id,
+        targetState,
+        reservationIds: operations.map(operation => operation.operationId),
+        evidence
+      }),
+      operations
+    }, { authorityContext });
+  }
+
+  async #reconcileCanonicalReservationLifecycle(runtime) {
+    const sessionIds = new Set(
+      this.reservationLedger.list({ activeOnly: true })
+        .filter(record => record.domain === "trade" && record.evidence?.sessionId)
+        .map(record => record.evidence.sessionId)
+    );
+    for (const sessionId of sessionIds) {
+      const session = runtime.sessions?.[sessionId] ?? null;
+      let targetState = null;
+      let reasonCode = null;
+      if (!session) {
+        targetState = "RECOVERY_REQUIRED";
+        reasonCode = "ORPHANED_TRADE_RESERVATION";
+      } else if (session.state === TRADE_SESSION_STATES.EXECUTING) {
+        targetState = "COMMITTING";
+        reasonCode = "TRADE_EXECUTION_RELOADED";
+      } else if (session.state === TRADE_SESSION_STATES.RECOVERY_REQUIRED) {
+        targetState = "RECOVERY_REQUIRED";
+        reasonCode = session.recovery?.reasonCode ?? "TRADE_RECOVERY_RELOADED";
+      }
+      if (!targetState) continue;
+      await this.#transitionCanonicalCapacity(
+        { id: sessionId },
+        targetState,
+        `hydrate-${targetState}`,
+        { reasonCode, reconciledFromRuntime: true }
+      );
+    }
   }
 
   async #reconcileLegacyReservations(runtime) {

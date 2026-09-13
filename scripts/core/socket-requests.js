@@ -4,6 +4,8 @@ const pendingSocketRequests = new Map();
 
 const DEFAULT_SOCKET_TIMEOUT_MS = 30000;
 
+export const SOCKET_TIMEOUT_REASON_CODE = "SOCKET_TIMEOUT";
+
 export const MTROL_GM_REQUIRED_MESSAGE =
   "Se requiere un GM conectado para resolver esta acción.";
 
@@ -22,7 +24,8 @@ function notifyGMRequired() {
 export function requestPrimaryGM(action, payload = {}, {
   timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS,
   transactionId = payload?.transactionId ?? foundry.utils.randomID(),
-  combatId = payload?.combatId ?? game.combat?.id ?? null
+  combatId = payload?.combatId ?? game.combat?.id ?? null,
+  notifyOnTimeout = true
 } = {}) {
   const primaryGM =
     getPrimaryActiveGM();
@@ -47,11 +50,12 @@ export function requestPrimaryGM(action, payload = {}, {
         const error =
           "El GM no respondió a tiempo. La acción no fue resuelta.";
 
-        ui.notifications.warn(error);
+        if (notifyOnTimeout) ui.notifications.warn(error);
 
         resolve({
           ok: false,
           error,
+          reasonCode: SOCKET_TIMEOUT_REASON_CODE,
           result: null
         });
       }, timeoutMs);

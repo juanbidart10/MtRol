@@ -89,7 +89,8 @@ export class TransactionCoordinator {
     apply,
     reconcile = null,
     serializationKey = null
-    ,authorityContext = null
+    ,authorityContext = null,
+    fingerprint = null
   } = {}) {
     if (!transactionId || typeof apply !== "function") {
       throw new TypeError("TransactionCoordinator requiere transactionId y apply.");
@@ -107,18 +108,23 @@ export class TransactionCoordinator {
 
     const run = async () => {
       const existing = store.get(target, transactionId);
+      store.assertIdentity?.(existing, { transactionId, command, fingerprint });
       if (existing?.command && existing.command !== command) {
         throw Object.assign(new Error("El transactionId pertenece a otro command."), { reasonCode: "TRANSACTION_CONFLICT" });
       }
       if (existing && this.recoveryKey(scope, existing.command, existing) !== resourceKey) {
         throw Object.assign(new Error("El transactionId pertenece a otro Actor."), { reasonCode: "TRANSACTION_CONFLICT" });
       }
+      const assertAuthority = () => authorityContext
+        ? this.authority?.validateWriteContext(authorityContext)
+        : true;
       const compactReplay = replayCompactReceipt(existing);
       if (compactReplay.handled) return clone(compactReplay.result);
       if (existing?.status === "completed") return clone(existing.result);
       if (existing && !(existing.status === "failed" &&
           ["no-effects", "rolled-back"].includes(existing.failureSafety))) {
         if (existing.status === "applied" && existing.result != null) {
+          assertAuthority();
           await store.complete(target, transactionId, existing.result);
           return clone(existing.result);
         }
@@ -128,8 +134,9 @@ export class TransactionCoordinator {
           // must reconstruct success from their durable evidence instead.
           if (recoveryInput.result?.reasonCode === "RECOVERY_REQUIRED" &&
               recoveryInput.result?.status === "recovery-required") recoveryInput.result = null;
-          const recovered = await reconcile(recoveryInput);
+          const recovered = await reconcile(recoveryInput, { assertAuthority, transactionId });
           if (recovered?.resolved) {
+            assertAuthority();
             await store.complete(target, transactionId, recovered.result);
             return clone(recovered.result);
           }
@@ -142,15 +149,18 @@ export class TransactionCoordinator {
       if (existing?.status === "failed") return clone(existing.result);
 
       this.assertNoBlockingTransaction(scope, { transactionId, command, metadata });
-      const assertAuthority = () => authorityContext
-        ? this.authority?.validateWriteContext(authorityContext)
-        : true;
       assertAuthority();
-      await store.begin(target, transactionId, { command, authorityContext: clone(authorityContext) });
+      await store.begin(target, transactionId, {
+        command,
+        fingerprint,
+        authorityContext: clone(authorityContext)
+      });
+      assertAuthority();
       await store.transition(target, transactionId, "prepared", clone(metadata));
       let applyEntered = false;
       try {
         const prepared = prepare ? await prepare() : null;
+        assertAuthority();
         await store.transition(target, transactionId, "applying", {
           prepared: clone(prepared),
           checkpoints: {}
@@ -164,6 +174,7 @@ export class TransactionCoordinator {
         const result = await apply({ prepared, checkpoint, transactionId, assertAuthority });
         assertAuthority();
         await store.transition(target, transactionId, "applied", { result: clone(result) });
+        assertAuthority();
         await store.complete(target, transactionId, result);
         return clone(result);
       } catch (error) {

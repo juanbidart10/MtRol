@@ -404,3 +404,109 @@ test("lost ACK converge por receipt Trade sin repetir capacity mutation", async 
   await fx.ledger.hydrateFromPersistence();
   assert.equal(fx.ledger.get(tradeId(session.id, itemUuid)).revision, revision);
 });
+
+async function readyTradeWithReservation(fx, itemUuid, suffix = "one") {
+  let session = await accepted(fx, suffix);
+  session = await offer(fx, session, [{ itemUuid, quantity: 1 }], `lifecycle-offer-${suffix}`, suffix);
+  session = await fx.store.confirmSession({
+    sessionId: session.id, participantKey: "participantA", requestingUserId: `user-a-${suffix}`,
+    revision: session.revision, operationId: `confirm-a-${suffix}`
+  });
+  return fx.store.confirmSession({
+    sessionId: session.id, participantKey: "participantB", requestingUserId: `user-b-${suffix}`,
+    revision: session.revision, operationId: `confirm-b-${suffix}`
+  });
+}
+
+test("G3B.0 Trade transiciona reserva canónica RESERVED→COMMITTING→COMMITTED", async () => {
+  const itemUuid = "Item.lifecycle-complete";
+  const fx = fixture({ quantities: { [itemUuid]: 1 } });
+  let session = await readyTradeWithReservation(fx, itemUuid);
+  session = await fx.store.beginExecution({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-complete",
+    revision: session.revision, operationId: "begin-complete"
+  });
+  await fx.ledger.hydrateFromPersistence();
+  assert.equal(fx.ledger.get(tradeId(session.id, itemUuid)).state, "COMMITTING");
+  await fx.store.completeSession({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-complete",
+    operationId: "complete-capacity"
+  });
+  await fx.ledger.hydrateFromPersistence();
+  assert.equal(fx.ledger.get(tradeId(session.id, itemUuid)).state, "COMMITTED");
+});
+
+test("G3B.0 Trade conserva capacidad como RECOVERY_REQUIRED ante commit ambiguo", async () => {
+  const itemUuid = "Item.lifecycle-recovery";
+  const fx = fixture({ quantities: { [itemUuid]: 1 } });
+  let session = await readyTradeWithReservation(fx, itemUuid);
+  session = await fx.store.beginExecution({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-recovery",
+    revision: session.revision, operationId: "begin-recovery"
+  });
+  await fx.store.markRecoveryRequired({
+    sessionId: session.id, authorityUserId: "gm", reasonCode: "AMBIGUOUS",
+    operationId: "mark-recovery"
+  });
+  await fx.ledger.hydrateFromPersistence();
+  assert.equal(fx.ledger.get(tradeId(session.id, itemUuid)).state, "RECOVERY_REQUIRED");
+  assert.equal(fx.ledger.reservedQuantity("Actor.a-one", itemUuid), 1);
+});
+
+test("G3B.0 Trade marca ROLLED_BACK cuando una ejecución falla con rollback probado", async () => {
+  const itemUuid = "Item.lifecycle-rollback";
+  const fx = fixture({ quantities: { [itemUuid]: 1 } });
+  let session = await readyTradeWithReservation(fx, itemUuid);
+  session = await fx.store.beginExecution({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-rollback",
+    revision: session.revision, operationId: "begin-rollback"
+  });
+  await fx.store.failExecution({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-rollback",
+    reason: "rollback-proven", operationId: "fail-rollback"
+  });
+  await fx.ledger.hydrateFromPersistence();
+  assert.equal(fx.ledger.get(tradeId(session.id, itemUuid)).state, "ROLLED_BACK");
+});
+
+test("G3B.0 ejecución ignora reservas RELEASED de revisiones anteriores", async () => {
+  const oldItem = "Item.lifecycle-old";
+  const currentItem = "Item.lifecycle-current";
+  const fx = fixture({ quantities: { [oldItem]: 1, [currentItem]: 1 } });
+  let session = await accepted(fx);
+  session = await offer(fx, session, [{ itemUuid: oldItem, quantity: 1 }], "offer-old");
+  session = await offer(fx, session, [{ itemUuid: currentItem, quantity: 1 }], "offer-current");
+  session = await fx.store.confirmSession({
+    sessionId: session.id, participantKey: "participantA", requestingUserId: "user-a-one",
+    revision: session.revision, operationId: "confirm-current-a"
+  });
+  session = await fx.store.confirmSession({
+    sessionId: session.id, participantKey: "participantB", requestingUserId: "user-b-one",
+    revision: session.revision, operationId: "confirm-current-b"
+  });
+  await fx.store.beginExecution({
+    sessionId: session.id, authorityUserId: "gm", executionId: "exec-with-history",
+    revision: session.revision, operationId: "begin-with-history"
+  });
+  await fx.ledger.hydrateFromPersistence();
+  assert.equal(fx.ledger.get(tradeId(session.id, oldItem)).state, "RELEASED");
+  assert.equal(fx.ledger.get(tradeId(session.id, currentItem)).state, "COMMITTING");
+});
+
+test("G3B.0 reload conserva como RECOVERY_REQUIRED una reserva Trade huérfana heredada", async () => {
+  const itemUuid = "Item.lifecycle-orphan";
+  const first = fixture({ quantities: { [itemUuid]: 1 } });
+  let session = await accepted(first);
+  session = await offer(first, session, [{ itemUuid, quantity: 1 }], "offer-orphan");
+  await first.repository.mutate(first.repository.target, draft => {
+    delete draft.sessions[session.id];
+    draft.operationReceipts = {};
+  });
+  const reloaded = fixture({ repository: first.repository, quantities: { [itemUuid]: 0 } });
+  await reloaded.store.hydrateFromPersistence();
+  await reloaded.ledger.hydrateFromPersistence();
+  const reservation = reloaded.ledger.get(tradeId(session.id, itemUuid));
+  assert.equal(reservation.state, "RECOVERY_REQUIRED");
+  assert.equal(reservation.evidence.reasonCode, "ORPHANED_TRADE_RESERVATION");
+  assert.equal(reloaded.ledger.reservedQuantity("Actor.a-one", itemUuid), 1);
+});

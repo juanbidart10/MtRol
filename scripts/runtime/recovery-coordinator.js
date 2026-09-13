@@ -64,6 +64,45 @@ export class RecoveryCoordinator {
     return { recovered: true, completedIds, requiredIds };
   }
 
+  async recoverGroundTransactions(scenes = [], {
+    isPrimaryGM = false,
+    readRuntime,
+    recoverTransaction,
+    notify = null
+  } = {}) {
+    if (!isPrimaryGM) return { recovered: false, completedIds: [], requiredIds: [] };
+    if (typeof readRuntime !== "function" || typeof recoverTransaction !== "function") {
+      throw new TypeError("Ground recovery requiere lectura de Scene y reconciliador transaccional.");
+    }
+    const completedIds = [];
+    const requiredIds = [];
+    for (const scene of Array.from(scenes?.values?.() ?? scenes ?? [])) {
+      const runtime = readRuntime(scene);
+      for (const receipt of Object.values(runtime?.receipts ?? {})) {
+        if (receipt?.command !== "ground.drop" || receipt.status === "completed" ||
+            (receipt.status === "failed" && ["no-effects", "rolled-back"].includes(receipt.failureSafety))) {
+          continue;
+        }
+        try {
+          await recoverTransaction(scene.id, receipt.transactionId);
+          completedIds.push(receipt.transactionId);
+        } catch (error) {
+          requiredIds.push(receipt.transactionId);
+          this.logger?.warn?.("RECOVERY", "Ground transaction requires review", {
+            sceneId: scene.id,
+            transactionId: receipt.transactionId,
+            reasonCode: error?.reasonCode ?? "RECOVERY_REQUIRED",
+            error: error?.message ?? String(error)
+          });
+        }
+      }
+    }
+    if (requiredIds.length) {
+      notify?.(`MTROL | ${requiredIds.length} transacción(es) Ground requieren revisión del GM.`);
+    }
+    return { recovered: true, completedIds, requiredIds };
+  }
+
   configure({ hydrateCache = null, recoverPresentation = null } = {}) {
     this.hydrateCache = hydrateCache;
     this.recoverPresentation = recoverPresentation;
